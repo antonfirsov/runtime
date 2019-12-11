@@ -3,6 +3,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IncludeRemoteExecutor>true</IncludeRemoteExecutor>
     <Configurations>netcoreapp-Unix-Debug;netcoreapp-Unix-Release;netcoreapp-Windows_NT-Debug;netcoreapp-Windows_NT-Release</Configurations>
+    <!--<TestScope>outerloop</TestScope>-->
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Accept.cs" />
@@ -39,6 +40,7 @@
     <Compile Include="SendPacketsElementTest.netcoreapp.cs" Condition="'$(TargetsNetCoreApp)' == 'true'" />
     <Compile Include="SendReceive.cs" />
     <Compile Include="SendReceive.netcoreapp.cs" Condition="'$(TargetsNetCoreApp)' == 'true'" />
+    <Compile Include="SendTo.cs" />
     <Compile Include="SocketTestHelper.cs" />
     <Compile Include="SocketTestHelper.netcoreapp.cs" Condition="'$(TargetsNetCoreApp)' == 'true'" />
     <Compile Include="SelectAndPollTests.cs" />
