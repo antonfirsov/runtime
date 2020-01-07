@@ -1327,6 +1327,19 @@ namespace System.Net.Sockets
             return SendTo(buffer, 0, buffer != null ? buffer.Length : 0, SocketFlags.None, remoteEP);
         }
 
+        // existing: public int SendTo(byte[] buffer, EndPoint remoteEP);
+        public int SendTo(ReadOnlySpan<byte> buffer, EndPoint remoteEP)
+        {
+            throw new NotImplementedException();
+        }
+
+        // existing: public int SendTo(byte[] buffer, SocketFlags socketFlags, EndPoint remoteEP);
+        public int SendTo(ReadOnlySpan<byte> buffer, SocketFlags socketFlags, EndPoint remoteEP)
+        {
+            throw new NotImplementedException();
+        }
+
+
         // Receives data from a connected socket.
         public int Receive(byte[] buffer, int size, SocketFlags socketFlags)
         {
