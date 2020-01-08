@@ -288,8 +288,20 @@ namespace System.Net.Sockets.Tests
         public override bool ValidatesArrayArguments => false;
         public override Task<int> ReceiveAsync(Socket s, ArraySegment<byte> buffer) =>
             Task.Run(() => s.Receive((Span<byte>)buffer, SocketFlags.None));
+        public override Task<SocketReceiveFromResult> ReceiveFromAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint) =>
+            Task.Run(() =>
+            {
+                int received = s.ReceiveFrom(buffer.AsSpan(), SocketFlags.None, ref endPoint);
+                return new SocketReceiveFromResult
+                {
+                    ReceivedBytes = received,
+                    RemoteEndPoint = endPoint
+                };
+            });
         public override Task<int> SendAsync(Socket s, ArraySegment<byte> buffer) =>
             Task.Run(() => s.Send((ReadOnlySpan<byte>)buffer, SocketFlags.None));
+        public override Task<int> SendToAsync(Socket s, ArraySegment<byte> buffer, EndPoint endPoint) =>
+            Task.Run(() => s.SendTo(buffer.AsSpan(), SocketFlags.None, endPoint));
         public override bool UsesSync => true;
     }
 

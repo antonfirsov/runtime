@@ -44,8 +44,8 @@ namespace System.Net.Sockets.Tests
             }
         }
 
-        [ActiveIssue(16945)]
-        [OuterLoop] // TODO: Issue #11345
+        //[ActiveIssue(16945)]
+        //[OuterLoop] // TODO: Issue #11345
         [Theory]
         [MemberData(nameof(Loopbacks))]
         public async Task SendToRecvFrom_Datagram_UDP(IPAddress loopbackAddress)
