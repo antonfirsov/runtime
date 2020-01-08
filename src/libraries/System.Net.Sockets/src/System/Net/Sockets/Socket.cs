@@ -1722,6 +1722,16 @@ namespace System.Net.Sockets
             return ReceiveFrom(buffer, 0, buffer != null ? buffer.Length : 0, SocketFlags.None, ref remoteEP);
         }
 
+        public int ReceiveFrom(Span<byte> buffer, ref EndPoint remoteEP)
+        {
+            throw new NotImplementedException();
+        }
+
+        public int ReceiveFrom(Span<byte> buffer, SocketFlags socketFlags, ref EndPoint remoteEP)
+        {
+            throw new NotImplementedException();
+        }
+
         public int IOControl(int ioControlCode, byte[] optionInValue, byte[] optionOutValue)
         {
             ThrowIfDisposed();
