@@ -108,11 +108,42 @@ namespace System.Net.Sockets
 
         public Socket(SocketInformation socketInformation)
         {
-            //
-            // This constructor works in conjunction with DuplicateAndClose, which is not supported.
-            // See comments in DuplicateAndClose.
-            //
-            throw new PlatformNotSupportedException(SR.net_sockets_duplicateandclose_notsupported);
+            InitializeSockets();
+
+            SocketError errorCode = SocketPal.CreateSocket(socketInformation.ProtocolInformation, out _handle,
+                out _addressFamily, out _socketType, out _protocolType);
+            if (errorCode != SocketError.Success)
+            {
+                Debug.Assert(_handle.IsInvalid);
+
+                // Failed to create the socket, throw.
+                throw new SocketException((int)errorCode);
+            }
+
+            if (_handle.IsInvalid)
+            {
+                throw new SocketException();
+            }
+
+            if (_addressFamily != AddressFamily.InterNetwork && _addressFamily != AddressFamily.InterNetworkV6)
+            {
+                throw new NotSupportedException(SR.GetResourceString(SR.net_invalidversion));
+            }
+
+            _isConnected = socketInformation.IsConnected;
+            _willBlock = !socketInformation.IsNonBlocking;
+            InternalSetBlocking(_willBlock);
+            _isListening = socketInformation.IsListening;
+
+            IPAddress tempAddress = _addressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any;
+            IPEndPoint ep = new IPEndPoint(tempAddress, 0);
+
+            Internals.SocketAddress socketAddress = IPEndPointExtensions.Serialize(ep);
+            errorCode = SocketPal.GetSockName(_handle, socketAddress.Buffer, ref socketAddress.InternalSize);
+            if (errorCode == SocketError.Success)
+            {
+                _rightEndPoint = ep.Create(socketAddress);
+            }
         }
 
         // Called by the class to create a socket to accept an incoming request.
@@ -2045,13 +2076,26 @@ namespace System.Net.Sockets
 
         public SocketInformation DuplicateAndClose(int targetProcessId)
         {
-            //
-            // On Windows, we cannot duplicate a socket that is bound to an IOCP.  In this implementation, we *only*
-            // support IOCPs, so this will not work.
-            //
-            // On Unix, duplication of a socket into an arbitrary process is not supported at all.
-            //
-            throw new PlatformNotSupportedException(SR.net_sockets_duplicateandclose_notsupported);
+            SocketInformation info = new SocketInformation
+                {
+                    ProtocolInformation = new byte[Interop.Winsock.WSAProtocolInfo._Size]
+                };
+            SocketError errorCode = SocketPal.DuplicateSocket(_handle, targetProcessId, info.ProtocolInformation);
+
+            if (errorCode != SocketError.Success)
+            {
+                throw new SocketException();
+            }
+
+            info.IsConnected = Connected;
+            info.IsNonBlocking = !Blocking;
+            info.IsListening = _isListening;
+            //info.UseOnlyOverlappedIO = UseOnlyOverlappedIO;
+            //info.RemoteEndPoint = _remoteEndPoint;
+
+            Close(-1);
+
+            return info;
         }
 
         internal IAsyncResult UnsafeBeginConnect(EndPoint remoteEP, AsyncCallback callback, object state, bool flowContext = false)

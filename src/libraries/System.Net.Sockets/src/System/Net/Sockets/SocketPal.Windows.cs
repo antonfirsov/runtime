@@ -8,6 +8,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
 
@@ -1245,6 +1246,46 @@ namespace System.Net.Sockets
             }
 
             return errorCode;
+        }
+
+        public static unsafe SocketError DuplicateSocket(SafeSocketHandle handle, int targetProcessId, byte[] protocolInformation)
+        {
+            fixed (byte* pinnedBuffer = protocolInformation)
+            {
+                return Interop.Winsock.WSADuplicateSocket(handle, (uint)targetProcessId, pinnedBuffer);
+            }
+        }
+
+        public static unsafe SocketError CreateSocket(Span<byte> protocolInformation, out SafeSocketHandle socket,
+            out AddressFamily addressFamily, out SocketType socketType, out ProtocolType protocolType)
+        {
+            fixed (byte* pinnedBuffer = protocolInformation)
+            {
+                try
+                {
+                    IntPtr handle = Interop.Winsock.WSASocketW(
+                        (AddressFamily)(-1),
+                        (SocketType)(-1),
+                        (ProtocolType)(-1),
+                        (IntPtr)pinnedBuffer, 0, Interop.Winsock.SocketConstructorFlags.WSA_FLAG_OVERLAPPED);
+                    ;
+
+                    socket = new SafeSocketHandle(handle, ownsHandle: true);
+
+                    Interop.Winsock.WSAProtocolInfo protocolInfo = Marshal.PtrToStructure<Interop.Winsock.WSAProtocolInfo>((IntPtr)pinnedBuffer);
+                    addressFamily = protocolInfo.iAddressFamily;
+                    socketType = protocolInfo.iSocketType;
+                    protocolType = protocolInfo.iProtocol;
+
+                    return socket.IsInvalid ? GetLastSocketError() : SocketError.Success;
+                }
+                catch (Exception wtf)
+                {
+                    Debug.Print(wtf.Message);
+                    throw new Exception("lol", wtf);
+                }
+
+            }
         }
     }
 }

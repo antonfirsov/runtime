@@ -9,6 +9,7 @@ using System.IO.Pipes;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.DotNet.RemoteExecutor;
 using Xunit;
 using Xunit.Abstractions;
@@ -42,8 +43,11 @@ namespace System.Net.Sockets.Tests
         }
 
 
-        [Fact]
-        public void DuplicateAndClose_TcpServerHandler()
+        [Theory]
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task DuplicateAndClose_TcpServerHandler(bool sameProcess)
         {
             const string TestMessage = "test123!";
 
@@ -54,30 +58,53 @@ namespace System.Net.Sockets.Tests
             listener.Listen(1);
 
             client.Connect(listener.LocalEndPoint);
-            // accept
-            using Socket receiverProto = listener.Accept();
+
+            // Async is allowed on the listener:
+            using Socket handlerOriginal = await listener.AcceptAsync();
 
             // pipe used to exchange socket info
-            using NamedPipeServerStream pipeServerStream = new NamedPipeServerStream(_ipcPipeName, PipeDirection.Out);
-            using RemoteInvokeHandle hServerProc = RemoteExecutor.Invoke(HandlerServerCode, _ipcPipeName, _semaphoreName);
-            pipeServerStream.WaitForConnection();
+            await using NamedPipeServerStream pipeServerStream = new NamedPipeServerStream(_ipcPipeName, PipeDirection.Out);
 
-            Semaphore parentSemaphore = new Semaphore(0, 1, _semaphoreName);
-
-            try
+            if (sameProcess)
             {
+                Task handlerCode = Task.Run(() => HandlerServerCode(_ipcPipeName, _semaphoreName));
+                RunInnerTestLogic(Process.GetCurrentProcess().Id);
+                handlerCode.GetAwaiter().GetResult();
+            }
+            else
+            {
+                using RemoteInvokeHandle hServerProc = RemoteExecutor.Invoke(HandlerServerCode, _ipcPipeName, _semaphoreName);
+
+                try
+                {
+                    RunInnerTestLogic(hServerProc.Process.Id);
+                }
+                finally
+                {
+                    hServerProc.Process.Kill();
+                }
+            }
+
+
+            void RunInnerTestLogic(int processId)
+            {
+                pipeServerStream.WaitForConnection();
+                Semaphore parentSemaphore = new Semaphore(0, 1, _semaphoreName);
+
+                // Asynchronous receive would result in failure creating duplicate socket:
+                // client.Send(Encoding.ASCII.GetBytes("pre"));
+                // byte[] rcvBuffer = new byte[128];
+                // int received = handlerOriginal.ReceiveAsync(rcvBuffer, SocketFlags.None).GetAwaiter().GetResult();
+                // Assert.Equal("pre", Encoding.ASCII.GetString(rcvBuffer.AsSpan().Slice(0, received)));
+
                 // Duplicate the socket:
-                SocketInformation socketInfo = receiverProto.DuplicateAndClose(hServerProc.Process.Id);
+                SocketInformation socketInfo = handlerOriginal.DuplicateAndClose(processId);
                 SerializationHelper.WriteSocketInfo(pipeServerStream, socketInfo);
 
                 // Send client data:
                 client.Send(Encoding.ASCII.GetBytes(TestMessage));
-                bool finished = parentSemaphore.WaitOne(100);
+                bool finished = parentSemaphore.WaitOne(TimeSpan.FromMilliseconds(100));
                 Assert.True(finished);
-            }
-            finally
-            {
-                hServerProc.Process.Kill();
             }
 
             static void HandlerServerCode(string ipcPipeName, string semaphoreName)
@@ -89,9 +116,14 @@ namespace System.Net.Sockets.Tests
                 SocketInformation socketInfo = SerializationHelper.ReadSocketInfo(pipeClientStream);
                 using Socket handler = new Socket(socketInfo);
 
-                Span<byte> data = stackalloc byte[128];
-                int rcvCount = handler.Receive(data);
-                string actual = Encoding.ASCII.GetString(data.Slice(0, rcvCount));
+                Assert.True(handler.IsBound);
+                Assert.NotNull(handler.RemoteEndPoint);
+                Assert.NotNull(handler.LocalEndPoint);
+
+                byte[] data = new byte[128];
+
+                int rcvCount = handler.ReceiveAsync(data, SocketFlags.None).GetAwaiter().GetResult();
+                string actual = Encoding.ASCII.GetString(data.AsSpan().Slice(0, rcvCount));
 
                 Assert.Equal(TestMessage, actual);
 
