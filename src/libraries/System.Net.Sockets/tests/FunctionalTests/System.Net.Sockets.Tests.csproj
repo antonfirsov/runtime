@@ -10,6 +10,7 @@
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="ArgumentValidationTests.cs" />
     <Compile Include="DisconnectTest.cs" />
+    <Compile Include="DuplicateAndClose.cs" />
     <Compile Include="HandleTest.cs" />
     <Compile Include="Connect.cs" />
     <Compile Include="Close.cs" />
