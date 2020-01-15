@@ -71,7 +71,7 @@ namespace System.Net.Sockets
 
                         if (alreadyBound)
                         {
-                            throw new InvalidOperationException("Async operations are not allowed on a socket that's handle has been previously bound to a Thread Pool / IOCP port.");
+                            throw new InvalidOperationException("Asynchronous operations are not allowed on this socket. It's handle might have been previously bound to a Thread Pool / IOCP port.");
                         }
 
                         throw;
