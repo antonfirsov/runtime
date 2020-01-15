@@ -16,13 +16,18 @@ using Xunit.Abstractions;
 
 namespace System.Net.Sockets.Tests
 {
-    public class DuplicateAndClose
+    public abstract class DuplicateAndClose<T> where T : SocketHelperBase, new()
     {
+        private static readonly T Helper = new T();
+
+        private readonly byte[] _sendBuffer = new byte[32];
+        private readonly ArraySegment<byte> _receiveBuffer = new ArraySegment<byte>(new byte[32]);
+
         private readonly ITestOutputHelper _output;
         private readonly string _ipcPipeName = Path.GetRandomFileName();
         private readonly string _semaphoreName = Path.GetRandomFileName();
 
-        public DuplicateAndClose(ITestOutputHelper output)
+        protected DuplicateAndClose(ITestOutputHelper output)
         {
             _output = output;
         }
@@ -42,6 +47,24 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        [Fact]
+        public async Task DoAsyncOperation_OnBothOriginalAndClone_ThrowsInvalidOperationException()
+        {
+            (Socket client, Socket originalServer) =SocketTestExtensions.CreateConnectedSocketPair();
+
+            using (client)
+            using (originalServer)
+            {
+                client.Send(_sendBuffer);
+
+                await Helper.ReceiveAsync(originalServer, _receiveBuffer);
+
+                SocketInformation info = originalServer.DuplicateAndClose(Process.GetCurrentProcess().Id);
+
+                using Socket cloneServer = new Socket(info);
+                await Assert.ThrowsAsync<InvalidOperationException>( () => Helper.ReceiveAsync(cloneServer, _receiveBuffer));
+            }
+        }
 
         [Theory]
         [PlatformSpecific(TestPlatforms.Windows)]
@@ -69,7 +92,7 @@ namespace System.Net.Sockets.Tests
             {
                 Task handlerCode = Task.Run(() => HandlerServerCode(_ipcPipeName, _semaphoreName));
                 RunInnerTestLogic(Process.GetCurrentProcess().Id);
-                handlerCode.GetAwaiter().GetResult();
+                await handlerCode;
             }
             else
             {
@@ -91,12 +114,6 @@ namespace System.Net.Sockets.Tests
                 pipeServerStream.WaitForConnection();
                 Semaphore parentSemaphore = new Semaphore(0, 1, _semaphoreName);
 
-                // Asynchronous receive would result in failure creating duplicate socket:
-                // client.Send(Encoding.ASCII.GetBytes("pre"));
-                // byte[] rcvBuffer = new byte[128];
-                // int received = handlerOriginal.ReceiveAsync(rcvBuffer, SocketFlags.None).GetAwaiter().GetResult();
-                // Assert.Equal("pre", Encoding.ASCII.GetString(rcvBuffer.AsSpan().Slice(0, received)));
-
                 // Duplicate the socket:
                 SocketInformation socketInfo = handlerOriginal.DuplicateAndClose(processId);
                 SerializationHelper.WriteSocketInfo(pipeServerStream, socketInfo);
@@ -109,6 +126,7 @@ namespace System.Net.Sockets.Tests
 
             static void HandlerServerCode(string ipcPipeName, string semaphoreName)
             {
+                T helper = new T();
                 using NamedPipeClientStream pipeClientStream =
                     new NamedPipeClientStream(".", ipcPipeName, PipeDirection.In);
                 pipeClientStream.Connect();
@@ -122,12 +140,36 @@ namespace System.Net.Sockets.Tests
 
                 byte[] data = new byte[128];
 
-                int rcvCount = handler.ReceiveAsync(data, SocketFlags.None).GetAwaiter().GetResult();
+                int rcvCount = helper.ReceiveAsync(handler, new ArraySegment<byte>(data)).GetAwaiter().GetResult();
                 string actual = Encoding.ASCII.GetString(data.AsSpan().Slice(0, rcvCount));
 
                 Assert.Equal(TestMessage, actual);
 
                 Semaphore.OpenExisting(semaphoreName).Release();
+            }
+        }
+    }
+
+    public class DuplicateAndClose
+    {
+        public class Apm : DuplicateAndClose<SocketHelperApm>
+        {
+            public Apm(ITestOutputHelper output) : base(output)
+            {
+            }
+        }
+
+        public class Task : DuplicateAndClose<SocketHelperTask>
+        {
+            public Task(ITestOutputHelper output) : base(output)
+            {
+            }
+        }
+
+        public class Eap : DuplicateAndClose<SocketHelperEap>
+        {
+            public Eap(ITestOutputHelper output) : base(output)
+            {
             }
         }
     }
