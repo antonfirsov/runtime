@@ -10,7 +10,6 @@
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="ArgumentValidationTests.cs" />
     <Compile Include="DisconnectTest.cs" />
-    <Compile Include="DuplicateAndClose.cs" />
     <Compile Include="HandleTest.cs" />
     <Compile Include="Connect.cs" />
     <Compile Include="Close.cs" />
@@ -34,6 +33,7 @@
     <Compile Include="OSSupport.cs" />
     <Compile Include="SendReceive.cs" />
     <Compile Include="SendTo.cs" />
+    <Compile Include="DuplicateAndClose.cs" />
     <Compile Include="SocketTestHelper.cs" />
     <Compile Include="SelectAndPollTests.cs" />
     <Compile Include="SocketInformationTest.cs" />

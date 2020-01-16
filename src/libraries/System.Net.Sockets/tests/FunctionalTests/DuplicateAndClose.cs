@@ -33,16 +33,26 @@ namespace System.Net.Sockets.Tests
 
         static class SerializationHelper
         {
-            private static readonly BinaryFormatter BinaryFormatter = new BinaryFormatter();
-
             public static void WriteSocketInfo(Stream stream, SocketInformation socketInfo)
             {
-                BinaryFormatter.Serialize(stream, socketInfo);
+                BinaryWriter bw = new BinaryWriter(stream);
+                bw.Write((int)socketInfo.Options);
+                bw.Write(socketInfo.ProtocolInformation.Length);
+                bw.Write(socketInfo.ProtocolInformation);
             }
 
             public static SocketInformation ReadSocketInfo(Stream stream)
             {
-                return (SocketInformation)BinaryFormatter.Deserialize(stream);
+                BinaryReader br = new BinaryReader(stream);
+                SocketInformationOptions options = (SocketInformationOptions)br.ReadInt32();
+                int protocolInfoLength = br.ReadInt32();
+                SocketInformation result = new SocketInformation()
+                {
+                    Options = options,
+                    ProtocolInformation = new byte[protocolInfoLength]
+                };
+                br.Read(result.ProtocolInformation);
+                return result;
             }
         }
 
@@ -157,9 +167,9 @@ namespace System.Net.Sockets.Tests
             }
         }
 
-        public class Task : DuplicateAndClose<SocketHelperTask>
+        public class TaskBased : DuplicateAndClose<SocketHelperTask>
         {
-            public Task(ITestOutputHelper output) : base(output)
+            public TaskBased(ITestOutputHelper output) : base(output)
             {
             }
         }
