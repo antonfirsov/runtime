@@ -17,6 +17,70 @@ namespace System.Net.Sockets
 
         internal void ReplaceHandleIfNecessaryAfterFailedConnect() { /* nop on Windows */ }
 
+        public Socket(SocketInformation socketInformation)
+        {
+            InitializeSockets();
+
+            SocketError errorCode = SocketPal.CreateSocket(socketInformation.ProtocolInformation, out _handle,
+                out _addressFamily, out _socketType, out _protocolType);
+            if (errorCode != SocketError.Success)
+            {
+                Debug.Assert(_handle.IsInvalid);
+
+                // Failed to create the socket, throw.
+                throw new SocketException((int)errorCode);
+            }
+
+            if (_handle.IsInvalid)
+            {
+                throw new SocketException();
+            }
+
+            if (_addressFamily != AddressFamily.InterNetwork && _addressFamily != AddressFamily.InterNetworkV6)
+            {
+                throw new NotSupportedException(SR.GetResourceString(SR.net_invalidversion));
+            }
+
+            _isConnected = socketInformation.IsConnected;
+            _willBlock = !socketInformation.IsNonBlocking;
+            InternalSetBlocking(_willBlock);
+            _isListening = socketInformation.IsListening;
+
+            IPAddress tempAddress = _addressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any;
+            IPEndPoint ep = new IPEndPoint(tempAddress, 0);
+
+            Internals.SocketAddress socketAddress = IPEndPointExtensions.Serialize(ep);
+            errorCode = SocketPal.GetSockName(_handle, socketAddress.Buffer, ref socketAddress.InternalSize);
+            if (errorCode == SocketError.Success)
+            {
+                _rightEndPoint = ep.Create(socketAddress);
+            }
+        }
+
+        public SocketInformation DuplicateAndClose(int targetProcessId)
+        {
+            SocketInformation info = new SocketInformation
+            {
+                ProtocolInformation = new byte[Interop.Winsock.WSAProtocolInfo._Size]
+            };
+            SocketError errorCode = SocketPal.DuplicateSocket(_handle, targetProcessId, info.ProtocolInformation);
+
+            if (errorCode != SocketError.Success)
+            {
+                throw new SocketException();
+            }
+
+            info.IsConnected = Connected;
+            info.IsNonBlocking = !Blocking;
+            info.IsListening = _isListening;
+            //info.UseOnlyOverlappedIO = UseOnlyOverlappedIO;
+            //info.RemoteEndPoint = _remoteEndPoint;
+
+            Close(-1);
+
+            return info;
+        }
+
         private void EnsureDynamicWinsockMethods()
         {
             if (_dynamicWinsockMethods == null)

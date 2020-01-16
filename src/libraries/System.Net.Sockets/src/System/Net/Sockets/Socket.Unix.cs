@@ -11,6 +11,15 @@ namespace System.Net.Sockets
 {
     public partial class Socket
     {
+        public Socket(SocketInformation socketInformation)
+        {
+            //
+            // This constructor works in conjunction with DuplicateAndClose, which is not supported.
+            // See comments in DuplicateAndClose.
+            //
+            throw new PlatformNotSupportedException(SR.net_sockets_duplicateandclose_notsupported);
+        }
+
         partial void ValidateForMultiConnect(bool isMultiEndpoint)
         {
             // ValidateForMultiConnect is called before any {Begin}Connect{Async} call,
