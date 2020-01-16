@@ -25,7 +25,6 @@ namespace System.Net.Sockets.Tests
 
         private readonly ITestOutputHelper _output;
         private readonly string _ipcPipeName = Path.GetRandomFileName();
-        private readonly string _semaphoreName = Path.GetRandomFileName();
 
         protected DuplicateAndClose(ITestOutputHelper output)
         {
@@ -50,7 +49,10 @@ namespace System.Net.Sockets.Tests
         [Fact]
         public async Task DoAsyncOperation_OnBothOriginalAndClone_ThrowsInvalidOperationException()
         {
-            (Socket client, Socket originalServer) =SocketTestExtensions.CreateConnectedSocketPair();
+            // Not applicable for synchronous operations:
+            if (Helper.UsesSync) return;
+
+            (Socket client, Socket originalServer) = SocketTestExtensions.CreateConnectedSocketPair();
 
             using (client)
             using (originalServer)
@@ -90,29 +92,20 @@ namespace System.Net.Sockets.Tests
 
             if (sameProcess)
             {
-                Task handlerCode = Task.Run(() => HandlerServerCode(_ipcPipeName, _semaphoreName));
-                RunInnerTestLogic(Process.GetCurrentProcess().Id);
+                Task handlerCode = Task.Run(() => HandlerServerCode(_ipcPipeName));
+                RunCommonHostLogic(Process.GetCurrentProcess().Id);
                 await handlerCode;
             }
             else
             {
-                using RemoteInvokeHandle hServerProc = RemoteExecutor.Invoke(HandlerServerCode, _ipcPipeName, _semaphoreName);
-
-                try
-                {
-                    RunInnerTestLogic(hServerProc.Process.Id);
-                }
-                finally
-                {
-                    hServerProc.Process.Kill();
-                }
+                RemoteInvokeOptions options = new RemoteInvokeOptions() {TimeOut = 500};
+                using RemoteInvokeHandle hServerProc = RemoteExecutor.Invoke(HandlerServerCode, _ipcPipeName, options);
+                RunCommonHostLogic(hServerProc.Process.Id);
             }
 
-
-            void RunInnerTestLogic(int processId)
+            void RunCommonHostLogic(int processId)
             {
                 pipeServerStream.WaitForConnection();
-                Semaphore parentSemaphore = new Semaphore(0, 1, _semaphoreName);
 
                 // Duplicate the socket:
                 SocketInformation socketInfo = handlerOriginal.DuplicateAndClose(processId);
@@ -120,14 +113,11 @@ namespace System.Net.Sockets.Tests
 
                 // Send client data:
                 client.Send(Encoding.ASCII.GetBytes(TestMessage));
-                bool finished = parentSemaphore.WaitOne(TimeSpan.FromMilliseconds(100));
-                Assert.True(finished);
             }
 
-            static void HandlerServerCode(string ipcPipeName, string semaphoreName)
+            static async Task<int> HandlerServerCode(string ipcPipeName)
             {
-                T helper = new T();
-                using NamedPipeClientStream pipeClientStream =
+                await using NamedPipeClientStream pipeClientStream =
                     new NamedPipeClientStream(".", ipcPipeName, PipeDirection.In);
                 pipeClientStream.Connect();
 
@@ -140,18 +130,25 @@ namespace System.Net.Sockets.Tests
 
                 byte[] data = new byte[128];
 
-                int rcvCount = helper.ReceiveAsync(handler, new ArraySegment<byte>(data)).GetAwaiter().GetResult();
+                int rcvCount = await Helper.ReceiveAsync(handler, new ArraySegment<byte>(data));
                 string actual = Encoding.ASCII.GetString(data.AsSpan().Slice(0, rcvCount));
 
                 Assert.Equal(TestMessage, actual);
 
-                Semaphore.OpenExisting(semaphoreName).Release();
+                return RemoteExecutor.SuccessExitCode;
             }
         }
     }
 
     public class DuplicateAndClose
     {
+        public class Synchronous : DuplicateAndClose<SocketHelperArraySync>
+        {
+            public Synchronous(ITestOutputHelper output) : base(output)
+            {
+            }
+        }
+
         public class Apm : DuplicateAndClose<SocketHelperApm>
         {
             public Apm(ITestOutputHelper output) : base(output)
