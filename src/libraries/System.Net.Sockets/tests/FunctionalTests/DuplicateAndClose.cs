@@ -47,6 +47,7 @@ namespace System.Net.Sockets.Tests
         }
 
         [Fact]
+        [PlatformSpecific(TestPlatforms.Windows)]
         public async Task DoAsyncOperation_OnBothOriginalAndClone_ThrowsInvalidOperationException()
         {
             // Not applicable for synchronous operations:
