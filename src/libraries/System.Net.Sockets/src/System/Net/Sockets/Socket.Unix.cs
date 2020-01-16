@@ -20,6 +20,16 @@ namespace System.Net.Sockets
             throw new PlatformNotSupportedException(SR.net_sockets_duplicateandclose_notsupported);
         }
 
+        public SocketInformation DuplicateAndClose(int targetProcessId)
+        {
+            //
+            // DuplicateAndClose is not supported on Unix, since passing FD-s between processes
+            // should involve Unix Domain Sockets. This programming model is fundamentally different,
+            // and incompatible with the design of SocketInformation API-s.
+            //
+            throw new PlatformNotSupportedException(SR.net_sockets_duplicateandclose_notsupported);
+        }
+
         partial void ValidateForMultiConnect(bool isMultiEndpoint)
         {
             // ValidateForMultiConnect is called before any {Begin}Connect{Async} call,
