@@ -41,10 +41,10 @@ namespace System.Net.Sockets
                 throw new NotSupportedException(SR.GetResourceString(SR.net_invalidversion));
             }
 
-            _isConnected = socketInformation.IsConnected;
-            _willBlock = !socketInformation.IsNonBlocking;
+            _isConnected = socketInformation.GetOption(SocketInformationOptions.Connected);
+            _willBlock = !socketInformation.GetOption(SocketInformationOptions.NonBlocking);
             InternalSetBlocking(_willBlock);
-            _isListening = socketInformation.IsListening;
+            _isListening = socketInformation.GetOption(SocketInformationOptions.Listening);
 
             IPAddress tempAddress = _addressFamily == AddressFamily.InterNetwork ? IPAddress.Any : IPAddress.IPv6Any;
             IPEndPoint ep = new IPEndPoint(tempAddress, 0);
@@ -59,6 +59,10 @@ namespace System.Net.Sockets
 
         public SocketInformation DuplicateAndClose(int targetProcessId)
         {
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this, targetProcessId);
+
+            ThrowIfDisposed();
+
             SocketInformation info = new SocketInformation
             {
                 ProtocolInformation = new byte[Interop.Winsock.WSAProtocolInfo._Size]
@@ -67,17 +71,23 @@ namespace System.Net.Sockets
 
             if (errorCode != SocketError.Success)
             {
-                throw new SocketException();
+                Exception exception = new SocketException((int)errorCode);
+                if (NetEventSource.IsEnabled)
+                {
+                    NetEventSource.Error(this, exception);
+                    NetEventSource.Exit(this);
+                }
+
+                throw exception;
             }
 
-            info.IsConnected = Connected;
-            info.IsNonBlocking = !Blocking;
-            info.IsListening = _isListening;
-            //info.UseOnlyOverlappedIO = UseOnlyOverlappedIO;
-            //info.RemoteEndPoint = _remoteEndPoint;
+            info.SetOption(SocketInformationOptions.Connected, Connected);
+            info.SetOption(SocketInformationOptions.NonBlocking, !Blocking);
+            info.SetOption(SocketInformationOptions.Listening, _isListening);
 
             Close(-1);
 
+            if (NetEventSource.IsEnabled) NetEventSource.Exit(this);
             return info;
         }
 

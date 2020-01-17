@@ -16,7 +16,8 @@ using Xunit.Abstractions;
 
 namespace System.Net.Sockets.Tests
 {
-    public abstract class DuplicateAndClose<T> where T : SocketHelperBase, new()
+    // Test cases for DuplicateAndClose, and related API-s.
+    public abstract class SocketDuplicationTests<T> where T : SocketHelperBase, new()
     {
         private static readonly T Helper = new T();
 
@@ -26,7 +27,10 @@ namespace System.Net.Sockets.Tests
         private readonly ITestOutputHelper _output;
         private readonly string _ipcPipeName = Path.GetRandomFileName();
 
-        protected DuplicateAndClose(ITestOutputHelper output)
+        public static bool IsAsync => !Helper.UsesSync;
+
+
+        protected SocketDuplicationTests(ITestOutputHelper output)
         {
             _output = output;
         }
@@ -60,9 +64,9 @@ namespace System.Net.Sockets.Tests
         [PlatformSpecific(TestPlatforms.Windows)]
         public async Task DoAsyncOperation_OnBothOriginalAndClone_ThrowsInvalidOperationException()
         {
-            // Not applicable for synchronous operations:
-            if (Helper.UsesSync) return;
+            if (!IsAsync) return;
 
+            // Not applicable for synchronous operations:
             (Socket client, Socket originalServer) = SocketTestExtensions.CreateConnectedSocketPair();
 
             using (client)
@@ -151,30 +155,80 @@ namespace System.Net.Sockets.Tests
         }
     }
 
-    public class DuplicateAndClose
+    public class SocketDuplicationTests
     {
-        public class Synchronous : DuplicateAndClose<SocketHelperArraySync>
+        [Fact]
+        public void UseOnlyOverlappedIO_AlwaysFalse()
+        {
+            using Socket s = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+            Assert.False(s.UseOnlyOverlappedIO);
+            s.UseOnlyOverlappedIO = true;
+            Assert.False(s.UseOnlyOverlappedIO);
+        }
+
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [Fact]
+        public void DuplicateAndClose_TargetProcessDoesNotExist_Throws_SocketException()
+        {
+            using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+
+            Assert.Throws<SocketException>(() => socket.DuplicateAndClose(-1));
+        }
+
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [Fact]
+        public void DuplicateAndClose_WhenDisposed_Throws()
+        {
+            Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => socket.DuplicateAndClose(Process.GetCurrentProcess().Id));
+        }
+
+        public class NotSupportedOnUnix
+        {
+            [PlatformSpecific(TestPlatforms.AnyUnix)]
+            [Fact]
+            public void SocketCtr_SocketInformation()
+            {
+                SocketInformation socketInformation = default;
+                Assert.Throws<PlatformNotSupportedException>(() => new Socket(socketInformation));
+            }
+
+            [PlatformSpecific(TestPlatforms.AnyUnix)]
+            [Fact]
+            public void DuplicateAndClose()
+            {
+                using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                int processId = Process.GetCurrentProcess().Id;
+
+                Assert.Throws<PlatformNotSupportedException>(() => socket.DuplicateAndClose(processId));
+            }
+        }
+
+        public class Synchronous : SocketDuplicationTests<SocketHelperArraySync>
         {
             public Synchronous(ITestOutputHelper output) : base(output)
             {
             }
         }
 
-        public class Apm : DuplicateAndClose<SocketHelperApm>
+        public class Apm : SocketDuplicationTests<SocketHelperApm>
         {
             public Apm(ITestOutputHelper output) : base(output)
             {
             }
         }
 
-        public class TaskBased : DuplicateAndClose<SocketHelperTask>
+        public class TaskBased : SocketDuplicationTests<SocketHelperTask>
         {
             public TaskBased(ITestOutputHelper output) : base(output)
             {
             }
         }
 
-        public class Eap : DuplicateAndClose<SocketHelperEap>
+        public class Eap : SocketDuplicationTests<SocketHelperEap>
         {
             public Eap(ITestOutputHelper output) : base(output)
             {

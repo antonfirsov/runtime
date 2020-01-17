@@ -12,61 +12,15 @@ namespace System.Net.Sockets
         public byte[] ProtocolInformation { get; set; }
         public SocketInformationOptions Options { get; set; }
 
-
-        internal bool IsNonBlocking{
-            get{
-                return ((Options&SocketInformationOptions.NonBlocking)!=0);
-            }
-            set{
-                if (value){
-                    Options |= SocketInformationOptions.NonBlocking;
-                }
-                else{
-                    Options &= ~SocketInformationOptions.NonBlocking;
-                }
-            }
+        internal void SetOption(SocketInformationOptions option, bool value)
+        {
+            if (value)  Options |= option;
+            else  Options &= ~option;
         }
 
-        internal bool IsConnected{
-            get{
-                return ((Options&SocketInformationOptions.Connected)!=0);
-            }
-            set{
-                if (value){
-                    Options |= SocketInformationOptions.Connected;
-                }
-                else{
-                    Options &= ~SocketInformationOptions.Connected;
-                }
-            }
-        }
-
-        internal bool IsListening{
-            get{
-                return ((Options&SocketInformationOptions.Listening)!=0);
-            }
-            set{
-                if (value){
-                    Options |= SocketInformationOptions.Listening;
-                }
-                else{
-                    Options &= ~SocketInformationOptions.Listening;
-                }
-            }
-        }
-
-        internal bool UseOnlyOverlappedIO{
-            get{
-                return ((Options&SocketInformationOptions.UseOnlyOverlappedIO)!=0);
-            }
-            set{
-                if (value){
-                    Options |= SocketInformationOptions.UseOnlyOverlappedIO;
-                }
-                else{
-                    Options &= ~SocketInformationOptions.UseOnlyOverlappedIO;
-                }
-            }
+        internal bool GetOption(SocketInformationOptions option)
+        {
+            return ((Options & option) != 0);
         }
     }
 }
