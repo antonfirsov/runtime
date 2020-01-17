@@ -29,6 +29,13 @@ namespace System.Net.Sockets.Tests
 
         public static bool IsAsync => !Helper.UsesSync;
 
+        private static int CurrentProcessId => Process.GetCurrentProcess().Id;
+
+        const string TestMessage = "test123!";
+        private static byte[] TestBytes => Encoding.ASCII.GetBytes(TestMessage);
+
+        private static string GetMessageString(byte[] data, int count) =>
+            Encoding.ASCII.GetString(data.AsSpan().Slice(0, count));
 
         protected SocketDuplicationTests(ITestOutputHelper output)
         {
@@ -76,7 +83,7 @@ namespace System.Net.Sockets.Tests
 
                 await Helper.ReceiveAsync(originalServer, _receiveBuffer);
 
-                SocketInformation info = originalServer.DuplicateAndClose(Process.GetCurrentProcess().Id);
+                SocketInformation info = originalServer.DuplicateAndClose(CurrentProcessId);
 
                 using Socket cloneServer = new Socket(info);
                 await Assert.ThrowsAsync<InvalidOperationException>( () => Helper.ReceiveAsync(cloneServer, _receiveBuffer));
@@ -89,8 +96,6 @@ namespace System.Net.Sockets.Tests
         [InlineData(true)]
         public async Task DuplicateAndClose_TcpServerHandler(bool sameProcess)
         {
-            const string TestMessage = "test123!";
-
             using Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
@@ -108,7 +113,7 @@ namespace System.Net.Sockets.Tests
             if (sameProcess)
             {
                 Task handlerCode = Task.Run(() => HandlerServerCode(_ipcPipeName));
-                RunCommonHostLogic(Process.GetCurrentProcess().Id);
+                RunCommonHostLogic(CurrentProcessId);
                 await handlerCode;
             }
             else
@@ -127,7 +132,7 @@ namespace System.Net.Sockets.Tests
                 SerializationHelper.WriteSocketInfo(pipeServerStream, socketInfo);
 
                 // Send client data:
-                client.Send(Encoding.ASCII.GetBytes(TestMessage));
+                client.Send(TestBytes);
             }
 
             static async Task<int> HandlerServerCode(string ipcPipeName)
@@ -143,20 +148,72 @@ namespace System.Net.Sockets.Tests
                 Assert.NotNull(handler.RemoteEndPoint);
                 Assert.NotNull(handler.LocalEndPoint);
 
-                byte[] data = new byte[128];
+                byte[] data = new byte[32];
 
                 int rcvCount = await Helper.ReceiveAsync(handler, new ArraySegment<byte>(data));
-                string actual = Encoding.ASCII.GetString(data.AsSpan().Slice(0, rcvCount));
+                string actual = GetMessageString(data, rcvCount);
 
                 Assert.Equal(TestMessage, actual);
 
                 return RemoteExecutor.SuccessExitCode;
             }
         }
+
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [Fact]
+        public async Task DuplicateAndClose_TcpClient()
+        {
+            using Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            listener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+            listener.Listen(1);
+
+            using Socket client0 = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+            using Socket client1 = new Socket(client0.DuplicateAndClose(CurrentProcessId));
+            Assert.False(client1.Connected);
+            client1.Connect(listener.LocalEndPoint);
+
+            using Socket client2 = new Socket(client1.DuplicateAndClose(CurrentProcessId));
+            Assert.True(client2.Connected);
+
+            using Socket handler = await Helper.AcceptAsync(listener);
+            await Helper.SendAsync(client2, TestBytes);
+
+            byte[] receivedBuffer = new byte[32];
+            int rcvCount = await Helper.ReceiveAsync(handler, new ArraySegment<byte>(receivedBuffer));
+
+            string receivedMessage = GetMessageString(receivedBuffer, rcvCount);
+            Assert.Equal(TestMessage, receivedMessage);
+        }
+
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [Fact]
+        public async Task DuplicateAndClose_TcpListener()
+        {
+            using Socket listener0 = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            listener0.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+            listener0.Listen(1);
+
+            using Socket listener1 = new Socket(listener0.DuplicateAndClose(CurrentProcessId));
+
+            using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            _ = client.ConnectAsync(listener1.LocalEndPoint);
+
+            using Socket handler = await Helper.AcceptAsync(listener1);
+            await Helper.SendAsync(client, TestBytes);
+
+            byte[] receivedBuffer = new byte[32];
+            int rcvCount = await Helper.ReceiveAsync(handler, new ArraySegment<byte>(receivedBuffer));
+
+            string receivedMessage = GetMessageString(receivedBuffer, rcvCount);
+            Assert.Equal(TestMessage, receivedMessage);
+        }
     }
 
     public class SocketDuplicationTests
     {
+        private static int CurrentProcessId => Process.GetCurrentProcess().Id;
+
         [Fact]
         public void UseOnlyOverlappedIO_AlwaysFalse()
         {
@@ -183,7 +240,25 @@ namespace System.Net.Sockets.Tests
             Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
             socket.Dispose();
 
-            Assert.Throws<ObjectDisposedException>(() => socket.DuplicateAndClose(Process.GetCurrentProcess().Id));
+            Assert.Throws<ObjectDisposedException>(() => socket.DuplicateAndClose(CurrentProcessId));
+        }
+
+        [PlatformSpecific(TestPlatforms.Windows)]
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void BlockingState_IsTransferred(bool blocking)
+        {
+            using Socket original = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+            {
+                Blocking = blocking
+            };
+            Assert.Equal(blocking, original.Blocking);
+
+            SocketInformation info = original.DuplicateAndClose(CurrentProcessId);
+
+            using Socket clone = new Socket(info);
+            Assert.Equal(blocking, clone.Blocking);
         }
 
         public class NotSupportedOnUnix
@@ -201,7 +276,7 @@ namespace System.Net.Sockets.Tests
             public void DuplicateAndClose()
             {
                 using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-                int processId = Process.GetCurrentProcess().Id;
+                int processId = CurrentProcessId;
 
                 Assert.Throws<PlatformNotSupportedException>(() => socket.DuplicateAndClose(processId));
             }

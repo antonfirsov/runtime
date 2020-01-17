@@ -19,13 +19,21 @@ namespace System.Net.Sockets
 
         public Socket(SocketInformation socketInformation)
         {
+            if (NetEventSource.IsEnabled) NetEventSource.Enter(this);
+
             InitializeSockets();
 
             SocketError errorCode = SocketPal.CreateSocket(socketInformation.ProtocolInformation, out _handle,
-                out _addressFamily, out _socketType, out _protocolType);
+                ref _addressFamily, ref _socketType, ref _protocolType);
+
             if (errorCode != SocketError.Success)
             {
                 Debug.Assert(_handle.IsInvalid);
+
+                if (errorCode == SocketError.InvalidArgument)
+                {
+                    throw new ArgumentException(@"Invalid SocketInformation", nameof(socketInformation));
+                }
 
                 // Failed to create the socket, throw.
                 throw new SocketException((int)errorCode);
@@ -53,8 +61,16 @@ namespace System.Net.Sockets
             errorCode = SocketPal.GetSockName(_handle, socketAddress.Buffer, ref socketAddress.InternalSize);
             if (errorCode == SocketError.Success)
             {
-                _rightEndPoint = ep.Create(socketAddress);
+                try
+                {
+                    _rightEndPoint = ep.Create(socketAddress);
+                }
+                catch
+                {
+                }
             }
+
+            if (NetEventSource.IsEnabled) NetEventSource.Exit(this);
         }
 
         public SocketInformation DuplicateAndClose(int targetProcessId)
@@ -71,14 +87,7 @@ namespace System.Net.Sockets
 
             if (errorCode != SocketError.Success)
             {
-                Exception exception = new SocketException((int)errorCode);
-                if (NetEventSource.IsEnabled)
-                {
-                    NetEventSource.Error(this, exception);
-                    NetEventSource.Exit(this);
-                }
-
-                throw exception;
+                throw new SocketException((int)errorCode);
             }
 
             info.SetOption(SocketInformationOptions.Connected, Connected);
