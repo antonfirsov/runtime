@@ -2040,8 +2040,6 @@ namespace System.Net.Sockets
                 (_rightEndPoint != null || remoteEP.GetType() == typeof(IPEndPoint));
         }
 
-
-
         internal IAsyncResult UnsafeBeginConnect(EndPoint remoteEP, AsyncCallback? callback, object? state, bool flowContext = false)
         {
             if (CanUseConnectEx(remoteEP))
@@ -3752,6 +3750,9 @@ namespace System.Net.Sockets
 
                 WildcardBindForConnectIfNecessary(endPointSnapshot.AddressFamily);
 
+                // We should check this, before we alter _rightEndPoint:
+                bool canUseConnectEx = CanUseConnectEx(endPointSnapshot);
+
                 // Save the old RightEndPoint and prep new RightEndPoint.
                 EndPoint? oldEndPoint = _rightEndPoint;
                 if (_rightEndPoint == null)
@@ -3767,7 +3768,7 @@ namespace System.Net.Sockets
                 SocketError socketError = SocketError.Success;
                 try
                 {
-                    if (CanUseConnectEx(endPointSnapshot))
+                    if (canUseConnectEx)
                     {
                         socketError = e.DoOperationConnectEx(this, _handle);
                     }
