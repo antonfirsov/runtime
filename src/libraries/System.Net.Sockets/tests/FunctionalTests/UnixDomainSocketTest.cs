@@ -31,7 +31,7 @@ namespace System.Net.Sockets.Tests
 
             for (int attempt = 0; attempt < 5; attempt++)
             {
-                path = GetRandomNonExistingFilePath();
+                path = SocketTestUtils.GetRandomNonExistingFilePath();
                 endPoint = new UnixDomainSocketEndPoint(path);
                 try
                 {
@@ -78,9 +78,35 @@ namespace System.Net.Sockets.Tests
         }
 
         [ConditionalFact(nameof(PlatformSupportsUnixDomainSockets))]
+        public void Socket_ConnectAsync_SocketAsyncEventArgs_Success()
+        {
+            string path = SocketTestUtils.GetRandomNonExistingFilePath();
+            using var pathGuard = new TempFile(path, null); // will delete temporary file in Dispose()
+
+            var endPoint = new UnixDomainSocketEndPoint(path);
+            using var server = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            using var client = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            server.Bind(endPoint);
+            server.Listen(1);
+
+            using var mre = new ManualResetEventSlim(false);
+            using var sea = new SocketAsyncEventArgs() {RemoteEndPoint = endPoint};
+            sea.Completed += (_, __) => mre.Set();
+
+            bool pending = client.ConnectAsync(sea);
+            if (pending)
+            {
+                mre.Wait();
+            }
+
+            Assert.Equal(SocketError.Success, sea.SocketError);
+            Assert.True(client.Connected);
+        }
+
+        [ConditionalFact(nameof(PlatformSupportsUnixDomainSockets))]
         public async Task Socket_ConnectAsyncUnixDomainSocketEndPoint_NotServer()
         {
-            string path = GetRandomNonExistingFilePath();
+            string path = SocketTestUtils.GetRandomNonExistingFilePath();
             var endPoint = new UnixDomainSocketEndPoint(path);
             try
             {
@@ -111,80 +137,6 @@ namespace System.Net.Sockets.Tests
             }
         }
 
-        [ConditionalFact(nameof(PlatformSupportsUnixDomainSockets))]
-        public void Socket_SendReceive_Success()
-        {
-            string path = GetRandomNonExistingFilePath();
-            var endPoint = new UnixDomainSocketEndPoint(path);
-            try
-            {
-                using (var server = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
-                using (var client = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
-                {
-                    server.Bind(endPoint);
-                    server.Listen(1);
-
-                    client.Connect(endPoint);
-                    using (Socket accepted = server.Accept())
-                    {
-                        var data = new byte[1];
-                        for (int i = 0; i < 10; i++)
-                        {
-                            data[0] = (byte)i;
-
-                            accepted.Send(data);
-                            data[0] = 0;
-
-                            Assert.Equal(1, client.Receive(data));
-                            Assert.Equal(i, data[0]);
-                        }
-                    }
-                }
-            }
-            finally
-            {
-                try { File.Delete(path); }
-                catch { }
-            }
-        }
-
-        [ConditionalFact(nameof(PlatformSupportsUnixDomainSockets))]
-        public async Task Socket_SendReceiveAsync_Success()
-        {
-            string path = GetRandomNonExistingFilePath();
-            var endPoint = new UnixDomainSocketEndPoint(path);
-            try
-            {
-                using (var server = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
-                using (var client = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified))
-                {
-                    server.Bind(endPoint);
-                    server.Listen(1);
-
-                    await client.ConnectAsync(endPoint);
-                    using (Socket accepted = await server.AcceptAsync())
-                    {
-                        var data = new byte[1];
-                        for (int i = 0; i < 10; i++)
-                        {
-                            data[0] = (byte)i;
-
-                            await accepted.SendAsync(new ArraySegment<byte>(data), SocketFlags.None);
-                            data[0] = 0;
-
-                            Assert.Equal(1, await client.ReceiveAsync(new ArraySegment<byte>(data), SocketFlags.None));
-                            Assert.Equal(i, data[0]);
-                        }
-                    }
-                }
-            }
-            finally
-            {
-                try { File.Delete(path); }
-                catch { }
-            }
-        }
-
         [ActiveIssue("https://github.com/dotnet/runtime/issues/26189", TestPlatforms.Windows)]
         [ConditionalTheory(nameof(PlatformSupportsUnixDomainSockets))]
         [InlineData(5000, 1, 1)]
@@ -197,7 +149,7 @@ namespace System.Net.Sockets.Tests
             new Random().NextBytes(writeBuffer);
             var readData = new MemoryStream();
 
-            string path = GetRandomNonExistingFilePath();
+            string path = SocketTestUtils.GetRandomNonExistingFilePath();
             var endPoint = new UnixDomainSocketEndPoint(path);
             try
             {
@@ -262,7 +214,7 @@ namespace System.Net.Sockets.Tests
                 byte[] receiveData = new byte[sendData.Length];
                 new Random().NextBytes(sendData);
 
-                string path = GetRandomNonExistingFilePath();
+                string path = SocketTestUtils.GetRandomNonExistingFilePath();
 
                 server.Bind(new UnixDomainSocketEndPoint(path));
                 server.Listen(1);
@@ -304,7 +256,7 @@ namespace System.Net.Sockets.Tests
                 byte[] receiveData = new byte[sendData.Length];
                 new Random().NextBytes(sendData);
 
-                string path = GetRandomNonExistingFilePath();
+                string path = SocketTestUtils.GetRandomNonExistingFilePath();
 
                 server.Bind(new UnixDomainSocketEndPoint(path));
                 server.Listen(1);
@@ -367,8 +319,8 @@ namespace System.Net.Sockets.Tests
             }
             else
             {
-                serverAddress = GetRandomNonExistingFilePath();
-                clientAddress = GetRandomNonExistingFilePath();
+                serverAddress = SocketTestUtils.GetRandomNonExistingFilePath();
+                clientAddress = SocketTestUtils.GetRandomNonExistingFilePath();
                 expectedClientAddress = clientAddress;
             }
 
@@ -434,38 +386,8 @@ namespace System.Net.Sockets.Tests
             Assert.Throws<PlatformNotSupportedException>(() => new UnixDomainSocketEndPoint("hello"));
         }
 
-        private static string GetRandomNonExistingFilePath()
-        {
-            string result;
-            do
-            {
-                result = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-            }
-            while (File.Exists(result));
+        public static bool IsSubWindows10 => PlatformDetection.IsWindows && PlatformDetection.WindowsVersion < 10;
 
-            return result;
-        }
-
-        private static bool PlatformSupportsUnixDomainSockets
-        {
-            get
-            {
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                {
-                    try
-                    {
-                        using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Tcp);
-                    }
-                    catch (SocketException se)
-                    {
-                        return se.SocketErrorCode != SocketError.AddressFamilyNotSupported;
-                    }
-                }
-
-                return true;
-            }
-        }
-
-        private static bool IsSubWindows10 => PlatformDetection.IsWindows && PlatformDetection.WindowsVersion < 10;
+        public static bool PlatformSupportsUnixDomainSockets => SocketTestUtils.PlatformSupportsUnixDomainSockets;
     }
 }
