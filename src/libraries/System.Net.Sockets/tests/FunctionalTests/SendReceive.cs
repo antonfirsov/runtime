@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -238,6 +239,38 @@ namespace System.Net.Sockets.Tests
 
                 Assert.Equal(bytesSent, bytesReceived);
                 Assert.Equal(sentChecksum.Sum, receivedChecksum.Sum);
+            }
+        }
+
+        public static bool PlatformSupportsUnixDomainSockets => SocketTestUtils.PlatformSupportsUnixDomainSockets;
+
+        [ConditionalFact(nameof(PlatformSupportsUnixDomainSockets))]
+        public async Task SendReceive_UnixDomainSocket()
+        {
+            using TempFile tempFile = new TempFile(SocketTestUtils.GetRandomNonExistingFilePath(), null);
+
+            string path = tempFile.Path;
+            var endPoint = new UnixDomainSocketEndPoint(path);
+            using var server = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            using var client = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            server.Bind(endPoint);
+            server.Listen(1);
+
+            await ConnectAsync(client, endPoint);
+
+            using Socket accepted = await AcceptAsync(server);
+            var data = new byte[1];
+            for (int i = 0; i < 10; i++)
+            {
+                data[0] = (byte)i;
+
+                await SendAsync(accepted, new ArraySegment<byte>(data));
+                data[0] = 0;
+
+                int receivedBytes = await ReceiveAsync(client, new ArraySegment<byte>(data));
+
+                Assert.Equal(1, receivedBytes);
+                Assert.Equal(i, data[0]);
             }
         }
 
