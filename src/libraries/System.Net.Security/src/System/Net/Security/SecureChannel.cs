@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
-using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Authentication;
 using System.Security.Authentication.ExtendedProtection;
@@ -626,7 +625,7 @@ namespace System.Net.Security
         //
         // Acquire Server Side Certificate information and set it on the class.
         //
-        private bool AcquireServerCredentials(ref byte[] thumbPrint, byte[] clientHello)
+        private bool AcquireServerCredentials(ref byte[] thumbPrint, ReadOnlySpan<byte> clientHello)
         {
             if (NetEventSource.IsEnabled)
                 NetEventSource.Enter(this);
@@ -718,13 +717,13 @@ namespace System.Net.Security
         }
 
         //
-        internal ProtocolToken NextMessage(byte[] incoming, int offset, int count)
+        internal ProtocolToken NextMessage(ReadOnlySpan<byte> incomingBuffer)
         {
             if (NetEventSource.IsEnabled)
                 NetEventSource.Enter(this);
 
             byte[] nextmsg = null;
-            SecurityStatusPal status = GenerateToken(incoming, offset, count, ref nextmsg);
+            SecurityStatusPal status = GenerateToken(incomingBuffer, ref nextmsg);
 
             if (!_sslAuthenticationOptions.IsServer && status.ErrorCode == SecurityStatusPalErrorCode.CredentialsNeeded)
             {
@@ -732,7 +731,7 @@ namespace System.Net.Security
                     NetEventSource.Info(this, "NextMessage() returned SecurityStatusPal.CredentialsNeeded");
 
                 SetRefreshCredentialNeeded();
-                status = GenerateToken(incoming, offset, count, ref nextmsg);
+                status = GenerateToken(incomingBuffer, ref nextmsg);
             }
 
             ProtocolToken token = new ProtocolToken(nextmsg, status);
@@ -764,21 +763,9 @@ namespace System.Net.Security
             Return:
                 status - error information
         --*/
-        private SecurityStatusPal GenerateToken(byte[] input, int offset, int count, ref byte[] output)
+        private SecurityStatusPal GenerateToken(ReadOnlySpan<byte> inputBuffer, ref byte[] output)
         {
             if (NetEventSource.IsEnabled) NetEventSource.Enter(this, $"_refreshCredentialNeeded = {_refreshCredentialNeeded}");
-
-            if (offset < 0 || offset > (input == null ? 0 : input.Length))
-            {
-                NetEventSource.Fail(this, "Argument 'offset' out of range.");
-                throw new ArgumentOutOfRangeException(nameof(offset));
-            }
-
-            if (count < 0 || count > (input == null ? 0 : input.Length - offset))
-            {
-                NetEventSource.Fail(this, "Argument 'count' out of range.");
-                throw new ArgumentOutOfRangeException(nameof(count));
-            }
 
             byte[] result = Array.Empty<byte>();
             SecurityStatusPal status = default;
@@ -797,7 +784,7 @@ namespace System.Net.Security
                     if (_refreshCredentialNeeded)
                     {
                         cachedCreds = _sslAuthenticationOptions.IsServer
-                                        ? AcquireServerCredentials(ref thumbPrint, input)
+                                        ? AcquireServerCredentials(ref thumbPrint, inputBuffer)
                                         : AcquireClientCredentials(ref thumbPrint);
                     }
 
@@ -806,7 +793,7 @@ namespace System.Net.Security
                         status = SslStreamPal.AcceptSecurityContext(
                                       ref _credentialsHandle,
                                       ref _securityContext,
-                                      input != null ? new ArraySegment<byte>(input, offset, count) : default,
+                                      inputBuffer,
                                       ref result,
                                       _sslAuthenticationOptions);
                     }
@@ -816,7 +803,7 @@ namespace System.Net.Security
                                        ref _credentialsHandle,
                                        ref _securityContext,
                                        _sslAuthenticationOptions.TargetHost,
-                                      input != null ? new ArraySegment<byte>(input, offset, count) : default,
+                                       inputBuffer,
                                        ref result,
                                        _sslAuthenticationOptions);
                     }
@@ -846,13 +833,6 @@ namespace System.Net.Security
             }
 
             output = result;
-            if (_negotiatedApplicationProtocol == default)
-            {
-                // try to get ALPN info unless we already have it. (this function can be called multiple times)
-                byte[] alpnResult = SslStreamPal.GetNegotiatedApplicationProtocol(_securityContext);
-                _negotiatedApplicationProtocol = alpnResult == null ? default : new SslApplicationProtocol(alpnResult, false);
-            }
-
             if (NetEventSource.IsEnabled)
             {
                 NetEventSource.Exit(this);
@@ -872,6 +852,13 @@ namespace System.Net.Security
         {
             if (NetEventSource.IsEnabled)
                 NetEventSource.Enter(this);
+
+            if (_negotiatedApplicationProtocol == default)
+            {
+                // try to get ALPN info unless we already have it. (renegotiation)
+                byte[] alpnResult = SslStreamPal.GetNegotiatedApplicationProtocol(_securityContext);
+                _negotiatedApplicationProtocol = alpnResult == null ? default : new SslApplicationProtocol(alpnResult, false);
+            }
 
             SslStreamPal.QueryContextStreamSizes(_securityContext, out StreamSizes streamSizes);
 
@@ -1155,7 +1142,7 @@ namespace System.Net.Security
             byte[] nextmsg = null;
 
             SecurityStatusPal status;
-            status = GenerateToken(null, 0, 0, ref nextmsg);
+            status = GenerateToken(default, ref nextmsg);
 
             ProtocolToken token = new ProtocolToken(nextmsg, status);
 
