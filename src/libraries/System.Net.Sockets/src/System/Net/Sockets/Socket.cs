@@ -2090,11 +2090,8 @@ namespace System.Net.Sockets
 
         private bool CanUseConnectEx(EndPoint remoteEP)
         {
-            return (_socketType == SocketType.Stream) &&
-                (_rightEndPoint != null || remoteEP.GetType() == typeof(IPEndPoint));
+            return _socketType == SocketType.Stream && remoteEP is IPEndPoint;
         }
-
-
 
         internal IAsyncResult UnsafeBeginConnect(EndPoint remoteEP, AsyncCallback? callback, object? state, bool flowContext = false)
         {
