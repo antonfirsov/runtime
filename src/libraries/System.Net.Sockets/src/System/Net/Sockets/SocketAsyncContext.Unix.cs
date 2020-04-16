@@ -1398,7 +1398,7 @@ namespace System.Net.Sockets
                         _state = QueueState.Ready;
                         _sequenceNumber++;
                     }
-                    else if (_tail.Next == op)
+                    else if (_tail?.Next == op) // TODO: is _tail == null possible?
                     {
                         // Pop current operation and advance to next
                         _tail.Next = op.Next;

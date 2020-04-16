@@ -411,8 +411,9 @@ namespace System.Net.Sockets
                     {
                         shutdown = true;
                     }
-                    else if (_handleToContextMap.TryGetValue(socketEvent.Data, out SocketAsyncContext context))
+                    else if (_handleToContextMap.TryGetValue(socketEvent.Data, out SocketAsyncContext? context))
                     {
+
                         if ((socketEvent.Events & Interop.Sys.SocketEvents.Error) != 0)
                         {
                             // there was an error, we use the non-buffered execution path (this should be very rare)
