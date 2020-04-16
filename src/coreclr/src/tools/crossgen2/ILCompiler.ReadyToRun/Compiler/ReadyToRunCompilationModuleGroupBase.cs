@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Internal.TypeSystem;
@@ -9,27 +10,34 @@ using Internal.TypeSystem.Ecma;
 using Internal.TypeSystem.Interop;
 using ILCompiler.DependencyAnalysis.ReadyToRun;
 using Debug = System.Diagnostics.Debug;
-using System;
 
 namespace ILCompiler
 {
     public abstract class ReadyToRunCompilationModuleGroupBase : CompilationModuleGroup
     {
-        protected readonly HashSet<ModuleDesc> _compilationModuleSet;
+        protected readonly HashSet<EcmaModule> _compilationModuleSet;
         private readonly HashSet<ModuleDesc> _versionBubbleModuleSet;
         private Dictionary<TypeDesc, ModuleToken> _typeRefsInCompilationModuleSet;
         private readonly bool _compileGenericDependenciesFromVersionBubbleModuleSet;
+        private readonly bool _isCompositeBuildMode;
+        private readonly bool _isInputBubble;
         private readonly ConcurrentDictionary<TypeDesc, bool> _containsTypeLayoutCache = new ConcurrentDictionary<TypeDesc, bool>();
         private readonly ConcurrentDictionary<TypeDesc, bool> _versionsWithTypeCache = new ConcurrentDictionary<TypeDesc, bool>();
         private readonly ConcurrentDictionary<MethodDesc, bool> _versionsWithMethodCache = new ConcurrentDictionary<MethodDesc, bool>();
 
         public ReadyToRunCompilationModuleGroupBase(
             TypeSystemContext context,
-            IEnumerable<ModuleDesc> compilationModuleSet,
+            bool isCompositeBuildMode,
+            bool isInputBubble,
+            IEnumerable<EcmaModule> compilationModuleSet,
             IEnumerable<ModuleDesc> versionBubbleModuleSet,
             bool compileGenericDependenciesFromVersionBubbleModuleSet)
         {
-            _compilationModuleSet = new HashSet<ModuleDesc>(compilationModuleSet);
+            _compilationModuleSet = new HashSet<EcmaModule>(compilationModuleSet);
+            _isCompositeBuildMode = isCompositeBuildMode;
+            _isInputBubble = isInputBubble;
+
+            Debug.Assert(_isCompositeBuildMode || _compilationModuleSet.Count == 1);
 
             _versionBubbleModuleSet = new HashSet<ModuleDesc>(versionBubbleModuleSet);
             _versionBubbleModuleSet.UnionWith(_compilationModuleSet);
@@ -83,18 +91,7 @@ namespace ILCompiler
             var defType = (MetadataType)type;
             if (!ContainsType(defType))
             {
-                if (!defType.IsValueType)
-                {
-                    // Eventually, we may respect the non-versionable attribute for reference types too. For now, we are going
-                    // to play is safe and ignore it.
-                    return false;
-                }
-
-                // Valuetypes with non-versionable attribute are candidates for fixed layout. Reject the rest.
-                if (!defType.HasCustomAttribute("System.Runtime.Versioning", "NonVersionableAttribute"))
-                {
-                    return false;
-                }
+                return false;
             }
             if (!defType.IsValueType && !ContainsTypeLayout(defType.BaseType))
             {
@@ -156,8 +153,7 @@ namespace ILCompiler
             // (because otherwise we may not be able to encode its tokens)
             // and if the callee is either in the same version bubble or is marked as non-versionable.
             bool canInline = VersionsWithMethodBody(callerMethod) &&
-                (VersionsWithMethodBody(calleeMethod) ||
-                    calleeMethod.HasCustomAttribute("System.Runtime.Versioning", "NonVersionableAttribute"));
+                (VersionsWithMethodBody(calleeMethod) || calleeMethod.IsNonVersionable());
 
             return canInline;
         }
@@ -212,6 +208,12 @@ namespace ILCompiler
 
             return _typeRefsInCompilationModuleSet.TryGetValue(type, out token);
         }
+
+        public sealed override bool IsCompositeBuildMode => _isCompositeBuildMode;
+
+        public sealed override bool IsInputBubble => _isInputBubble;
+
+        public sealed override IEnumerable<EcmaModule> CompilationModuleSet => _compilationModuleSet;
 
         private bool ComputeTypeVersionsWithCode(TypeDesc type)
         {
