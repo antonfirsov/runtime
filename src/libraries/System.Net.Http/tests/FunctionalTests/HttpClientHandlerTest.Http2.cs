@@ -1870,8 +1870,9 @@ namespace System.Net.Http.Functional.Tests
             await Http2LoopbackServer.CreateClientAndServerAsync(async url =>
             {
                 using (var handler = new SocketsHttpHandler())
-                using (HttpClient client = CreateHttpClient())
+                using (HttpClient client = CreateHttpClient(handler))
                 {
+                    TestHelper.EnableUnencryptedHttp2IfNecessary(handler);
                     handler.SslOptions.RemoteCertificateValidationCallback = delegate { return true; };
                     // Increase default Expect: 100-continue timeout to ensure that we don't accidentally fire the timer and send the request body.
                     handler.Expect100ContinueTimeout = TimeSpan.FromSeconds(300);
@@ -1899,7 +1900,7 @@ namespace System.Net.Http.Functional.Tests
                 await connection.SendResponseBodyAsync(streamId, Encoding.ASCII.GetBytes(responseContent));
 
                 // Client should send empty request body
-                byte[] requestBody = await connection.ReadBodyAsync();
+                byte[] requestBody = await connection.ReadBodyAsync(expectEndOfStream:true);
                 Assert.Null(requestBody);
 
                 await connection.ShutdownIgnoringErrorsAsync(streamId);
@@ -1937,13 +1938,11 @@ namespace System.Net.Http.Functional.Tests
             public void Complete()
             {
                 _waitForCompletion.SetResult(true);
-                _waitForCompletion = null;
             }
 
             public void Fail(Exception e)
             {
                 _waitForCompletion.SetException(e);
-                _waitForCompletion = null;
             }
         }
 

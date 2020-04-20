@@ -2468,6 +2468,48 @@ int32_t SystemNative_GetSocketType(intptr_t socket, int32_t* addressFamily, int3
     return Error_SUCCESS;
 }
 
+int32_t SystemNative_GetSocketType(intptr_t socket, int32_t* addressFamily, int32_t* socketType, int32_t* protocolType)
+{
+    if (addressFamily == NULL || socketType == NULL || protocolType == NULL)
+    {
+        return Error_EFAULT;
+    }
+
+    int fd = ToFileDescriptor(socket);
+
+#ifdef SO_DOMAIN
+    int domainValue;
+    socklen_t domainLength = sizeof(int);
+    if (getsockopt(fd, SOL_SOCKET, SO_DOMAIN, &domainValue, &domainLength) != 0 ||
+        !TryConvertAddressFamilyPlatformToPal((sa_family_t)domainValue, addressFamily))
+#endif
+    {
+        *addressFamily = AddressFamily_AF_UNKNOWN;
+    }
+
+#ifdef SO_TYPE
+    int typeValue;
+    socklen_t typeLength = sizeof(int);
+    if (getsockopt(fd, SOL_SOCKET, SO_TYPE, &typeValue, &typeLength) != 0 ||
+        !TryConvertSocketTypePlatformToPal(typeValue, socketType))
+#endif
+    {
+        *socketType = SocketType_UNKNOWN;
+    }
+
+#ifdef SO_PROTOCOL
+    int protocolValue;
+    socklen_t protocolLength = sizeof(int);
+    if (getsockopt(fd, SOL_SOCKET, SO_PROTOCOL, &protocolValue, &protocolLength) != 0 ||
+        !TryConvertProtocolTypePlatformToPal(*addressFamily, protocolValue, protocolType))
+#endif
+    {
+        *protocolType = ProtocolType_PT_UNKNOWN;
+    }
+
+    return Error_SUCCESS;
+}
+
 int32_t SystemNative_GetAtOutOfBandMark(intptr_t socket, int32_t* atMark)
 {
     if (atMark == NULL)

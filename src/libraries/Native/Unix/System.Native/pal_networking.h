@@ -356,8 +356,6 @@ typedef struct
 } AioContext;
 
 
-PALEXPORT void SystemNative_FreeHostEntry(HostEntry* entry);
-
 
 PALEXPORT int32_t SystemNative_GetNameInfo(const uint8_t* address,
                                int32_t addressLength,
