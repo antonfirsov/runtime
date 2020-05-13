@@ -2,8 +2,11 @@
   <PropertyGroup>
     <AssemblyName>System.Net.Sockets</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <TargetFrameworks>$(NetCoreAppCurrent)-Unix;$(NetCoreAppCurrent)-Windows_NT</TargetFrameworks>
+<!--    <TargetFrameworks>$(NetCoreAppCurrent)-Unix;$(NetCoreAppCurrent)-Windows_NT</TargetFrameworks>-->
+    <TargetFrameworks>$(NetCoreAppCurrent)-Unix</TargetFrameworks>
     <Nullable>enable</Nullable>
+    <NoWarn>BCL0015,CS1591</NoWarn>
+
   </PropertyGroup>
   <PropertyGroup>
     <!-- SYSTEM_NET_SOCKETS_DLL is required to allow source-level code sharing for types defined within the

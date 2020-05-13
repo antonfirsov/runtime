@@ -6,7 +6,9 @@
       This assembly is referenced from rid agnostic configurations therefore we can't make it RID specific
       and instead use runtime checks.
     -->
-    <TargetFrameworks>$(NetCoreAppCurrent);$(NetFrameworkCurrent)</TargetFrameworks>
+<!--    <TargetFrameworks>$(NetCoreAppCurrent);$(NetFrameworkCurrent)</TargetFrameworks>-->
+    <TargetFrameworks>$(NetCoreAppCurrent)</TargetFrameworks>
+
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="System\AdminHelpers.cs" />
@@ -25,7 +27,7 @@
     <Compile Include="System\PlatformDetection.cs" />
     <Compile Include="System\PlatformDetection.Unix.cs" />
     <Compile Include="System\PlatformDetection.Windows.cs" />
-    <!-- 
+    <!--
       Interop.Library is not designed to support runtime checks therefore we are picking the Windows
       variant from the Common folder and adding the missing members manually.
     -->
