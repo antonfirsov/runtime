@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Diagnostics;
+using System.Net.Sockets;
 
 namespace ConsoleTest
 {
@@ -6,6 +8,9 @@ namespace ConsoleTest
     {
         public static void Main(string[] args)
         {
+            using Socket sock = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            sock.Listen();
+            Debugger.Break();
             Console.WriteLine("Hello World!");
         }
     }

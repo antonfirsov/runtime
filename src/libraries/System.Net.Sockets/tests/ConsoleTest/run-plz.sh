@@ -1,0 +1,3 @@
+pushd /home/anton/dev/dotnet/06/runtime/artifacts/bin/ConsoleTest/net5.0-Unix-Debug 
+lldb -- /home/anton/dev/dotnet/06/runtime/artifacts/bin/testhost/net5.0-Linux-Debug-x64/dotnet exec --runtimeconfig /home/anton/dev/dotnet/06/runtime/artifacts/bin/System.Net.Sockets.Tests/net5.0-Unix-Debug/System.Net.Sockets.Tests.runtimeconfig.json --depsfile /home/anton/dev/dotnet/06/runtime/artifacts/bin/System.Net.Sockets.Tests/net5.0-Unix-Debug/System.Net.Sockets.Tests.deps.json ConsoleTest.dll
+popd

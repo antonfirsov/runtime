@@ -7,4 +7,11 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\ref\System.Net.Sockets.csproj" />
+    <Reference Include="System.Net.Sockets" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Properties" />
+  </ItemGroup>
 </Project>
