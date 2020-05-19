@@ -35,6 +35,7 @@ namespace System.Net.Sockets
         public SafeSocketHandle(IntPtr preexistingHandle, bool ownsHandle)
             : base(ownsHandle)
         {
+            Interlocked.Increment(ref TotalCount);
             OwnsHandle = ownsHandle;
             SetHandleAndValid(preexistingHandle);
         }
@@ -68,6 +69,8 @@ namespace System.Net.Sockets
             }
         }
 
+        public static int TotalCount;
+
         protected override bool ReleaseHandle()
         {
             _released = true;
@@ -83,6 +86,12 @@ namespace System.Net.Sockets
             }
 
             return true;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
+            Interlocked.Decrement(ref TotalCount);
         }
 
         internal void CloseAsIs(bool abortive)

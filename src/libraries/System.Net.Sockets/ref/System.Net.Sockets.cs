@@ -192,6 +192,8 @@ namespace System.Net.Sockets
     {
         public SafeSocketHandle(System.IntPtr preexistingHandle, bool ownsHandle) : base (default(bool)) { }
         protected override bool ReleaseHandle() { throw null; }
+
+        public static int TotalCount;
     }
     public enum SelectMode
     {
