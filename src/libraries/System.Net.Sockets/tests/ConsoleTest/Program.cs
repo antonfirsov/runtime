@@ -59,8 +59,8 @@ namespace ConsoleTest
     {
         public static Task Main()
         {
-            //return SocketDisposeTestAsync();
-            return DumbTest();
+            return SocketDisposeTestAsync();
+            //return DumbTest();
         }
 
         private static async Task DumbTest()
