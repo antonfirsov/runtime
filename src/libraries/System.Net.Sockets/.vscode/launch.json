@@ -1,0 +1,37 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": ".NET Core Launch (console)",
+            "type": "coreclr",
+            "request": "launch",
+            "program": "/Users/presenter/anton/dev/runtime/artifacts/bin/testhost/net5.0-OSX-Debug-x64/dotnet",
+            "args": [
+                "exec",
+                "xunit.console.dll", 
+                "System.Net.Sockets.Tests.dll",
+                "-class",
+                "System.Net.Sockets.Tests._Hello"
+
+                // "exec",
+                // "xunit.console.dll",
+                // "System.Net.Sockets.Tests.dll",
+                // "--runtimeconfig System.Net.Sockets.Tests.runtimeconfig.json", 
+                // "--depsfile System.Net.Sockets.Tests.deps.json",
+                // "-class System.Net.Sockets.Tests._Hello",
+            ],
+            "cwd": "/Users/presenter/anton/dev/runtime/artifacts/bin/System.Net.Sockets.Tests/net5.0-Unix-Debug",
+            "console": "internalConsole",
+            "stopAtEntry": false
+        },
+        {
+            "name": ".NET Core Attach",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        }
+    ]
+}
