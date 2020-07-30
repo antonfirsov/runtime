@@ -16,13 +16,13 @@ namespace System.Net.Sockets.Tests
         {
         }
 
-        [Fact]
+        [Fact(Skip ="kussolj")]
         public async Task BasicSendReceive()
         {
-            byte[] sendBuffer = new byte[256];
-            byte[] receiveBuffer = new byte[256];
+            byte[] sendBuffer = new byte[32];
+            byte[] receiveBuffer = new byte[32];
 
-            int msgCount = 2000;
+            int msgCount = 10000;
 
             (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
 
@@ -42,6 +42,37 @@ namespace System.Net.Sockets.Tests
 
             await Task.WhenAll(allTasks);
             
+            client.Dispose();
+            server.Dispose();
+        }
+
+        [Fact]
+        public async Task BasicSendReceive2()
+        {
+            byte[] sendBuffer = new byte[32];
+            byte[] receiveBuffer = new byte[32];
+
+            int msgCount = 10000;
+
+            (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
+
+            List<Task> allTasks = new List<Task>();
+
+            for (int i = 0; i < msgCount; i++)
+            {
+                Task sendTask = SendAsync(server, sendBuffer);
+                //allTasks.Add(sendTask);
+                await sendTask;
+            }
+
+            for (int i = 0; i < msgCount; i++)
+            {
+                Task receiveTask = ReceiveAsync(client, receiveBuffer);
+                allTasks.Add(receiveTask);
+            }
+
+            await Task.WhenAll(allTasks);
+
             client.Dispose();
             server.Dispose();
         }
