@@ -21,7 +21,13 @@ namespace System.Net.Sockets.Tests
         {
             if (UsesSync) return;
 
-            for (int i = 0; i < 10000; i++) // run multiple times to attempt to force various interleavings
+            //const int BufferSize = 16384;
+            const int BufferSize = 4096;
+
+            byte[] sendBuffer = new byte[BufferSize];
+            byte[] receiveBuffer = new byte[BufferSize];
+
+            for (int i = 0; i < 1000; i++) // run multiple times to attempt to force various interleavings
             {
                 (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
                 using (var b = new Barrier(2))
@@ -35,9 +41,9 @@ namespace System.Net.Sockets.Tests
 
                     Task send = Task.Factory.StartNew(() =>
                     {
-                        SendAsync(server, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
+                        SendAsync(server, new ArraySegment<byte>(sendBuffer)).GetAwaiter().GetResult();
                         b.SignalAndWait();
-                        ReceiveAsync(client, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
+                        ReceiveAsync(client, new ArraySegment<byte>(receiveBuffer)).GetAwaiter().GetResult();
                     }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
                     await dispose;
@@ -49,6 +55,10 @@ namespace System.Net.Sockets.Tests
                             error is SocketException ||
                             (error is SEHException && PlatformDetection.IsInAppContainer),
                             error.ToString());
+                        _output.WriteLine($"{i} E: "+error.Message);
+                    }
+                    else{
+                        _output.WriteLine($"{i} NO ERROR!");
                     }
                 }
             }

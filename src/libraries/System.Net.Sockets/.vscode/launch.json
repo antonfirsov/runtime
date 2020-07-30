@@ -14,7 +14,7 @@
                 "xunit.console.dll", 
                 "System.Net.Sockets.Tests.dll",
                 "-class",
-                "System.Net.Sockets.Tests._Hello"
+                "System.Net.Sockets.Tests.SendReceiveEap"
 
                 // "exec",
                 // "xunit.console.dll",
@@ -24,7 +24,7 @@
                 // "-class System.Net.Sockets.Tests._Hello",
             ],
             "cwd": "/Users/presenter/anton/dev/runtime/artifacts/bin/System.Net.Sockets.Tests/net5.0-Unix-Debug",
-            "console": "internalConsole",
+            "console": "integratedTerminal",
             "stopAtEntry": false
         },
         {
