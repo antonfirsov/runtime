@@ -16,7 +16,74 @@ namespace System.Net.Sockets.Tests
         {
         }
 
-        [Fact]
+        public static TheoryData<int> GetDisposeAfterData()
+        {
+            TheoryData<int> result = new TheoryData<int>();
+
+            for (int i = 0; i < 10; i++)
+            {
+                result.Add(2 * i);
+            }
+
+            return result;
+        }
+
+        [Theory]
+        [MemberData(nameof(GetDisposeAfterData))]
+        public async Task ReproMaybe(int disposeAfterReceives)
+        {
+            byte[] sendBuffer = new byte[512];
+            byte[] receiveBuffer = new byte[512];
+
+            int msgCount = 10000;
+
+            (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
+
+            List<Task> allTasks = new List<Task>();
+
+            ManualResetEventSlim shouldDisposeNow = new ManualResetEventSlim();
+
+            Task disposeTask = Task.Factory.StartNew(() =>
+            {
+                shouldDisposeNow.Wait();
+                client.Shutdown(SocketShutdown.Both);
+                client.Close(15);
+            }, TaskCreationOptions.LongRunning);
+
+            for (int i = 0; i < msgCount; i++)
+            {
+                Task sendTask = SendAsync(server, sendBuffer);
+                allTasks.Add(sendTask);
+            }
+
+            try
+            {
+                for (int i = 0; i < msgCount; i++)
+                {
+                    Task receiveTask = ReceiveAsync(client, receiveBuffer);
+
+                    if (i == disposeAfterReceives)
+                    {
+                        shouldDisposeNow.Set();
+                    }
+
+                    allTasks.Add(receiveTask);
+                }
+
+                await disposeTask;
+                await Task.WhenAll(allTasks);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Got exception: {ex.GetType()} | {ex.Message}");
+                Console.WriteLine(ex.StackTrace);
+            }
+            
+            client.Dispose();
+            server.Dispose();
+        }
+
+        [Fact(Skip = "kussolj")]
         public async Task BasicSendReceive1()
         {
             byte[] sendBuffer = new byte[512];
