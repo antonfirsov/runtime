@@ -21,89 +21,38 @@ namespace System.Net.Sockets.Tests
         {
             if (UsesSync) return;
 
-
-            for (int i = 0; i < 10000; i++) // run multiple times to attempt to force various interleavings
-            {
-                try
-                {
-                    (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
-
-                    using (var b = new Barrier(2))
-                    {
-                        Task dispose = Task.Factory.StartNew(() =>
-                        {
-                            b.SignalAndWait();
-                            client.Shutdown(SocketShutdown.Both);
-                            client.Close(15);
-                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-
-                        Task send = Task.Factory.StartNew(() =>
-                        {
-                            SendAsync(server, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
-                            b.SignalAndWait();
-                            ReceiveAsync(client, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
-                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-
-                        await dispose;
-                        Exception error = await Record.ExceptionAsync(() => send);
-                        if (error != null)
-                        {
-                            Assert.True(
-                                error is ObjectDisposedException ||
-                                error is SocketException ||
-                                (error is SEHException && PlatformDetection.IsInAppContainer),
-                                error.ToString());
-                        }
-                    }
-                }
-                catch (SocketException ex)
-                {
-                    throw new Exception($"SocketException @ i={i}: {ex.Message}");
-                }
-            }
-        }
-
-        [Fact]
-        public async Task ReceiveAsync_ConcurrentShutdownWithTimeoutAndClose_SucceedsOrThrowsAppropriateException_Please()
-        {
-            if (UsesSync) return;
-
-
             for (int i = 0; i < 10000; i++) // run multiple times to attempt to force various interleavings
             {
                 (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
                 using (var b = new Barrier(2))
                 {
-                    // Task dispose = Task.Factory.StartNew(() =>
-                    // {
-                    //     b.SignalAndWait();
-                    //     client.Shutdown(SocketShutdown.Both);
-                    //     client.Close(15);
-                    // }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                    Task dispose = Task.Factory.StartNew(() =>
+                    {
+                        b.SignalAndWait();
+                        client.Shutdown(SocketShutdown.Both);
+                        client.Close(15);
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-                    // Task send = Task.Factory.StartNew(() =>
-                    // {
-                    //     SendAsync(server, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
-                    //     b.SignalAndWait();
-                    //     ReceiveAsync(client, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
-                    // }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                    Task send = Task.Factory.StartNew(() =>
+                    {
+                        SendAsync(server, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
+                        b.SignalAndWait();
+                        ReceiveAsync(client, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
+                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-                    // await dispose;
-                    // Exception error = await Record.ExceptionAsync(() => send);
-                    // if (error != null)
-                    // {
-                    //     Assert.True(
-                    //         error is ObjectDisposedException ||
-                    //         error is SocketException ||
-                    //         (error is SEHException && PlatformDetection.IsInAppContainer),
-                    //         error.ToString());
-                    // }
+                    await dispose;
+                    Exception error = await Record.ExceptionAsync(() => send);
+                    if (error != null)
+                    {
+                        Assert.True(
+                            error is ObjectDisposedException ||
+                            error is SocketException ||
+                            (error is SEHException && PlatformDetection.IsInAppContainer),
+                            error.ToString());
+                    }
                 }
             }
-
-            await Task.CompletedTask;
         }
-
 
         [Theory]
         [InlineData(null, 0, 0)] // null array
