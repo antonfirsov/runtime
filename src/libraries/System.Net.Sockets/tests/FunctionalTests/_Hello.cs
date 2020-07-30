@@ -10,8 +10,12 @@ using Xunit.Abstractions;
 
 namespace System.Net.Sockets.Tests
 {
-    public class _Hello 
+    public class _Hello : SocketTestHelperBase<SocketHelperEap>
     {
+        public _Hello(ITestOutputHelper output) : base(output)
+        {
+        }
+
         [Fact]
         public async Task BasicSendReceive()
         {
@@ -26,13 +30,13 @@ namespace System.Net.Sockets.Tests
 
             for (int i = 0; i < msgCount; i++)
             {
-                Task sendTask = client.SendAsync(sendBuffer, SocketFlags.None);
+                Task sendTask = SendAsync(server, sendBuffer);
                 allTasks.Add(sendTask);
             }
 
             for (int i = 0; i < msgCount; i++)
             {
-                Task receiveTask = server.ReceiveAsync(receiveBuffer, SocketFlags.None);
+                Task receiveTask = ReceiveAsync(client, receiveBuffer);
                 allTasks.Add(receiveTask);
             }
 
