@@ -47,6 +47,7 @@ namespace System.Net.Sockets.Tests
             Task disposeTask = Task.Factory.StartNew(() =>
             {
                 shouldDisposeNow.Wait();
+                Thread.Sleep(1);
                 client.Shutdown(SocketShutdown.Both);
                 client.Close(15);
             }, TaskCreationOptions.LongRunning);
