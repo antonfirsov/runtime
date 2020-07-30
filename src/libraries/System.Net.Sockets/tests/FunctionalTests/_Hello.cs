@@ -22,7 +22,7 @@ namespace System.Net.Sockets.Tests
 
             for (int i = 0; i < 10; i++)
             {
-                result.Add(2 * i);
+                result.Add(8000 + 2 * i);
             }
 
             return result;
@@ -64,7 +64,19 @@ namespace System.Net.Sockets.Tests
 
                     if (i == disposeAfterReceives)
                     {
-                        shouldDisposeNow.Set();
+                        if (receiveTask.IsCompleted)
+                        {
+                            Console.WriteLine($"Firing the dispose @ {i} [sync]");
+                            shouldDisposeNow.Set();
+                        }
+                        else
+                        {
+                            receiveTask.GetAwaiter().OnCompleted(() =>
+                            {
+                                Console.WriteLine($"Firing dispose @ {i} [async]");
+                                shouldDisposeNow.Set();
+                            });
+                        }
                     }
 
                     allTasks.Add(receiveTask);
