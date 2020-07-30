@@ -59,6 +59,8 @@ namespace System.Net.Sockets.Tests
 
             for (int i = 0; i < msgCount; i++)
             {
+                if (client.SafeHandle.IsClosed) continue;
+
                 Task receiveTask = ReceiveAsync(client, receiveBuffer);
 
                 if (i == disposeAfterReceives)
