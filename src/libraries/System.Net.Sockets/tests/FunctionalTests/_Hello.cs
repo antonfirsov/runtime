@@ -22,7 +22,7 @@ namespace System.Net.Sockets.Tests
             byte[] sendBuffer = new byte[256];
             byte[] receiveBuffer = new byte[256];
 
-            int msgCount = 20;
+            int msgCount = 2000;
 
             (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
 
