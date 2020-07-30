@@ -23,33 +23,41 @@ namespace System.Net.Sockets.Tests
 
             for (int i = 0; i < 10000; i++) // run multiple times to attempt to force various interleavings
             {
-                (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
-                using (var b = new Barrier(2))
+                try
                 {
-                    Task dispose = Task.Factory.StartNew(() =>
-                    {
-                        b.SignalAndWait();
-                        client.Shutdown(SocketShutdown.Both);
-                        client.Close(15);
-                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                    (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
 
-                    Task send = Task.Factory.StartNew(() =>
+                    using (var b = new Barrier(2))
                     {
-                        SendAsync(server, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
-                        b.SignalAndWait();
-                        ReceiveAsync(client, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
-                    }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                        Task dispose = Task.Factory.StartNew(() =>
+                        {
+                            b.SignalAndWait();
+                            client.Shutdown(SocketShutdown.Both);
+                            client.Close(15);
+                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-                    await dispose;
-                    Exception error = await Record.ExceptionAsync(() => send);
-                    if (error != null)
-                    {
-                        Assert.True(
-                            error is ObjectDisposedException ||
-                            error is SocketException ||
-                            (error is SEHException && PlatformDetection.IsInAppContainer),
-                            error.ToString());
+                        Task send = Task.Factory.StartNew(() =>
+                        {
+                            SendAsync(server, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
+                            b.SignalAndWait();
+                            ReceiveAsync(client, new ArraySegment<byte>(new byte[1])).GetAwaiter().GetResult();
+                        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+                        await dispose;
+                        Exception error = await Record.ExceptionAsync(() => send);
+                        if (error != null)
+                        {
+                            Assert.True(
+                                error is ObjectDisposedException ||
+                                error is SocketException ||
+                                (error is SEHException && PlatformDetection.IsInAppContainer),
+                                error.ToString());
+                        }
                     }
+                }
+                catch (SocketException ex)
+                {
+                    throw new Exception($"SocketException @ i={i}: {ex.Message}");
                 }
             }
         }
