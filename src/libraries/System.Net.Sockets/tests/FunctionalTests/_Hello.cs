@@ -28,7 +28,7 @@ namespace System.Net.Sockets.Tests
             return result;
         }
 
-        [Theory]
+        [Theory(Timeout = 5000)]
         [MemberData(nameof(GetDisposeAfterData))]
         public async Task ReproMaybe(int disposeAfterReceives)
         {
@@ -40,6 +40,7 @@ namespace System.Net.Sockets.Tests
             (Socket client, Socket server) = SocketTestExtensions.CreateConnectedSocketPair();
 
             List<Task> allTasks = new List<Task>();
+            List<Task> receiveTasks = new List<Task>();
 
             ManualResetEventSlim shouldDisposeNow = new ManualResetEventSlim();
 
@@ -56,34 +57,34 @@ namespace System.Net.Sockets.Tests
                 allTasks.Add(sendTask);
             }
 
-            try
+            for (int i = 0; i < msgCount; i++)
             {
-                for (int i = 0; i < msgCount; i++)
+                Task receiveTask = ReceiveAsync(client, receiveBuffer);
+
+                if (i == disposeAfterReceives)
                 {
-                    Task receiveTask = ReceiveAsync(client, receiveBuffer);
-
-                    if (i == disposeAfterReceives)
+                    if (receiveTask.IsCompleted)
                     {
-                        if (receiveTask.IsCompleted)
-                        {
-                            Console.WriteLine($"Firing the dispose @ {i} [sync]");
-                            shouldDisposeNow.Set();
-                        }
-                        else
-                        {
-                            receiveTask.GetAwaiter().OnCompleted(() =>
-                            {
-                                Console.WriteLine($"Firing dispose @ {i} [async]");
-                                shouldDisposeNow.Set();
-                            });
-                        }
+                        Console.WriteLine($"Firing the dispose @ {i} [sync]");
+                        shouldDisposeNow.Set();
                     }
-
-                    allTasks.Add(receiveTask);
+                    else
+                    {
+                        receiveTask.GetAwaiter().OnCompleted(() =>
+                        {
+                            Console.WriteLine($"Firing dispose @ {i} [async]");
+                            shouldDisposeNow.Set();
+                        });
+                    }
                 }
 
-                await disposeTask;
-                await Task.WhenAll(allTasks);
+                allTasks.Add(receiveTask);
+                receiveTasks.Add(receiveTask);
+            }
+
+            try
+            {
+                await Task.WhenAll(receiveTasks);
             }
             catch (Exception ex)
             {
