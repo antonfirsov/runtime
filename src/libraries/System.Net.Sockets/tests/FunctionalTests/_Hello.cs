@@ -16,11 +16,11 @@ namespace System.Net.Sockets.Tests
         {
         }
 
-        [Fact(Skip ="kussolj")]
-        public async Task BasicSendReceive()
+        [Fact]
+        public async Task BasicSendReceive1()
         {
-            byte[] sendBuffer = new byte[32];
-            byte[] receiveBuffer = new byte[32];
+            byte[] sendBuffer = new byte[512];
+            byte[] receiveBuffer = new byte[512];
 
             int msgCount = 10000;
 
@@ -46,7 +46,7 @@ namespace System.Net.Sockets.Tests
             server.Dispose();
         }
 
-        [Fact]
+        [Fact(Skip = "kussolj")]
         public async Task BasicSendReceive2()
         {
             byte[] sendBuffer = new byte[32];
