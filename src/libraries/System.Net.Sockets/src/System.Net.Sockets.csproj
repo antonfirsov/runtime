@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <TargetFrameworks>$(NetCoreAppCurrent)-Windows_NT;$(NetCoreAppCurrent)-Unix;$(NetCoreAppCurrent)-Browser</TargetFrameworks>
@@ -10,7 +10,7 @@
   <PropertyGroup>
     <!-- SYSTEM_NET_SOCKETS_DLL is required to allow source-level code sharing for types defined within the
          System.Net.Internals namespace. -->
-    <DefineConstants>$(DefineConstants);SYSTEM_NET_SOCKETS_DLL</DefineConstants>
+    <DefineConstants>$(DefineConstants);SYSTEM_NET_SOCKETS_DLL;SOCKETASYNCCONTEXT_TRACE</DefineConstants>
   </PropertyGroup>
   <ItemGroup Condition="'$(TargetsBrowser)' != 'true'">
     <!-- All configurations -->
@@ -318,6 +318,7 @@
     <Reference Include="System.Threading" />
     <Reference Include="System.Threading.Overlapped" />
     <Reference Include="System.Threading.ThreadPool" />
+    <Reference Include="System.Console" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetsUnix)' == 'true'">
     <Reference Include="System.Threading.Thread" />
