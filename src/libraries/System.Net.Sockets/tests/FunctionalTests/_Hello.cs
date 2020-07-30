@@ -59,9 +59,22 @@ namespace System.Net.Sockets.Tests
 
             for (int i = 0; i < msgCount; i++)
             {
-                if (client.SafeHandle.IsClosed) continue;
+                if (client.SafeHandle.IsClosed)
+                {
+                    break;
+                }
 
-                Task receiveTask = ReceiveAsync(client, receiveBuffer);
+                Task receiveTask = null;
+                try
+                {
+                    receiveTask = ReceiveAsync(client, receiveBuffer);
+                }
+                catch (ObjectDisposedException)
+                {
+                    Console.WriteLine("Disposed. good!");
+                    break;
+                }
+                
 
                 if (i == disposeAfterReceives)
                 {
