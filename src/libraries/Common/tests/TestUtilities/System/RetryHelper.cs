@@ -7,6 +7,11 @@ using System.Threading.Tasks;
 
 namespace System
 {
+    public class StopRetryingException : Exception
+    {
+        public StopRetryingException(string message) : base(message) { }
+    }
+
     public static partial class RetryHelper
     {
         private static readonly Func<int, int> s_defaultBackoffFunc = i => Math.Min(i * 100, 60_000);
@@ -35,6 +40,10 @@ namespace System
                 {
                     test();
                     return;
+                }
+                catch (StopRetryingException)
+                {
+                    throw;
                 }
                 catch (Exception e)
                 {

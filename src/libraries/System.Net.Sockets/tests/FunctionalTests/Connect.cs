@@ -140,7 +140,10 @@ namespace System.Net.Sockets.Tests
 
                 var cts = new CancellationTokenSource();
                 Task timeoutTask = Task.Delay(30000, cts.Token);
-                Assert.NotSame(timeoutTask, await Task.WhenAny(disposeTask, connectTask, timeoutTask));
+                if (await Task.WhenAny(disposeTask, connectTask, timeoutTask) == timeoutTask)
+                {
+                    throw new StopRetryingException("The connect operation timed out.");
+                }
                 cts.Cancel();
 
                 await disposeTask;
