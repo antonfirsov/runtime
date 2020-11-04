@@ -48,14 +48,15 @@ namespace System.Net.Sockets.Tests
         public static IEnumerable<object[]> LoopbackWithBool =>
             from addr in Loopbacks
             from b in new[] { false, true }
-            select new object[] { addr[0], b };
+            from d in Enumerable.Range(0, 10)
+            select new object[] { addr[0], b, d };
 
-        [ActiveIssue("https://github.com/dotnet/runtime/issues/1712")]
-        [OuterLoop]
         [Theory]
         [MemberData(nameof(LoopbackWithBool))]
-        public async Task SendToRecvFrom_Datagram_UDP(IPAddress loopbackAddress, bool useClone)
+        public async Task SendToRecvFrom_Datagram_UDP(IPAddress loopbackAddress, bool useClone, int dummy)
         {
+            _output.WriteLine("dummy: " + dummy);
+
             IPAddress leftAddress = loopbackAddress, rightAddress = loopbackAddress;
 
             const int DatagramSize = 256;
