@@ -6,6 +6,7 @@
     <IgnoreForCI Condition="'$(TargetOS)' == 'Browser'">true</IgnoreForCI>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="_Repro.cs" />
     <Compile Include="Accept.cs" />
     <Compile Include="AgnosticListenerTest.cs" />
     <Compile Include="AssemblyInfo.cs" />
