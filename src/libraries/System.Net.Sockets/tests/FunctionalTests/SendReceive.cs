@@ -143,8 +143,10 @@ namespace System.Net.Sockets.Tests
             var leftEndpoint = (IPEndPoint)left.LocalEndPoint;
             var rightEndpoint = (IPEndPoint)right.LocalEndPoint;
 
-            var receiverAck = new SemaphoreSlim(0);
-            var senderAck = new SemaphoreSlim(0);
+            //var receiverAck = new SemaphoreSlim(0);
+            //var senderAck = new SemaphoreSlim(0);
+            var receiverAck = new AutoResetEvent(false);
+            var senderAck = new AutoResetEvent(false);
 
             _output.WriteLine($"{DateTime.Now}: Sending data from {rightEndpoint} to {leftEndpoint}");
 
@@ -164,8 +166,8 @@ namespace System.Net.Sockets.Tests
                     Assert.Null(receivedChecksums[datagramId]);
                     receivedChecksums[datagramId] = Fletcher32.Checksum(recvBuffer, 0, result.ReceivedBytes);
 
-                    receiverAck.Release();
-                    bool gotAck = await senderAck.WaitAsync(AckTimeout);
+                    receiverAck.Set();
+                    bool gotAck = senderAck.WaitOne(AckTimeout);
                     Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {AckTimeout} for senderAck in iteration {i}");
                 }
             });
@@ -182,9 +184,9 @@ namespace System.Net.Sockets.Tests
 
                     int sent = await SendToAsync(right, new ArraySegment<byte>(sendBuffer), leftEndpoint);
 
-                    bool gotAck = await receiverAck.WaitAsync(AckTimeout);
+                    bool gotAck = receiverAck.WaitOne(AckTimeout);
                     Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {AckTimeout} for receiverAck in iteration {i} after sending {sent}. Receiver is in {leftThread.Status}");
-                    senderAck.Release();
+                    senderAck.Set();
 
                     Assert.Equal(DatagramSize, sent);
                     sentChecksums[i] = Fletcher32.Checksum(sendBuffer, 0, sent);
