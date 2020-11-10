@@ -1,6 +1,9 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
@@ -25,7 +28,7 @@ namespace System.Net.Sockets.Tests
         }
 
         [Fact]
-        public async Task SendToRecvFrom_Datagram_UDP()
+        public async Task KillUdp()
         {
             IPAddress leftAddress = IPAddress.Loopback, rightAddress = IPAddress.Loopback;
 
@@ -125,7 +128,7 @@ namespace System.Net.Sockets.Tests
 
             while (DateTime.Now < end)
             {
-                Parallel.For(0, parallelism, i => _ = FindPrimeNumber(500 + i));
+                Parallel.For(0, parallelism, i => _ = /*FindPrimeNumber(500 + i)*/ GetPi(1000, 100));
             }
         }
 
@@ -153,6 +156,34 @@ namespace System.Net.Sockets.Tests
                 a++;
             }
             return (--a);
+        }
+
+        private static BigInteger GetPi(int digits, int iterations)
+        {
+            return 16 * ArcTan1OverX(5, digits).ElementAt(iterations)
+                - 4 * ArcTan1OverX(239, digits).ElementAt(iterations);
+        }
+
+        //arctan(x) = x - x^3/3 + x^5/5 - x^7/7 + x^9/9 - ...
+        private static IEnumerable<BigInteger> ArcTan1OverX(int x, int digits)
+        {
+            var mag = BigInteger.Pow(10, digits);
+            var sum = BigInteger.Zero;
+            bool sign = true;
+            for (int i = 1; true; i += 2)
+            {
+                var cur = mag / (BigInteger.Pow(x, i) * i);
+                if (sign)
+                {
+                    sum += cur;
+                }
+                else
+                {
+                    sum -= cur;
+                }
+                yield return sum;
+                sign = !sign;
+            }
         }
     }
 }
