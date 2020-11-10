@@ -15,10 +15,10 @@ namespace System.Net.Sockets.Tests
     public class _Repro2 : _Repro { public _Repro2(ITestOutputHelper output) : base(output) { } }
     public class _Repro3 : _Repro { public _Repro3(ITestOutputHelper output) : base(output) { } }
     public class _Repro4 : _Repro { public _Repro4(ITestOutputHelper output) : base(output) { } }
-    public class _Repro5 : _Repro { public _Repro5(ITestOutputHelper output) : base(output) { } }
-    public class _Repro6 : _Repro { public _Repro6(ITestOutputHelper output) : base(output) { } }
-    public class _Repro7 : _Repro { public _Repro7(ITestOutputHelper output) : base(output) { } }
-    public class _Repro8 : _Repro { public _Repro8(ITestOutputHelper output) : base(output) { } }
+    // public class _Repro5 : _Repro { public _Repro5(ITestOutputHelper output) : base(output) { } }
+    // public class _Repro6 : _Repro { public _Repro6(ITestOutputHelper output) : base(output) { } }
+    // public class _Repro7 : _Repro { public _Repro7(ITestOutputHelper output) : base(output) { } }
+    // public class _Repro8 : _Repro { public _Repro8(ITestOutputHelper output) : base(output) { } }
 
     public abstract class _Repro
     {
@@ -29,24 +29,31 @@ namespace System.Net.Sockets.Tests
             _output = output;
         }
 
-        [Theory]
-        [InlineData(0)]
-        // [InlineData(1)]
-        // [InlineData(2)]
-        // [InlineData(3)]
-        // [InlineData(4)]
-        // [InlineData(5)]
-        // [InlineData(6)]
-        // [InlineData(7)]
-        // [InlineData(8)]
-        // [InlineData(9)]
-        // [InlineData(10)]
-        public void BurnCpu(int dummy)
-        {
-            DoBurnCpu(30 + dummy, 4);
-        }
+        [Fact]
+        public void BurnCpu1() => DoBurnCpu(15, 4);
 
-        public const int TestInstanceCount = 30;
+        // [Fact]
+        // public void BurnCpu2() => DoBurnCpu(30, 4);
+
+        // [Fact]
+        // public void BurnCpu3() => DoBurnCpu(30, 4);
+
+        // [Fact]
+        // public void BurnCpu4() => DoBurnCpu(30, 4);
+
+        // [Fact]
+        // public void BurnCpu5() => DoBurnCpu(30, 4);
+
+        // [Fact]
+        // public void BurnCpu6() => DoBurnCpu(30, 4);
+
+        // [Fact]
+        // public void BurnCpu7() => DoBurnCpu(30, 4);
+
+        // [Fact]
+        // public void BurnCpu8() => DoBurnCpu(30, 4);
+
+        public const int TestInstanceCount = 5;
 
         public static TheoryData<bool, int> GetTestData()
         {
@@ -63,9 +70,35 @@ namespace System.Net.Sockets.Tests
             new SocketHelperArraySync() :
             new SocketHelperMemoryArrayTask();
 
-        [Theory(Timeout = 20000)]
-        [MemberData(nameof(GetTestData))]
-        public async Task KillUdp(bool sync, int dummy)
+        //[Theory(Timeout = 20000)]
+        //[MemberData(nameof(GetTestData))]
+        //public Task KillUdp(bool sync, int dummy) => KillUdpImpl(sync, dummy);
+
+        [Fact(Timeout = 15000)]
+        public Task KillUdp_Async() => KillUdpImpl(false, 0);
+
+        // [Fact(Timeout = 20000)]
+        // public Task KillUdp_Sync() => KillUdpImpl(true, 1);
+
+        // [Fact(Timeout = 20000)]
+        // public Task KillUdp_03() => KillUdpImpl(false, 2);
+
+        // [Fact(Timeout = 20000)]
+        // public Task KillUdp_04() => KillUdpImpl(false, 3);
+
+        // [Fact(Timeout = 20000)]
+        // public Task KillUdp_05() => KillUdpImpl(false, 0);
+
+        // [Fact(Timeout = 20000)]
+        // public Task KillUdp_06() => KillUdpImpl(false, 1);
+
+        // [Fact(Timeout = 20000)]
+        // public Task KillUdp_07() => KillUdpImpl(false, 2);
+
+        // [Fact(Timeout = 20000)]
+        // public Task KillUdp_08() => KillUdpImpl(false, 3);
+
+        private async Task KillUdpImpl(bool sync, int dummy)
         {
             IPAddress leftAddress = IPAddress.Loopback, rightAddress = IPAddress.Loopback;
 
@@ -165,12 +198,24 @@ namespace System.Net.Sockets.Tests
 
         private static void DoBurnCpu(int seconds, int parallelism)
         {
-            TimeSpan dt = TimeSpan.FromSeconds(seconds);
-            DateTime end = DateTime.Now + dt;
+            List<Task> tasks = new List<Task>();
 
-            while (DateTime.Now < end)
+            for (int i = 0; i < parallelism; i++)
             {
-                Parallel.For(0, parallelism, i => _ = FindPrimeNumber(500 + i));
+                tasks.Add(Task.Factory.StartNew(BurnPlease, TaskCreationOptions.LongRunning));
+            }
+
+            Task.WhenAll(tasks).GetAwaiter().GetResult();
+
+            void BurnPlease()
+            {
+                TimeSpan dt = TimeSpan.FromSeconds(seconds);
+                DateTime end = DateTime.Now + dt;
+
+                while (DateTime.Now < end)
+                {
+                    FindPrimeNumber(500);
+                }
             }
         }
 
@@ -198,34 +243,6 @@ namespace System.Net.Sockets.Tests
                 a++;
             }
             return (--a);
-        }
-
-        private static BigInteger GetPi(int digits, int iterations)
-        {
-            return 16 * ArcTan1OverX(5, digits).ElementAt(iterations)
-                - 4 * ArcTan1OverX(239, digits).ElementAt(iterations);
-        }
-
-        //arctan(x) = x - x^3/3 + x^5/5 - x^7/7 + x^9/9 - ...
-        private static IEnumerable<BigInteger> ArcTan1OverX(int x, int digits)
-        {
-            var mag = BigInteger.Pow(10, digits);
-            var sum = BigInteger.Zero;
-            bool sign = true;
-            for (int i = 1; true; i += 2)
-            {
-                var cur = mag / (BigInteger.Pow(x, i) * i);
-                if (sign)
-                {
-                    sum += cur;
-                }
-                else
-                {
-                    sum -= cur;
-                }
-                yield return sum;
-                sign = !sign;
-            }
         }
     }
 }
