@@ -21,7 +21,7 @@ namespace System.Net.Sockets.Tests
         [Fact]
         public void BurnCpu()
         {
-            DoBurnCpu(5, 4);
+            DoBurnCpu(60, 4);
         }
 
         [Fact]
