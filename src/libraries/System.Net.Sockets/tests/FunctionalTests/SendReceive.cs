@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -129,8 +130,8 @@ namespace System.Net.Sockets.Tests
 
             const int DatagramSize = 256;
             const int DatagramsToSend = 256;
-            const int AckTimeout = 2000;
-            //const int TestTimeout = 30000;
+            const int SenderAckTimeout = 2000;
+            const int ReceiverAckTimeout = 10000;
 
             using var origLeft = new Socket(leftAddress.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             using var origRight = new Socket(rightAddress.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
@@ -143,10 +144,10 @@ namespace System.Net.Sockets.Tests
             var leftEndpoint = (IPEndPoint)left.LocalEndPoint;
             var rightEndpoint = (IPEndPoint)right.LocalEndPoint;
 
-            //var receiverAck = new SemaphoreSlim(0);
-            //var senderAck = new SemaphoreSlim(0);
-            var receiverAck = new AutoResetEvent(false);
-            var senderAck = new AutoResetEvent(false);
+            var receiverAck = new SemaphoreSlim(0);
+            var senderAck = new SemaphoreSlim(0);
+            //var receiverAck = new AutoResetEvent(false);
+            //var senderAck = new AutoResetEvent(false);
 
             _output.WriteLine($"{DateTime.Now}: Sending data from {rightEndpoint} to {leftEndpoint}");
 
@@ -155,28 +156,41 @@ namespace System.Net.Sockets.Tests
             {
                 EndPoint remote = leftEndpoint.Create(leftEndpoint.Serialize());
                 var recvBuffer = new byte[DatagramSize];
+                Stopwatch sw = new Stopwatch();
                 for (int i = 0; i < DatagramsToSend; i++)
                 {
+                    _output.WriteLine("ReceiveFromAsync ...");
                     SocketReceiveFromResult result = await ReceiveFromAsync(
                         left, new ArraySegment<byte>(recvBuffer), remote);
+                    _output.WriteLine("ReceiveFromAsync got result");
+
                     Assert.Equal(DatagramSize, result.ReceivedBytes);
                     Assert.Equal(rightEndpoint, result.RemoteEndPoint);
+                    _output.WriteLine("ReceiveFromAsync result correct");
 
                     int datagramId = recvBuffer[0];
                     Assert.Null(receivedChecksums[datagramId]);
                     receivedChecksums[datagramId] = Fletcher32.Checksum(recvBuffer, 0, result.ReceivedBytes);
 
-                    receiverAck.Set();
-                    bool gotAck = senderAck.WaitOne(AckTimeout);
-                    Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {AckTimeout} for senderAck in iteration {i}");
+                    //receiverAck.Set();
+                    receiverAck.Release();
+                    sw.Restart();
+                    _output.WriteLine("senderAck.WaitOne ...");
+                    //bool gotAck = senderAck.WaitOne(SenderAckTimeout);
+                    bool gotAck = await senderAck.WaitAsync(SenderAckTimeout);
+                    _output.WriteLine($"senderAck.WaitOne completed in {sw.ElapsedMilliseconds}");
+
+                    Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {SenderAckTimeout} for senderAck in iteration {i}");
                 }
             });
 
             var sentChecksums = new uint[DatagramsToSend];
+
             using (right)
             {
                 var random = new Random();
                 var sendBuffer = new byte[DatagramSize];
+                Stopwatch sw = new Stopwatch();
                 for (int i = 0; i < DatagramsToSend; i++)
                 {
                     random.NextBytes(sendBuffer);
@@ -184,9 +198,16 @@ namespace System.Net.Sockets.Tests
 
                     int sent = await SendToAsync(right, new ArraySegment<byte>(sendBuffer), leftEndpoint);
 
-                    bool gotAck = receiverAck.WaitOne(AckTimeout);
-                    Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {AckTimeout} for receiverAck in iteration {i} after sending {sent}. Receiver is in {leftThread.Status}");
-                    senderAck.Set();
+                    sw.Restart();
+                    _output.WriteLine("receiverAck.WaitOne ...");
+                    //bool gotAck = receiverAck.WaitOne(ReceiverAckTimeout);
+                    bool gotAck = await receiverAck.WaitAsync(ReceiverAckTimeout);
+                    _output.WriteLine($"receiverAck.WaitOne completed in {sw.ElapsedMilliseconds}");
+
+                    Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {ReceiverAckTimeout} for receiverAck in iteration {i} after sending {sent}. Receiver is in {leftThread.Status}");
+
+                    //senderAck.Set();
+                    senderAck.Release();
 
                     Assert.Equal(DatagramSize, sent);
                     sentChecksums[i] = Fletcher32.Checksum(sendBuffer, 0, sent);
