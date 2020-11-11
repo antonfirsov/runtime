@@ -131,6 +131,10 @@ namespace System.Net.Sockets.Tests
 
             throw new Exception($"maxSendTime={maxSendTime} ms | maxRecvTime={maxRecvTime} ms");
         }
+
+        [OuterLoop]
+        [Fact]
+        public static Task ReportTimes_OuterLoop() => ReportTimes();
     }
 
     public abstract class SendReceive<T> : SocketTestHelperBase<T> where T : SocketHelperBase, new()
