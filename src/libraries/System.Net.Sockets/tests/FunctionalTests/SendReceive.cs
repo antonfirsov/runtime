@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -22,6 +23,8 @@ namespace System.Net.Sockets.Tests
         public const int StressParallelism = 4;
 
         public const int StressTimeSeconds = 30;
+
+        private static readonly ConcurrentBag<(long SendTime, long RecvTime)> _allTimes = new ConcurrentBag<(long SendTime, long RecvTime)>();
 
         internal static async Task SendToRecvFrom_Datagram_UDP(
             IPAddress loopbackAddress,
@@ -113,6 +116,18 @@ namespace System.Net.Sockets.Tests
                 Assert.Equal(sentChecksums[i], (uint)receivedChecksums[i]);
             }
             _output.WriteLine("- REACHED END -");
+
+            _allTimes.Add((maxSendTime, maxRecvTime));
+        }
+
+        [Fact]
+        public static async Task ReportTimes()
+        {
+            await Task.Delay(TimeSpan.FromMinutes(1));
+
+            var times = _allTimes.ToArray();
+            long maxSendTime = times.Select(t => t.SendTime).Max();
+            long maxRecvTime = times.Select(t => t.RecvTime).Max();
 
             throw new Exception($"maxSendTime={maxSendTime} ms | maxRecvTime={maxRecvTime} ms");
         }
