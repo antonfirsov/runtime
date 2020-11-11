@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -16,7 +17,13 @@ namespace System.Net.Sockets.Tests
 {
     public static class UdpStressRepro
     {
-        public static async Task SendToRecvFrom_Datagram_UDP(
+        public const int Parallelism = 10;
+
+        public const int StressParallelism = 4;
+
+        public const int StressTimeSeconds = 30;
+
+        internal static async Task SendToRecvFrom_Datagram_UDP(
             IPAddress loopbackAddress,
             bool useClone,
             SocketHelperBase helper,
@@ -26,8 +33,11 @@ namespace System.Net.Sockets.Tests
 
             const int DatagramSize = 256;
             const int DatagramsToSend = 256;
-            const int AckTimeout = 2000;
-            const int TestTimeout = 30000;
+            const int RecvAckTimeout = 20000;
+            const int SendAckTimeout = 40000;
+
+            long maxRecvTime = 0;
+            long maxSendTime = 0;
 
             using var origLeft = new Socket(leftAddress.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             using var origRight = new Socket(rightAddress.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
@@ -50,10 +60,15 @@ namespace System.Net.Sockets.Tests
             {
                 EndPoint remote = leftEndpoint.Create(leftEndpoint.Serialize());
                 var recvBuffer = new byte[DatagramSize];
+                Stopwatch sw = new Stopwatch();
                 for (int i = 0; i < DatagramsToSend; i++)
                 {
+                    sw.Restart();
+
                     SocketReceiveFromResult result = await helper.ReceiveFromAsync(
                         left, new ArraySegment<byte>(recvBuffer), remote);
+                    maxRecvTime = Math.Max(maxRecvTime, sw.ElapsedMilliseconds);
+
                     Assert.Equal(DatagramSize, result.ReceivedBytes);
                     Assert.Equal(rightEndpoint, result.RemoteEndPoint);
 
@@ -62,8 +77,8 @@ namespace System.Net.Sockets.Tests
                     receivedChecksums[datagramId] = Fletcher32.Checksum(recvBuffer, 0, result.ReceivedBytes);
 
                     receiverAck.Release();
-                    bool gotAck = await senderAck.WaitAsync(TestTimeout);
-                    Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {AckTimeout} for senderAck in iteration {i}");
+                    bool gotAck = await senderAck.WaitAsync(SendAckTimeout);
+                    Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {RecvAckTimeout} for senderAck in iteration {i}");
                 }
             });
 
@@ -72,15 +87,18 @@ namespace System.Net.Sockets.Tests
             {
                 var random = new Random();
                 var sendBuffer = new byte[DatagramSize];
+                Stopwatch sw = new Stopwatch();
                 for (int i = 0; i < DatagramsToSend; i++)
                 {
                     random.NextBytes(sendBuffer);
                     sendBuffer[0] = (byte)i;
 
+                    sw.Restart();
                     int sent = await helper.SendToAsync(right, new ArraySegment<byte>(sendBuffer), leftEndpoint);
+                    maxSendTime = Math.Max(maxSendTime, sw.ElapsedMilliseconds);
 
-                    bool gotAck = await receiverAck.WaitAsync(AckTimeout);
-                    Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {AckTimeout} for receiverAck in iteration {i} after sending {sent}. Receiver is in {leftThread.Status}");
+                    bool gotAck = await receiverAck.WaitAsync(RecvAckTimeout);
+                    Assert.True(gotAck, $"{DateTime.Now}: Timeout waiting {RecvAckTimeout} for receiverAck in iteration {i} after sending {sent}. Receiver is in {leftThread.Status}");
                     senderAck.Release();
 
                     Assert.Equal(DatagramSize, sent);
@@ -95,6 +113,8 @@ namespace System.Net.Sockets.Tests
                 Assert.Equal(sentChecksums[i], (uint)receivedChecksums[i]);
             }
             _output.WriteLine("- REACHED END -");
+
+            throw new Exception($"maxSendTime={maxSendTime} ms | maxRecvTime={maxRecvTime} ms");
         }
     }
 
@@ -132,20 +152,20 @@ namespace System.Net.Sockets.Tests
         public static IEnumerable<object[]> LoopbackWithBool =>
             from addr in Loopbacks
             from b in new[] { false, true }
-            from dummy in Enumerable.Range(0, 10)
+            from dummy in Enumerable.Range(0, UdpStressRepro.Parallelism)
             select new object[] { addr[0], b, dummy };
 
         [Fact]
         public void StressTestEnvironmentMore()
         {
-            DoBurnCpu(30, 4);
+            DoBurnCpu(UdpStressRepro.StressTimeSeconds, UdpStressRepro.StressTimeSeconds);
         }
 
         [OuterLoop]
         [Fact]
         public void StressTestEnvironmentMore_OuterLoop()
         {
-            DoBurnCpu(30, 4);
+            StressTestEnvironmentMore();
         }
 
         private static void DoBurnCpu(int seconds, int parallelism)
