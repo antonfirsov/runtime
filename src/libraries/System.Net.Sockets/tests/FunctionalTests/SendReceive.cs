@@ -173,7 +173,7 @@ namespace System.Net.Sockets.Tests
         [Fact]
         public void StressTestEnvironmentMore()
         {
-            DoBurnCpu(UdpStressRepro.StressTimeSeconds, UdpStressRepro.StressTimeSeconds);
+            DoBurnCpu(UdpStressRepro.StressTimeSeconds, UdpStressRepro.StressParallelism);
         }
 
         [OuterLoop]
