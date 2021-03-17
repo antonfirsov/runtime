@@ -1,7 +1,10 @@
+.git/
+
 ### VisualStudio ###
 
 # Tool Runtime Dir
 **/.dotnet/
+**/.dotnet-mono/
 **/.packages/
 **/.tools/
 
@@ -24,7 +27,7 @@
 **/msbuild.log
 **/msbuild.err
 **/msbuild.wrn
-**/msbuild.binlog
+**/*.binlog
 **/.deps/
 **/.dirstamp
 **/.libs/
@@ -48,6 +51,7 @@
 #NUNIT
 **/*.VisualState.xml
 **/TestResult.xml
+**/testResults.xml
 
 # Build Results of an ATL Project
 **/[Dd]ebugPS/
@@ -61,7 +65,6 @@
 **/*.obj
 **/*.pch
 **/*.pdb
-!**/_.pdb
 **/*.pgc
 **/*.pgd
 **/*.rsp
@@ -78,6 +81,9 @@
 **/*.pidb
 **/*.svclog
 **/*.scc
+
+# Special file
+!**/src/coreclr/.nuget/_.pdb
 
 # Chutzpah Test files
 **/_Chutzpah*
@@ -208,8 +214,6 @@
 !**/**/.vscode/c_cpp_properties.json
 
 ### MonoDevelop ###
-
-**/*.pidb
 **/*.userprefs
 
 ### Windows ###
@@ -269,10 +273,10 @@
 **/*.un~
 **/Session.vim
 **/.netrwhist
-**/*~
 
 # Visual Studio Code
 **/.vscode/
+**/.devcontainer/
 
 # Private test configuration and binaries.
 **/config.ps1
@@ -289,10 +293,10 @@
 **/stage/
 
 # CLR prebuilt generated files
-!**/src/pal/prebuilt/idl/*_i.c
+!**/pal/prebuilt/idl/*_i.c
 
 # Valid 'debug' folder, that contains CLR debugging code
-!**/src/**/debug
+!**/src/coreclr/debug
 
 # Ignore folders created by the CLR test build
 **/TestWrappers_x64_[d|D]ebug
@@ -307,7 +311,6 @@
 **/TestWrappers_arm64_[d|D]ebug
 **/TestWrappers_arm64_[c|C]hecked
 **/TestWrappers_arm64_[r|R]elease
-**/tests/src/common/test_runtime/project.json
 
 **/Vagrantfile
 **/.vagrant
@@ -316,7 +319,6 @@
 **/CMakeFiles/
 **/cmake_install.cmake
 **/CMakeCache.txt
-**/Makefile
 
 # Cross compilation
 **/cross/rootfs/*
@@ -328,10 +330,20 @@
 **/*.pyc
 
 # JIT32 files
-**/src/jit32
+**/jit32
 
 # performance testing sandbox
 **/sandbox
 
 #IL linker for testing
 **/linker
+
+# Symbolic link for the shared portion of CoreLib to make grep/findstr work for runtime devs
+**/src/coreclr/System.Private.CoreLib/shared
+**/src/coreclr/System.Private.CoreLib/common
+
+# Exceptions to the exclusions
+!**/src/coreclr/.nuget/_.pdb
+!**/src/coreclr/inc/obj/
+!**/src/coreclr/vm/.vscode/
+!**/src/coreclr/vm/.vscode/c_cpp_properties.json
