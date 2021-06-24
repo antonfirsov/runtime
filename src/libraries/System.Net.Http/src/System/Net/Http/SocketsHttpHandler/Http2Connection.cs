@@ -488,7 +488,6 @@ namespace System.Net.Http
             _hpackDecoder.CompleteDecode();
 
             http2Stream?.OnHeadersComplete(endStream);
-            //_rttEstimator.Update();
         }
 
         /// <summary>Nop implementation of <see cref="IHttpHeadersHandler"/> used by <see cref="ProcessHeadersFrame"/>.</summary>

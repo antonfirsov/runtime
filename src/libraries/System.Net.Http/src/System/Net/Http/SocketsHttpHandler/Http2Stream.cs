@@ -99,8 +99,6 @@ namespace System.Net.Http
 
                 _windowManager = new Http2StreamWindowManager(connection, this);
 
-                Trace($"_windowManager: {_windowManager.GetType().Name}");
-
                 _headerBudgetRemaining = connection._pool.Settings._maxResponseHeadersLength * 1024;
 
                 if (_request.Content == null)

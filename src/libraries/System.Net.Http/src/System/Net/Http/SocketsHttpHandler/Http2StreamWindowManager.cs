@@ -198,7 +198,10 @@ namespace System.Net.Http
 
             internal void OnPingAckReceived(long payload)
             {
-                if (_state != State.PingSent) return;
+                if (_state != State.PingSent)
+                {
+                    ThrowProtocolError();
+                }
                 Debug.Assert(payload < 0);
 
                 if (Interlocked.Read(ref _pingCounter) != payload)
