@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -100,6 +98,15 @@ namespace System.Net.Http
                     TimeSpan rtt = _connection._rttEstimator.MinRtt;
                     TimeSpan dt = StopwatchTicksToTimeSpan(currentTime - _lastWindowUpdate);
 
+                    // We are detecting bursts in the amount of data consumed within a single 'dt' window update period.
+                    // The value "_deliveredBytes / dt" correlates with the bandwidth of the connection.
+                    // We need to extend the window, if the bandwidth-delay product grows over the current window size.
+                    // To enable empirical fine tuning, we apply a configurable multiplier (_windowScaleThresholdMultiplier) to the window size, which defaults to 1.0
+                    //
+                    // The condition to extend the window is:
+                    // (_deliveredBytes / dt) * rtt > _streamWindowSize * _windowScaleThresholdMultiplier
+                    //
+                    // Which is reordered into the form below, to avoid the division:
                     if (_deliveredBytes * rtt.Ticks > _streamWindowSize * dt.Ticks * _windowScaleThresholdMultiplier)
                     {
                         int extendedWindowSize = Math.Min(_maxStreamWindowSize, _streamWindowSize * 2);
@@ -112,6 +119,8 @@ namespace System.Net.Http
                         if (_streamWindowSize == _maxStreamWindowSize)
                         {
                             if (NetEventSource.Log.IsEnabled()) _stream.Trace($"[FlowControl] StreamWindowSize reached the configured maximum of {_maxStreamWindowSize}.");
+
+                            // We are at maximum configured window, stop further scaling:
                             _windowScalingEnabled = false;
                         }
                     }

@@ -28,7 +28,7 @@ namespace System.Net.Http.Functional.Tests
     {
     }
 
-    // This test class contains tests which are strongly timing-dependant.
+    // This test class contains tests which are strongly timing-dependent.
     // There are two mitigations avoid flaky behavior on CI:
     // - The tests are executed in a non-parallel manner
     // - The timing-dependent behavior is pushed to the extremes, making it very unlikely to fail.
