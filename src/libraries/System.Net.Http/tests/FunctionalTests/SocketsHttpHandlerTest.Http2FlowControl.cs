@@ -44,6 +44,7 @@ namespace System.Net.Http.Functional.Tests
         {
         }
 
+        [OuterLoop("Runs long")]
         [Fact]
         public async Task InitialHttp2StreamWindowSize_SentInSettingsFrame()
         {
@@ -61,6 +62,7 @@ namespace System.Net.Http.Functional.Tests
             Assert.Equal(WindowSize, (int)entry.Value);
         }
 
+        [OuterLoop("Runs long")]
         [Fact]
         public void DisableDynamicWindowScaling_HighBandwidthDelayProduct_WindowRemainsConstant()
         {
@@ -80,6 +82,7 @@ namespace System.Net.Http.Functional.Tests
             RemoteExecutor.Invoke(RunTest).Dispose();
         }
 
+        [OuterLoop("Runs long")]
         [Fact]
         public void MaxStreamWindowSize_HighBandwidthDelayProduct_WindowStopsAtMaxValue()
         {
@@ -102,6 +105,7 @@ namespace System.Net.Http.Functional.Tests
             RemoteExecutor.Invoke(RunTest, options).Dispose();
         }
 
+        [OuterLoop("Runs long")]
         [Fact]
         public async Task HighBandwidthDelayProduct_ClientStreamReceiveWindowWindowScalesUp()
         {
@@ -115,6 +119,7 @@ namespace System.Net.Http.Functional.Tests
             Assert.True(maxCredit > 1024 * 1024);
         }
 
+        [OuterLoop("Runs long")]
         [Fact]
         public async Task LowBandwidthDelayProduct_ClientStreamReceiveWindowStopsScaling()
         {
@@ -128,6 +133,7 @@ namespace System.Net.Http.Functional.Tests
             Assert.True(maxCredit < 1024 * 1024);
         }
 
+        [OuterLoop("Runs long")]
         [Fact]
         public void StreamWindowScaleThresholdMultiplier_HighValue_WindowScalesSlower()
         {
@@ -148,6 +154,7 @@ namespace System.Net.Http.Functional.Tests
             RemoteExecutor.Invoke(RunTest, options).Dispose();
         }
 
+        [OuterLoop("Runs long")]
         [Fact]
         public void StreamWindowScaleThresholdMultiplier_LowValue_WindowScalesFaster()
         {
