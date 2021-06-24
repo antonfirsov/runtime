@@ -207,7 +207,7 @@ namespace System.Net.Test.Common
                 // _expectPingFrame is not intended to work with PING ACK:
                 if (!pingFrame.AckFlag)
                 {
-                    await ProcessExpectedPingFrame(pingFrame);
+                    await ProcessExpectedPingFrameAsync(pingFrame);
                     return await ReadFrameAsync(cancellationToken).ConfigureAwait(false);
                 }
                 else
@@ -242,7 +242,7 @@ namespace System.Net.Test.Common
             }
         }
 
-        private async Task ProcessExpectedPingFrame(PingFrame pingFrame)
+        private async Task ProcessExpectedPingFrameAsync(PingFrame pingFrame)
         {
             _expectPingFrame.SetResult(pingFrame);
             if (_respondToPing && !pingFrame.AckFlag)
