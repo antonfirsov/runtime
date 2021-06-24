@@ -354,6 +354,7 @@ namespace System.Net.Http
     {
         public SocketsHttpHandler() { }
         public int InitialHttp2StreamWindowSize { get { throw null; } set { } }
+        [System.Runtime.Versioning.UnsupportedOSPlatformGuardAttribute("browser")]
         public static bool IsSupported { get { throw null; } }
         public bool AllowAutoRedirect { get { throw null; } set { } }
         public System.Net.DecompressionMethods AutomaticDecompression { get { throw null; } set { } }
