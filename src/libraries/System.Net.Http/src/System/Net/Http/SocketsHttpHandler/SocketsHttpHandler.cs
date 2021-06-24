@@ -55,6 +55,22 @@ namespace System.Net.Http
             }
         }
 
+        public int InitialHttp2StreamWindowSize
+        {
+            get => _settings._initialHttp2StreamWindowSize;
+            set
+            {
+                if (value < Http2Connection.DefaultInitialWindowSize || value > _settings._maxHttp2StreamWindowSize)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(InitialHttp2StreamWindowSize),
+                        SR.Format(SR.net_http_http2_invalidinitialstreamwindowsize, Http2Connection.DefaultInitialWindowSize, _settings._maxHttp2StreamWindowSize));
+                }
+                CheckDisposedOrStarted();
+                _settings._initialHttp2StreamWindowSize = value;
+            }
+        }
+
         [AllowNull]
         public CookieContainer CookieContainer
         {

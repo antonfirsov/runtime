@@ -353,7 +353,7 @@ namespace System.Net.Http
     public sealed partial class SocketsHttpHandler : System.Net.Http.HttpMessageHandler
     {
         public SocketsHttpHandler() { }
-        [System.Runtime.Versioning.UnsupportedOSPlatformGuardAttribute("browser")]
+        public int InitialHttp2StreamWindowSize { get { throw null; } set { } }
         public static bool IsSupported { get { throw null; } }
         public bool AllowAutoRedirect { get { throw null; } set { } }
         public System.Net.DecompressionMethods AutomaticDecompression { get { throw null; } set { } }
