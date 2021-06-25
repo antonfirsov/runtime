@@ -122,6 +122,7 @@ namespace System.Net.Http
 
                             // We are at maximum configured window, stop further scaling:
                             _windowScalingEnabled = false;
+                            _connection._rttEstimator.MaximumWindowReached();
                         }
                     }
                 }
@@ -148,8 +149,7 @@ namespace System.Net.Http
                 Disabled,
                 Init,
                 Waiting,
-                PingSent,
-                Terminating
+                PingSent
             }
 
             private const double PingIntervalInSeconds = 1;
@@ -161,6 +161,7 @@ namespace System.Net.Http
             private long _pingSentTimestamp;
             private long _pingCounter;
             private int _initialBurst;
+            private volatile bool _terminating;
 
             public TimeSpan MinRtt;
 
@@ -168,10 +169,11 @@ namespace System.Net.Http
             {
                 _connection = connection;
                 _state = connection._pool.Settings._disableDynamicHttp2WindowSizing ? State.Disabled : State.Init;
-                _pingCounter = -1;
+                _pingCounter = 0;
                 _initialBurst = 4;
                 _pingSentTimestamp = default;
                 MinRtt = default;
+                _terminating = false;
             }
 
             internal void OnInitialSettingsSent()
@@ -191,15 +193,21 @@ namespace System.Net.Http
             {
                 if (_state != State.Waiting) return;
 
+                if (_terminating)
+                {
+                    _state = State.Disabled;
+                    return;
+                }
+
                 long now = Stopwatch.GetTimestamp();
-                bool initial = Interlocked.Decrement(ref _initialBurst) >= 0;
+                bool initial = _initialBurst > 0;
                 if (initial || now - _pingSentTimestamp > PingIntervalInTicks)
                 {
-                    if (_initialBurst > 0) Interlocked.Decrement(ref _initialBurst);
+                    if (initial) _initialBurst--;
 
                     // Send a PING
-                    long payload = Interlocked.Decrement(ref _pingCounter);
-                    _connection.LogExceptions(_connection.SendPingAsync(payload, isAck: false));
+                    _pingCounter--;
+                    _connection.LogExceptions(_connection.SendPingAsync(_pingCounter, isAck: false));
                     _pingSentTimestamp = now;
                     _state = State.PingSent;
                 }
@@ -213,16 +221,23 @@ namespace System.Net.Http
                 }
                 Debug.Assert(payload < 0);
 
-                if (Interlocked.Read(ref _pingCounter) != payload)
+                if (_pingCounter != payload)
                     ThrowProtocolError();
+
                 RefreshRtt();
                 _state = State.Waiting;
             }
 
             internal void OnGoAwayReceived()
             {
-                if (_state == State.Disabled) return;
-                _state = State.Terminating;
+                _state = State.Disabled;
+            }
+
+            internal void MaximumWindowReached()
+            {
+                // This method is being called from a thread other than the rest of the methods, so do not mess with _state.
+                // OnDataOrHeadersReceived will eventually flip it to State.Disabled.
+                _terminating = true;
             }
 
             private void RefreshRtt()
