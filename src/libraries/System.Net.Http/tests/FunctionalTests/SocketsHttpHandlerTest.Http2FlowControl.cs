@@ -44,7 +44,6 @@ namespace System.Net.Http.Functional.Tests
         {
         }
 
-        [OuterLoop("Runs long")]
         [Fact]
         public async Task InitialHttp2StreamWindowSize_SentInSettingsFrame()
         {
@@ -61,6 +60,73 @@ namespace System.Net.Http.Functional.Tests
 
             Assert.Equal(WindowSize, (int)entry.Value);
         }
+
+        [Fact]
+        public Task InvalidRttPingResponse_RequestShouldFail()
+        {
+            return Http2LoopbackServer.CreateClientAndServerAsync(async uri =>
+            {
+                using var handler = CreateHttpClientHandler();
+                using HttpClient client = CreateHttpClient(handler);
+                HttpRequestException exception = await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync(uri));
+                _output.WriteLine(exception.Message + exception.StatusCode);
+            },
+            async server =>
+            {
+                Http2LoopbackConnection connection = await server.EstablishConnectionAsync();
+                (int streamId, _) = await connection.ReadAndParseRequestHeaderAsync();
+                await connection.SendDefaultResponseHeadersAsync(streamId);
+                PingFrame pingFrame = await connection.ReadPingAsync(); // expect an RTT PING
+                await connection.SendPingAckAsync(-6666); // send an invalid PING response
+                await connection.SendResponseDataAsync(streamId, new byte[] { 1, 2, 3 }, true); // otherwise fine response
+            });
+        }
+
+
+        //[OuterLoop("Runs long")]
+        [Fact]
+        public async Task HighBandwidthDelayProduct_ClientStreamReceiveWindowWindowScalesUp()
+        {
+            int maxCredit = await TestClientWindowScalingAsync(
+                TimeSpan.FromMilliseconds(30),
+                TimeSpan.Zero,
+                2 * 1024 * 1024,
+                _output);
+
+            // Expect the client receive window to grow over 1MB:
+            Assert.True(maxCredit > 1024 * 1024);
+        }
+
+        //[OuterLoop("Runs long")]
+        [Fact]
+        public async Task LowBandwidthDelayProduct_ClientStreamReceiveWindowStopsScaling()
+        {
+            int maxCredit = await TestClientWindowScalingAsync(
+                TimeSpan.Zero,
+                TimeSpan.FromMilliseconds(15),
+                2 * 1024 * 1024,
+                _output);
+
+            // Expect the client receive window to stay below 1MB:
+            Assert.True(maxCredit < 1024 * 1024);
+        }
+
+        [Fact]
+        public async Task KeepAlivePing_DoesNotInterfereWithRttPing()
+        {
+            await TestClientWindowScalingAsync(
+                TimeSpan.Zero,
+                TimeSpan.FromMilliseconds(15),
+                5 * 1024 * 1024,
+                _output,
+                configureHandler: h =>
+                {
+                    h.KeepAlivePingDelay = TimeSpan.FromSeconds(1);
+                    h.KeepAlivePingTimeout = TimeSpan.FromSeconds(10);
+                    h.KeepAlivePingPolicy = HttpKeepAlivePingPolicy.Always;
+                });
+        }
+
 
         [OuterLoop("Runs long")]
         [Fact]
@@ -82,9 +148,9 @@ namespace System.Net.Http.Functional.Tests
             RemoteExecutor.Invoke(RunTest).Dispose();
         }
 
-        [OuterLoop("Runs long")]
+        //[OuterLoop("Runs long")]
         [Fact]
-        public void MaxStreamWindowSize_HighBandwidthDelayProduct_WindowStopsAtMaxValue()
+        public void MaxStreamWindowSize_WhenSet_WindowDoesNotScaleAboveMaximum()
         {
             const int MaxWindow = 654321;
 
@@ -105,32 +171,39 @@ namespace System.Net.Http.Functional.Tests
             RemoteExecutor.Invoke(RunTest, options).Dispose();
         }
 
-        [OuterLoop("Runs long")]
-        [Fact]
-        public async Task HighBandwidthDelayProduct_ClientStreamReceiveWindowWindowScalesUp()
+        class StringBuilderOutput : ITestOutputHelper
         {
-            int maxCredit = await TestClientWindowScalingAsync(
-                TimeSpan.FromMilliseconds(30),
-                TimeSpan.Zero,
-                2 * 1024 * 1024,
-                _output);
+            private StringBuilder _bld = new StringBuilder();
+            public void WriteLine(string message) => _bld.AppendLine(message);
+            public void WriteLine(string format, params object[] args) => _bld.AppendLine(string.Format(format, args));
 
-            // Expect the client receive window to grow over 1MB:
-            Assert.True(maxCredit > 1024 * 1024);
+            public string Output => _bld.ToString();
         }
 
-        [OuterLoop("Runs long")]
         [Fact]
-        public async Task LowBandwidthDelayProduct_ClientStreamReceiveWindowStopsScaling()
+        public void MaxStreamWindowSize_WhenMaximumReached_NoMoreRttPingsAreSent()
         {
-            int maxCredit = await TestClientWindowScalingAsync(
-                TimeSpan.Zero,
-                TimeSpan.FromMilliseconds(15),
-                2 * 1024 * 1024,
-                _output);
+            const int MaxWindow = 65535 * 2;
 
-            // Expect the client receive window to stay below 1MB:
-            Assert.True(maxCredit < 1024 * 1024);
+            static async Task RunTest()
+            {
+                StringBuilderOutput output = new StringBuilderOutput();
+                Stopwatch sw = Stopwatch.StartNew();
+                int maxCredit = await TestClientWindowScalingAsync(
+                    TimeSpan.FromMilliseconds(300),
+                    TimeSpan.FromMilliseconds(15),
+                    4 * 1024 * 1024,
+                    output: output,
+                    maxWindowForPingStopValidation: MaxWindow);
+                sw.Stop();
+
+                throw new Exception($"MaxCredit: {maxCredit} Elapsed: {sw.Elapsed.TotalSeconds} sec \n  {output.Output}");
+            }
+
+            RemoteInvokeOptions options = new RemoteInvokeOptions();
+            options.StartInfo.EnvironmentVariables["DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_FLOWCONTROL_MAXSTREAMWINDOWSIZE"] = MaxWindow.ToString();
+
+            RemoteExecutor.Invoke(RunTest, options).Dispose();
         }
 
         [OuterLoop("Runs long")]
@@ -179,11 +252,14 @@ namespace System.Net.Http.Functional.Tests
             TimeSpan networkDelay,
             TimeSpan slowBandwidthSimDelay,
             int bytesToDownload,
-            ITestOutputHelper output)
+            ITestOutputHelper output = null,
+            int maxWindowForPingStopValidation = int.MaxValue, // set to actual maximum to test if we stop sending PING when window reached maximum
+            Action<SocketsHttpHandler> configureHandler = null)
         {
             TimeSpan timeout = TimeSpan.FromSeconds(30);
 
             HttpClientHandler handler = CreateHttpClientHandler(HttpVersion20.Value);
+            configureHandler?.Invoke(GetUnderlyingSocketsHttpHandler(handler));
 
             using Http2LoopbackServer server = Http2LoopbackServer.CreateServer();
             using HttpClient client = new HttpClient(handler, true);
@@ -214,7 +290,12 @@ namespace System.Net.Http.Functional.Tests
             using SemaphoreSlim creditReceivedSemaphore = new SemaphoreSlim(0);
             using SemaphoreSlim writeSemaphore = new SemaphoreSlim(1);
             int remainingBytes = bytesToDownload;
-            _ = Task.Run(ProcessIncomingFramesAsync);
+
+            bool pingReceivedAfterReachingMaxWindow = false;
+            bool unexpectedFrameReceived = false;
+            CancellationTokenSource stopFrameProcessingCts = new CancellationTokenSource();
+            CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stopFrameProcessingCts.Token, new CancellationTokenSource(timeout).Token);
+            Task processFramesTask = ProcessIncomingFramesAsync(linkedCts.Token);
             byte[] buffer = new byte[16384];
 
             while (remainingBytes > 0)
@@ -238,42 +319,72 @@ namespace System.Net.Http.Functional.Tests
             }
 
             using HttpResponseMessage response = await clientTask;
+
+            stopFrameProcessingCts.Cancel();
+            await processFramesTask;
+
             int dataReceived = (await response.Content.ReadAsByteArrayAsync()).Length;
             Assert.Equal(bytesToDownload, dataReceived);
+            Assert.False(pingReceivedAfterReachingMaxWindow, "Server received a PING after reaching max window");
+            Assert.False(unexpectedFrameReceived, "Server received an unexpected frame, see test output for more details.");
 
             return maxCredit;
 
-            async Task ProcessIncomingFramesAsync()
+            async Task ProcessIncomingFramesAsync(CancellationToken cancellationToken)
             {
-                while (remainingBytes > 0)
+                // If credit > 90% of the maximum window, we are safe to assume we reached the max window.
+                // We should not receive any more RTT PING's after this point
+                int maxWindowCreditThreshold = (int) (0.9 * maxWindowForPingStopValidation);
+                output?.WriteLine($"maxWindowCreditThreshold: {maxWindowCreditThreshold} maxWindowForPingStopValidation: {maxWindowForPingStopValidation}");
+
+                try
                 {
-                    Frame frame = await connection.ReadFrameAsync(timeout);
-
-                    if (frame is PingFrame pingFrame)
+                    while (remainingBytes > 0 && !cancellationToken.IsCancellationRequested)
                     {
-                        // Simulate network delay for RTT PING
-                        Wait(networkDelay);
+                        Frame frame = await connection.ReadFrameAsync(cancellationToken);
 
-                        await writeSemaphore.WaitAsync();
-                        await connection.SendPingAckAsync(pingFrame.Data);
-                        writeSemaphore.Release();
-                    }
-                    else if (frame is WindowUpdateFrame windowUpdateFrame)
-                    {
-                        // Ignore connection window:
-                        if (windowUpdateFrame.StreamId != streamId) continue;
+                        if (frame is PingFrame pingFrame)
+                        {
+                            // Simulate network delay for RTT PING
+                            Wait(networkDelay);
 
-                        int currentCredit = Interlocked.Add(ref credit, windowUpdateFrame.UpdateSize);
-                        maxCredit = Math.Max(currentCredit, maxCredit); // Detect if client grows the window
-                        creditReceivedSemaphore.Release();
+                            output?.WriteLine($"Received PING ({pingFrame.Data}) [credit >? maxWindowCreditThreshold] : {maxCredit} >? {maxWindowCreditThreshold}");
 
-                        output?.WriteLine($"UpdateSize:{windowUpdateFrame.UpdateSize} currentCredit:{currentCredit} MaxCredit: {maxCredit}");
-                    }
-                    else if (frame is not null)
-                    {
-                        throw new Exception("Unexpected frame: " + frame);
+                            if (maxCredit > maxWindowCreditThreshold)
+                            {
+                                output?.WriteLine("PING was unexpected");
+                                Volatile.Write(ref pingReceivedAfterReachingMaxWindow, true);
+                            }
+
+                            await writeSemaphore.WaitAsync(cancellationToken);
+                            await connection.SendPingAckAsync(pingFrame.Data, cancellationToken);
+                            writeSemaphore.Release();
+                        }
+                        else if (frame is WindowUpdateFrame windowUpdateFrame)
+                        {
+                            // Ignore connection window:
+                            if (windowUpdateFrame.StreamId != streamId) continue;
+
+                            int currentCredit = Interlocked.Add(ref credit, windowUpdateFrame.UpdateSize);
+                            maxCredit = Math.Max(currentCredit, maxCredit); // Detect if client grows the window
+                            creditReceivedSemaphore.Release();
+
+                            output?.WriteLine($"UpdateSize:{windowUpdateFrame.UpdateSize} currentCredit:{currentCredit} MaxCredit: {maxCredit}");
+                        }
+                        else if (frame is not null)
+                        {
+                            Volatile.Write(ref unexpectedFrameReceived, true);
+                            output?.WriteLine("Received unexpected frame: " + frame);
+                        }
                     }
                 }
+                catch (OperationCanceledException ex)
+                {
+                    output?.WriteLine("ProcessIncomingFramesAsync canceled: " + ex.Message);
+                }
+                
+
+                output?.WriteLine("ProcessIncomingFramesAsync finished");
             }
 
             static void Wait(TimeSpan dt) { if (dt != TimeSpan.Zero) Thread.Sleep(dt); }

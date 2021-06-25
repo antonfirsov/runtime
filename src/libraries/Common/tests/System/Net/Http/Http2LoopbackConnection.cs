@@ -123,11 +123,11 @@ namespace System.Net.Test.Common
             clientSettings = await ReadFrameAsync(_timeout).ConfigureAwait(false);
         }
 
-        public async Task WriteFrameAsync(Frame frame)
+        public async Task WriteFrameAsync(Frame frame, CancellationToken cancellationToken = default)
         {
             byte[] writeBuffer = new byte[Frame.FrameHeaderLength + frame.Length];
             frame.WriteTo(writeBuffer);
-            await _connectionStream.WriteAsync(writeBuffer, 0, writeBuffer.Length).ConfigureAwait(false);
+            await _connectionStream.WriteAsync(writeBuffer, 0, writeBuffer.Length, cancellationToken).ConfigureAwait(false);
         }
 
         // Read until the buffer is full
@@ -161,7 +161,7 @@ namespace System.Net.Test.Common
             return await ReadFrameAsync(timeoutCts.Token).ConfigureAwait(false);
         }
 
-        private async Task<Frame> ReadFrameAsync(CancellationToken cancellationToken)
+        public async Task<Frame> ReadFrameAsync(CancellationToken cancellationToken)
         {
             // First read the frame headers, which should tell us how long the rest of the frame is.
             byte[] headerBytes = new byte[Frame.FrameHeaderLength];
@@ -785,6 +785,8 @@ namespace System.Net.Test.Common
             Assert.Equal(pingData, pingAck.Data);
         }
 
+        public Task<PingFrame> ReadPingAsync() => ReadPingAsync(_timeout);
+
         public async Task<PingFrame> ReadPingAsync(TimeSpan timeout)
         {
             _expectPingFrame?.TrySetCanceled();
@@ -801,7 +803,7 @@ namespace System.Net.Test.Common
             return Assert.IsAssignableFrom<PingFrame>(frame);
         }
 
-        public async Task SendPingAckAsync(long payload)
+        public async Task SendPingAckAsync(long payload, CancellationToken cancellationToken = default)
         {
             PingFrame pingAck = new PingFrame(payload, FrameFlags.Ack, 0);
             await WriteFrameAsync(pingAck).ConfigureAwait(false);
