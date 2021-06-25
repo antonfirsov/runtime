@@ -83,7 +83,7 @@ namespace System.Net.Http.Functional.Tests
         }
 
 
-        //[OuterLoop("Runs long")]
+        [OuterLoop("Runs long")]
         [Fact]
         public async Task HighBandwidthDelayProduct_ClientStreamReceiveWindowWindowScalesUp()
         {
@@ -97,7 +97,7 @@ namespace System.Net.Http.Functional.Tests
             Assert.True(maxCredit > 1024 * 1024);
         }
 
-        //[OuterLoop("Runs long")]
+        [OuterLoop("Runs long")]
         [Fact]
         public async Task LowBandwidthDelayProduct_ClientStreamReceiveWindowStopsScaling()
         {
@@ -110,23 +110,6 @@ namespace System.Net.Http.Functional.Tests
             // Expect the client receive window to stay below 1MB:
             Assert.True(maxCredit < 1024 * 1024);
         }
-
-        [Fact]
-        public async Task KeepAlivePing_DoesNotInterfereWithRttPing()
-        {
-            await TestClientWindowScalingAsync(
-                TimeSpan.Zero,
-                TimeSpan.FromMilliseconds(15),
-                5 * 1024 * 1024,
-                _output,
-                configureHandler: h =>
-                {
-                    h.KeepAlivePingDelay = TimeSpan.FromSeconds(1);
-                    h.KeepAlivePingTimeout = TimeSpan.FromSeconds(10);
-                    h.KeepAlivePingPolicy = HttpKeepAlivePingPolicy.Always;
-                });
-        }
-
 
         [OuterLoop("Runs long")]
         [Fact]
@@ -148,7 +131,7 @@ namespace System.Net.Http.Functional.Tests
             RemoteExecutor.Invoke(RunTest).Dispose();
         }
 
-        //[OuterLoop("Runs long")]
+        [OuterLoop("Runs long")]
         [Fact]
         public void MaxStreamWindowSize_WhenSet_WindowDoesNotScaleAboveMaximum()
         {
@@ -180,6 +163,7 @@ namespace System.Net.Http.Functional.Tests
             public string Output => _bld.ToString();
         }
 
+        [OuterLoop("Runs long")]
         [Fact]
         public void MaxStreamWindowSize_WhenMaximumReached_NoMoreRttPingsAreSent()
         {
@@ -196,8 +180,6 @@ namespace System.Net.Http.Functional.Tests
                     output: output,
                     maxWindowForPingStopValidation: MaxWindow);
                 sw.Stop();
-
-                throw new Exception($"MaxCredit: {maxCredit} Elapsed: {sw.Elapsed.TotalSeconds} sec \n  {output.Output}");
             }
 
             RemoteInvokeOptions options = new RemoteInvokeOptions();
@@ -348,7 +330,7 @@ namespace System.Net.Http.Functional.Tests
                             // Simulate network delay for RTT PING
                             Wait(networkDelay);
 
-                            output?.WriteLine($"Received PING ({pingFrame.Data}) [credit >? maxWindowCreditThreshold] : {maxCredit} >? {maxWindowCreditThreshold}");
+                            output?.WriteLine($"Received PING ({pingFrame.Data})");
 
                             if (maxCredit > maxWindowCreditThreshold)
                             {
@@ -378,9 +360,8 @@ namespace System.Net.Http.Functional.Tests
                         }
                     }
                 }
-                catch (OperationCanceledException ex)
+                catch (OperationCanceledException)
                 {
-                    output?.WriteLine("ProcessIncomingFramesAsync canceled: " + ex.Message);
                 }
                 
 
