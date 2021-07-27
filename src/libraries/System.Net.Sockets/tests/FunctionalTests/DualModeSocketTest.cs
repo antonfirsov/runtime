@@ -536,6 +536,22 @@ namespace System.Net.Sockets.Tests
             DualModeConnectAsync_IPEndPointToHost_Helper(IPAddress.IPv6Loopback, IPAddress.IPv6Any, true);
         }
 
+        [Fact]
+        public void HopHop01()
+        {
+            using Socket server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            int port = server.BindToAnonymousPort(IPAddress.Loopback);
+            using Socket guard = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+            guard.Bind(new IPEndPoint(IPAddress.IPv6Loopback, port));
+
+            server.Listen();
+            _ = server.AcceptAsync();
+
+            using Socket client = new Socket(SocketType.Stream, ProtocolType.Tcp);
+            SocketException ex = Assert.ThrowsAny<SocketException>(() => client.Connect(IPAddress.IPv6Loopback, port));
+            Assert.Equal(SocketError.ConnectionRefused, ex.SocketErrorCode);
+        }
+
         private void DualModeConnectAsync_IPEndPointToHost_Helper(IPAddress connectTo, IPAddress listenOn, bool dualModeServer)
         {
             using (Socket socket = new Socket(SocketType.Stream, ProtocolType.Tcp))
