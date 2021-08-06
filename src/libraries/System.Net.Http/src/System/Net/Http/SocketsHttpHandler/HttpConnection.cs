@@ -1430,13 +1430,13 @@ namespace System.Net.Http
 
         private void WriteToStream(ReadOnlySpan<byte> source)
         {
-            if (NetEventSource.Log.IsEnabled()) Trace($"Writing {source.Length} bytes.");
+            //if (NetEventSource.Log.IsEnabled()) Trace($"Writing {source.Length} bytes.");
             _stream.Write(source);
         }
 
         private ValueTask WriteToStreamAsync(ReadOnlyMemory<byte> source, bool async)
         {
-            if (NetEventSource.Log.IsEnabled()) Trace($"Writing {source.Length} bytes.");
+            //if (NetEventSource.Log.IsEnabled()) Trace($"Writing {source.Length} bytes.");
 
             if (async)
             {
