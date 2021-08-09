@@ -209,6 +209,13 @@ namespace HttpStress
                     {
                         _aggregator.RecordCancellation(opIndex, stopwatch.Elapsed);
                     }
+                    catch (HttpRequestException e) when (e.InnerException is ObjectDisposedException)
+                    {
+                        _aggregator.RecordFailure(e, opIndex, stopwatch.Elapsed, requestContext.IsCancellationRequested, taskNum: taskNum, iteration: i);
+                        Console.WriteLine("--- FATAL DEATH ---");
+                        _cts.Cancel();
+                        break;
+                    }
                     catch (Exception e) when (e.Message == "IGNORE")
                     {
                         // [ActiveIssue("https://github.com/dotnet/runtime/issues/55261")]
