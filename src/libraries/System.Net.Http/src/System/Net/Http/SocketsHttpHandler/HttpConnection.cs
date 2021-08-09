@@ -801,6 +801,7 @@ namespace System.Net.Http
                         // Map the exception the same way as we normally do.
                         catch (Exception ex) when (MapSendException(ex, cancellationToken, out Exception mappedEx))
                         {
+                            if (NetEventSource.Log.IsEnabled()) Trace($"PROPAGATING MAPPED 1: {mappedEx}");
                             throw mappedEx;
                         }
                     }
@@ -814,9 +815,12 @@ namespace System.Net.Http
                 // determine which exception to throw.
                 if (MapSendException(error, cancellationToken, out Exception mappedException))
                 {
+                    if (NetEventSource.Log.IsEnabled()) Trace($"PROPAGATING MAPPED 2: {mappedException}");
                     throw mappedException;
                 }
                 // Otherwise, just allow the original exception to propagate.
+
+                if (NetEventSource.Log.IsEnabled()) Trace($"PROPAGATING ORIGINAL: {error}");
                 throw;
             }
         }
