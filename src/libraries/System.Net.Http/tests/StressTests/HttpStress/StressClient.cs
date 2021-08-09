@@ -26,7 +26,7 @@ namespace HttpStress
         private readonly Stopwatch _stopwatch = new Stopwatch();
         private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private Task? _clientTask;
-        private EventListener? _eventListener;
+        private LogHttpEventListener? _eventListener;
 
         public long TotalErrorCount => _aggregator.TotalErrorCount;
 
@@ -212,6 +212,7 @@ namespace HttpStress
                     catch (HttpRequestException e) when (e.InnerException is ObjectDisposedException)
                     {
                         _aggregator.RecordFailure(e, opIndex, stopwatch.Elapsed, requestContext.IsCancellationRequested, taskNum: taskNum, iteration: i);
+                        _eventListener?.WriteLine($"FATAL FAILURE: [{e.GetHashCode()}/{e.InnerException?.GetHashCode()}] {e}");
                         Console.WriteLine("--- FATAL DEATH ---");
                         _cts.Cancel();
                         break;
@@ -309,7 +310,7 @@ namespace HttpStress
                 {
                     (Type, string, string)[] key = ClassifyFailure(exn);
 
-                    StressFailureType failureType = _failureTypes.GetOrAdd(key, _ => new StressFailureType(exn.ToString()));
+                    StressFailureType failureType = _failureTypes.GetOrAdd(key, _ => new StressFailureType($"[{exn.GetHashCode()}/{exn.InnerException?.GetHashCode()}] {exn}"));
 
                     lock (failureType)
                     {

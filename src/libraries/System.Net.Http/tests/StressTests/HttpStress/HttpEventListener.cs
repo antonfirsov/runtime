@@ -123,6 +123,12 @@ namespace HttpStress
 
         }
 
+        public void WriteLine(string msg)
+        {
+            msg += Environment.NewLine;
+            _messagesChannel.Writer.TryWrite(msg);
+        }
+
         public override void Dispose()
         {
             base.Dispose();
