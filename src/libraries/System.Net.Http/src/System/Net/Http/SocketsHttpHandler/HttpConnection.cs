@@ -778,7 +778,7 @@ namespace System.Net.Http
                 // Make sure to complete the allowExpect100ToContinue task if it exists.
                 allowExpect100ToContinue?.TrySetResult(false);
 
-                if (NetEventSource.Log.IsEnabled()) Trace($"Error sending request: {error}");
+                if (NetEventSource.Log.IsEnabled()) Trace($"Error sending request. Stream hash: [{_stream?.GetHashCode()}] error: {error}");
 
                 // In the rare case where Expect: 100-continue was used and then processing
                 // of the response headers encountered an error such that we weren't able to
