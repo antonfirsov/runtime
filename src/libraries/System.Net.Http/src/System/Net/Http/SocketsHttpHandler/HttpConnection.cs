@@ -904,7 +904,7 @@ namespace System.Net.Http
                 var weakThisRef = state.ConnectionWeakRef!;
                 if (weakThisRef.TryGetTarget(out HttpConnection? strongThisRef))
                 {
-                    if (NetEventSource.Log.IsEnabled()) strongThisRef.Trace($"Cancellation requested. Disposing of the connection. CALLER: {callerName} L{callerLine} -- {callerFile}");
+                    if (NetEventSource.Log.IsEnabled()) strongThisRef.Trace($"Cancellation requested. Disposing of the connection. CALLER: {state.CallerName} L{state.CallerLine} -- {state.CallerFile}");
                     strongThisRef.Dispose();
                     Interlocked.Exchange(ref strongThisRef._cachedState, state);
                 }
