@@ -25,7 +25,7 @@ namespace HttpStress
         private readonly HttpClient _client;
         private readonly CancellationToken _globalToken;
         private readonly Configuration _config;
-        private readonly LogHttpEventListener? _log;
+        
 
         public RequestContext(Configuration config, HttpClient httpClient, Random random, CancellationToken globalToken, int taskNum, LogHttpEventListener? log)
         {
@@ -38,8 +38,10 @@ namespace HttpStress
 
             TaskNum = taskNum;
             IsCancellationRequested = false;
-            _log = log;
+            Log = log;
         }
+
+        public LogHttpEventListener? Log { get; }
 
         public int TaskNum { get; }
         public bool IsCancellationRequested { get; private set; }
@@ -105,7 +107,7 @@ namespace HttpStress
                     throw new Exception($"Expected response version {HttpVersion}, got {m.Version}");
                 }
 
-                _log?.WriteLine($"request [{request.GetHashCode()}] SendAsync returned, response content: {m.Content.GetType()}");
+                Log?.WriteLine($"request [{request.GetHashCode()}] SendAsync returned, response content: {m.Content.GetType()}");
 
                 return m;
             }
@@ -501,12 +503,26 @@ namespace HttpStress
                 ("GET Slow",
                 async ctx =>
                 {
-                    using var req = new HttpRequestMessage(HttpMethod.Get, "/slow");
-                    int expectedLength = ctx.SetExpectedResponseContentLengthHeader(req.Headers);
-                    using HttpResponseMessage m = await ctx.SendAsync(req);
+                    int hash = 0;
+                    try
+                    {
+                        using var req = new HttpRequestMessage(HttpMethod.Get, "/slow");
+                        hash = req.GetHashCode();
+                        int expectedLength = ctx.SetExpectedResponseContentLengthHeader(req.Headers);
+                        ctx.Log?.WriteLine($">>> Sending request [{hash}]");
+                        using HttpResponseMessage m = await ctx.SendAsync(req);
+                        ctx.Log?.WriteLine($">>> Request returned [{hash}]");
 
-                    ValidateStatusCode(m);
-                    ValidateServerContent(await m.Content.ReadAsStringAsync(), expectedLength);
+                        ValidateStatusCode(m);
+                        ctx.Log?.WriteLine($">>> Request [{hash}] ReadAsStringAsync...");
+                        ValidateServerContent(await m.Content.ReadAsStringAsync(), expectedLength);
+                        ctx.Log?.WriteLine($">>> Request [{hash}] ReadAsStringAsync returned");
+                    }
+                    catch (Exception ex)
+                    {
+                        ctx.Log?.WriteLine($">>> Request [{hash}] failed: {ex}");
+                        throw;
+                    }
                 }),
             };
 
