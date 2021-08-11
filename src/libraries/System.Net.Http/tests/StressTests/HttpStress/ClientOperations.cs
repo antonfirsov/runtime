@@ -372,16 +372,30 @@ namespace HttpStress
                 ("POST Multipart Data",
                 async ctx =>
                 {
-                    (string expected, MultipartContent formDataContent) formData = GetMultipartContent(ctx, ctx.MaxRequestParameters);
-                    ulong checksum = CRC.CalculateCRC(formData.expected);
+                    int hash = 0;
+                    try
+                    {
+                        (string expected, MultipartContent formDataContent) formData = GetMultipartContent(ctx, ctx.MaxRequestParameters);
+                        ulong checksum = CRC.CalculateCRC(formData.expected);
 
-                    using var req = new HttpRequestMessage(HttpMethod.Post, "/") { Content = formData.formDataContent };
-                    using HttpResponseMessage m = await ctx.SendAsync(req);
+                        using var req = new HttpRequestMessage(HttpMethod.Post, "/") { Content = formData.formDataContent };
+                        hash = req.GetHashCode();
+                        ctx.Log?.WriteLine($">>> Sending request [{hash}] (multipart)");
+                        using HttpResponseMessage m = await ctx.SendAsync(req);
+                        ctx.Log?.WriteLine($">>> Request [{hash}] returned (multipart)");
 
-                    ValidateStatusCode(m);
+                        ValidateStatusCode(m);
 
-                    string checksumMessage = ValidateServerChecksum(m.Headers, checksum) ? "server checksum matches client checksum" : "server checksum mismatch";
-                    ValidateContent(formData.expected, await m.Content.ReadAsStringAsync(), checksumMessage);
+                        string checksumMessage = ValidateServerChecksum(m.Headers, checksum) ? "server checksum matches client checksum" : "server checksum mismatch";
+                        ctx.Log?.WriteLine($">>> Request [{hash}] (multipart) ReadAsStringAsync ...");
+                        ValidateContent(formData.expected, await m.Content.ReadAsStringAsync(), checksumMessage);
+                        ctx.Log?.WriteLine($">>> Request [{hash}] (multipart) ReadAsStringAsync returned");
+                    }
+                    catch(Exception ex)
+                    {
+                        ctx.Log?.WriteLine($">>> Request [{hash}] (multipart) failed: {ex}");
+                        throw;
+                    }
                 }),
 
                 ("POST Duplex",
