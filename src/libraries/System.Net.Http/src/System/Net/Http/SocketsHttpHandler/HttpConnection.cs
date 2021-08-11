@@ -3,6 +3,7 @@
 
 using System.Buffers;
 using System.Buffers.Text;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -871,8 +872,24 @@ namespace System.Net.Http
             return requestContentStream;
         }
 
-        private CancellationTokenRegistration RegisterCancellation(CancellationToken cancellationToken)
+        private class CancellationRegistrationState
         {
+            public WeakReference<HttpConnection>? ConnectionWeakRef;
+            public string? CallerName;
+            public string? CallerFile;
+            public int CallerLine;
+        }
+
+        private CancellationRegistrationState? _cachedState;
+
+        private CancellationTokenRegistration RegisterCancellation(CancellationToken cancellationToken, [CallerMemberName] string callerName = "", [CallerFilePath] string callerFile = "", [CallerLineNumber] int callerLine = -1)
+        {
+            CancellationRegistrationState state = Interlocked.Exchange(ref _cachedState, null) ?? new CancellationRegistrationState();
+            state.ConnectionWeakRef = _weakThisRef;
+            state.CallerName = callerName;
+            state.CallerFile = callerFile;
+            state.CallerLine = callerLine;
+
             // Cancellation design:
             // - We register with the SendAsync CancellationToken for the duration of the SendAsync operation.
             // - We register with the Read/Write/CopyToAsync methods on the response stream for each such individual operation.
@@ -883,13 +900,15 @@ namespace System.Net.Http
             //   artificially keeping this connection alive.
             return cancellationToken.Register(static s =>
             {
-                var weakThisRef = (WeakReference<HttpConnection>)s!;
+                CancellationRegistrationState state = (CancellationRegistrationState)s!;
+                var weakThisRef = state.ConnectionWeakRef!;
                 if (weakThisRef.TryGetTarget(out HttpConnection? strongThisRef))
                 {
-                    if (NetEventSource.Log.IsEnabled()) strongThisRef.Trace("Cancellation requested. Disposing of the connection.");
+                    if (NetEventSource.Log.IsEnabled()) strongThisRef.Trace($"Cancellation requested. Disposing of the connection. CALLER: {callerName} L{callerLine} -- {callerFile}");
                     strongThisRef.Dispose();
+                    Interlocked.Exchange(ref strongThisRef._cachedState, state);
                 }
-            }, _weakThisRef);
+            }, state);
         }
 
         private static bool IsLineEmpty(ReadOnlyMemory<byte> line) => line.Length == 0;
@@ -1597,7 +1616,7 @@ namespace System.Net.Http
         }
 
         // Throws IOException on EOF.  This is only called when we expect more data.
-        private async ValueTask FillAsync(bool async, [CallerMemberName]string callerName ="", [CallerFilePath]string callerFile ="", [CallerLineNumber]int callerLine=-1)
+        private async ValueTask FillAsync(bool async, [CallerMemberName] string callerName = "", [CallerFilePath] string callerFile = "", [CallerLineNumber] int callerLine=-1)
         {
             Debug.Assert(_readAheadTask == null);
 
@@ -1636,7 +1655,7 @@ namespace System.Net.Http
                 await _stream.ReadAsync(new Memory<byte>(_readBuffer, _readLength, _readBuffer.Length - _readLength)).ConfigureAwait(false) :
                 _stream.Read(_readBuffer, _readLength, _readBuffer.Length - _readLength);
 
-            if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes. Caller: {callerFile} L{callerLine} {callerName}");
+            if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes. Caller: {callerName} L{callerLine} -- {callerFile}");
             if (bytesRead == 0)
             {
                 throw new IOException(SR.net_http_invalid_response_premature_eof);
