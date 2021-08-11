@@ -1989,7 +1989,7 @@ namespace System.Net.Http
             _detachedFromPool = true;
         }
 
-        private void CompleteResponse()
+        private void CompleteResponse([CallerMemberName] string callerName = "", [CallerFilePath] string callerFile = "", [CallerLineNumber] int callerLine = -1)
         {
             Debug.Assert(_currentRequest != null, "Expected the connection to be associated with a request.");
             Debug.Assert(_writeOffset == 0, "Everything in write buffer should have been flushed.");
@@ -2016,6 +2016,7 @@ namespace System.Net.Http
             // Otherwise, it will be returned when the connection is no longer in use (i.e. Release above is called).
             if (!_inUse)
             {
+                if (NetEventSource.Log.IsEnabled()) Trace($"CompleteResponse -> ReturnConnectionToPool(): CALLER: {callerName} L{callerLine} {callerFile}");
                 ReturnConnectionToPool();
             }
         }

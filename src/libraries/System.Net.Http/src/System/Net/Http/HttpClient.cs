@@ -536,6 +536,7 @@ namespace System.Net.Http
                             responseContentTelemetryStarted = true;
                         }
 
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.HandlerMessage(-1, -1, request.GetHashCode(), "HttpClient.SendAsync.Core", $"response.Content.LoadIntoBufferAsync ...");
                         await response.Content.LoadIntoBufferAsync(_maxResponseContentBufferSize, cts.Token).ConfigureAwait(false);
                     }
 
