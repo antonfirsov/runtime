@@ -74,12 +74,14 @@ namespace HttpStress
                     {
                         await RotateFiles();
                     }
-                    int maxLen = encoding.GetMaxByteCount(message.Length);
+                    int maxLen = encoding.GetMaxByteCount(message.Length) + 2; // with EOL
                     if (maxLen > buffer.Length)
                     {
                         buffer = new byte[maxLen];
                     }
                     int byteCount = encoding.GetBytes(message, buffer);
+                    buffer[byteCount++] = 13;
+                    buffer[byteCount++] = 10; // EOL
                                         
                     await _log.WriteAsync(buffer.AsMemory(0, byteCount), _stopProcessing.Token);
                 }
@@ -92,7 +94,7 @@ namespace HttpStress
             async ValueTask RotateFiles()
             {
                 await _log.FlushAsync(_stopProcessing.Token);
-                // Rotate the log if it reaches 50 MB size.
+                // Rotate the log if it reaches 100 MB size.
                 if (_log.Length > (100 << 20))
                 {
                     await _log.DisposeAsync();
@@ -115,7 +117,6 @@ namespace HttpStress
                 }
                 sb.Append(eventData.PayloadNames?[i]).Append(": ").Append(eventData.Payload[i]);
             }
-            sb.Append(Environment.NewLine);
             string s = sb.ToString();
             sb.Clear();
             Interlocked.Exchange(ref _cachedStringBuilder, sb);
@@ -125,7 +126,6 @@ namespace HttpStress
 
         public void WriteLine(string msg)
         {
-            msg += Environment.NewLine;
             _messagesChannel.Writer.TryWrite(msg);
         }
 

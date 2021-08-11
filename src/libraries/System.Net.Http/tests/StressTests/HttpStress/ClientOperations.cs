@@ -25,8 +25,9 @@ namespace HttpStress
         private readonly HttpClient _client;
         private readonly CancellationToken _globalToken;
         private readonly Configuration _config;
+        private readonly LogHttpEventListener? _log;
 
-        public RequestContext(Configuration config, HttpClient httpClient, Random random, CancellationToken globalToken, int taskNum)
+        public RequestContext(Configuration config, HttpClient httpClient, Random random, CancellationToken globalToken, int taskNum, LogHttpEventListener? log)
         {
             Debug.Assert(httpClient.BaseAddress != null);
 
@@ -37,6 +38,7 @@ namespace HttpStress
 
             TaskNum = taskNum;
             IsCancellationRequested = false;
+            _log = log;
         }
 
         public int TaskNum { get; }
@@ -102,6 +104,8 @@ namespace HttpStress
                 {
                     throw new Exception($"Expected response version {HttpVersion}, got {m.Version}");
                 }
+
+                _log?.WriteLine($"request [{request.GetHashCode()}] SendAsync returned, response content: {m.Content.GetType()}");
 
                 return m;
             }

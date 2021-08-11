@@ -1597,7 +1597,7 @@ namespace System.Net.Http
         }
 
         // Throws IOException on EOF.  This is only called when we expect more data.
-        private async ValueTask FillAsync(bool async)
+        private async ValueTask FillAsync(bool async, [CallerMemberName]string callerName ="", [CallerFilePath]string callerFile ="", [CallerLineNumber]int callerLine=-1)
         {
             Debug.Assert(_readAheadTask == null);
 
@@ -1636,7 +1636,7 @@ namespace System.Net.Http
                 await _stream.ReadAsync(new Memory<byte>(_readBuffer, _readLength, _readBuffer.Length - _readLength)).ConfigureAwait(false) :
                 _stream.Read(_readBuffer, _readLength, _readBuffer.Length - _readLength);
 
-            if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes.");
+            if (NetEventSource.Log.IsEnabled()) Trace($"Received {bytesRead} bytes. Caller: {callerFile} L{callerLine} {callerName}");
             if (bytesRead == 0)
             {
                 throw new IOException(SR.net_http_invalid_response_premature_eof);

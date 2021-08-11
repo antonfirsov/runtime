@@ -197,7 +197,7 @@ namespace HttpStress
 
                     int opIndex = (int)(i % _clientOperations.Length);
                     (string operation, Func<RequestContext, Task> func) = _clientOperations[opIndex];
-                    var requestContext = new RequestContext(_config, client, random, _cts.Token, taskNum);
+                    var requestContext = new RequestContext(_config, client, random, _cts.Token, taskNum, _eventListener);
                     stopwatch.Restart();
                     try
                     {
