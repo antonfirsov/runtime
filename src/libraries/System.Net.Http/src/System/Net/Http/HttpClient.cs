@@ -586,6 +586,7 @@ namespace System.Net.Http
         {
             LogRequestFailed(telemetryStarted);
 
+            if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.HandlerMessage(-1, -1, response?.RequestMessage != null ? response.RequestMessage.GetHashCode() : -1, "HttpClient.HandleFailure", "disposing response!");
             response?.Dispose();
 
             Exception? toThrow = null;
