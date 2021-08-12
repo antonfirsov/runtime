@@ -4,6 +4,7 @@
 using System.Buffers.Text;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -44,7 +45,7 @@ namespace System.Net.Http
                 }
 
                 // Try to consume from data we already have in the buffer.
-                int bytesRead = ReadChunksFromConnectionBuffer(buffer, cancellationRegistration: default);
+                int bytesRead = ReadChunksFromConnectionBuffer(buffer, cancellationRegistration: default, default);
                 if (bytesRead > 0)
                 {
                     return bytesRead;
@@ -86,7 +87,7 @@ namespace System.Net.Http
 
                     // Now that we have more, see if we can get any response data, and if
                     // we can we're done.
-                    int bytesCopied = ReadChunksFromConnectionBuffer(buffer, cancellationRegistration: default);
+                    int bytesCopied = ReadChunksFromConnectionBuffer(buffer, cancellationRegistration: default, default);
                     if (bytesCopied > 0)
                     {
                         return bytesCopied;
@@ -109,7 +110,7 @@ namespace System.Net.Http
                 }
 
                 // Try to consume from data we already have in the buffer.
-                int bytesRead = ReadChunksFromConnectionBuffer(buffer.Span, cancellationRegistration: default);
+                int bytesRead = ReadChunksFromConnectionBuffer(buffer.Span, cancellationRegistration: default, cancellationToken);
                 if (bytesRead > 0)
                 {
                     return new ValueTask<int>(bytesRead);
@@ -172,7 +173,7 @@ namespace System.Net.Http
 
                         // Now that we have more, see if we can get any response data, and if
                         // we can we're done.
-                        int bytesCopied = ReadChunksFromConnectionBuffer(buffer.Span, ctr);
+                        int bytesCopied = ReadChunksFromConnectionBuffer(buffer.Span, ctr, cancellationToken);
                         if (bytesCopied > 0)
                         {
                             return bytesCopied;
@@ -208,7 +209,7 @@ namespace System.Net.Http
                     {
                         while (true)
                         {
-                            ReadOnlyMemory<byte> bytesRead = ReadChunkFromConnectionBuffer(int.MaxValue, ctr);
+                            ReadOnlyMemory<byte> bytesRead = ReadChunkFromConnectionBuffer(int.MaxValue, ctr, cancellationToken);
                             if (bytesRead.Length == 0)
                             {
                                 break;
@@ -235,12 +236,17 @@ namespace System.Net.Http
                 }
             }
 
-            private int ReadChunksFromConnectionBuffer(Span<byte> buffer, CancellationTokenRegistration cancellationRegistration)
+            private int ReadChunksFromConnectionBuffer(Span<byte> buffer, CancellationTokenRegistration cancellationRegistration, CancellationToken originalToken,
+                [CallerMemberName] string callerName = "",
+                [CallerFilePath] string callerFile = "",
+                [CallerLineNumber] int callerLine = -1)
             {
+                if (NetEventSource.Log.IsEnabled()) _connection?.Trace($"Caller of ReadChunksFromConnectionBuffer(Span<byte>): {callerName} L{callerLine} @ {callerFile}");
+
                 int totalBytesRead = 0;
                 while (buffer.Length > 0)
                 {
-                    ReadOnlyMemory<byte> bytesRead = ReadChunkFromConnectionBuffer(buffer.Length, cancellationRegistration);
+                    ReadOnlyMemory<byte> bytesRead = ReadChunkFromConnectionBuffer(buffer.Length, cancellationRegistration, originalToken);
                     Debug.Assert(bytesRead.Length <= buffer.Length);
                     if (bytesRead.Length == 0)
                     {
@@ -254,7 +260,13 @@ namespace System.Net.Http
                 return totalBytesRead;
             }
 
-            private ReadOnlyMemory<byte> ReadChunkFromConnectionBuffer(int maxBytesToRead, CancellationTokenRegistration cancellationRegistration)
+            private ReadOnlyMemory<byte> ReadChunkFromConnectionBuffer(
+                int maxBytesToRead,
+                CancellationTokenRegistration cancellationRegistration,
+                CancellationToken origianlToken,
+                [CallerMemberName] string callerName = "",
+                [CallerFilePath] string callerFile = "",
+                [CallerLineNumber] int callerLine = -1)
             {
                 Debug.Assert(maxBytesToRead > 0 && _connection != null);
 
@@ -373,7 +385,7 @@ namespace System.Net.Http
 
                                     if (NetEventSource.Log.IsEnabled())
                                     {
-                                        _connection.Trace($"d/c[1]={disposed1}/{cancelled1} | d/c[2]={disposed2}/{cancelled2} | d/c[3]={disposed3}/{cancelled3}");
+                                        _connection.Trace($"d/c[1]={disposed1}/{cancelled1} | d/c[2]={disposed2}/{cancelled2} | d/c[3]={disposed3}/{cancelled3} originalToken:{origianlToken.IsCancellationRequested} || caller: {callerName} L{callerLine} @ {callerFile}");
                                     }
 
                                     _state = ParsingState.Done;
@@ -456,7 +468,7 @@ namespace System.Net.Http
                         drainedBytes += _connection.RemainingBuffer.Length;
                         while (true)
                         {
-                            ReadOnlyMemory<byte> bytesRead = ReadChunkFromConnectionBuffer(int.MaxValue, ctr);
+                            ReadOnlyMemory<byte> bytesRead = ReadChunkFromConnectionBuffer(int.MaxValue, ctr, default);
                             if (bytesRead.Length == 0)
                             {
                                 break;

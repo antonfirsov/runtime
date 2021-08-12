@@ -882,7 +882,10 @@ namespace System.Net.Http
 
         private CancellationRegistrationState? _cachedState;
 
-        private CancellationTokenRegistration RegisterCancellation(CancellationToken cancellationToken, [CallerMemberName] string callerName = "", [CallerFilePath] string callerFile = "", [CallerLineNumber] int callerLine = -1)
+        private CancellationTokenRegistration RegisterCancellation(CancellationToken cancellationToken,
+            [CallerMemberName] string callerName = "",
+            [CallerFilePath] string callerFile = "",
+            [CallerLineNumber] int callerLine = -1)
         {
             CancellationRegistrationState state = Interlocked.Exchange(ref _cachedState, null) ?? new CancellationRegistrationState();
             state.ConnectionWeakRef = _weakThisRef;
@@ -2116,7 +2119,7 @@ namespace System.Net.Http
             CancellationToken ctrToken = default,
             [CallerMemberName] string callerName = "",
             [CallerFilePath] string callerFile = "",
-            [CallerLineNumber] int callerLine = -1) =>
+            [c] int callerLine = -1) =>
             NetEventSource.Log.HandlerMessage(
                 _pool?.GetHashCode() ?? 0,           // pool ID
                 GetHashCode(),                       // connection ID
