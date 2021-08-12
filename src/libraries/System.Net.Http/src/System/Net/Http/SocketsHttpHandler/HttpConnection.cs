@@ -2113,30 +2113,6 @@ namespace System.Net.Http
                 GetHashCode(),                       // connection ID
                 _currentRequest?.GetHashCode() ?? 0, // request ID
                 memberName,                          // method name
-                message);                            // messagev
-
-        public void TraceDisposedState(
-            CancellationToken ctrToken = default,
-            [CallerMemberName] string callerName = "",
-            [CallerFilePath] string callerFile = "",
-            [c] int callerLine = -1) =>
-            NetEventSource.Log.HandlerMessage(
-                _pool?.GetHashCode() ?? 0,           // pool ID
-                GetHashCode(),                       // connection ID
-                _currentRequest?.GetHashCode() ?? 0, // request ID
-                callerName,                          // method name
-                $"_disposed: {_disposed} token: {ctrToken.IsCancellationRequested} L{callerLine} {callerFile}");
-
-        public void TraceDisposedState(
-            [CallerMemberName] string callerName = "",
-            [CallerFilePath] string callerFile = "",
-            [CallerLineNumber] int callerLine = -1) =>
-            NetEventSource.Log.HandlerMessage(
-                _pool?.GetHashCode() ?? 0,           // pool ID
-                GetHashCode(),                       // connection ID
-                _currentRequest?.GetHashCode() ?? 0, // request ID
-                callerName,                          // method name
-                $"_disposed:{_disposed} L{callerLine} {callerFile}");
-
+                message);                            // message
     }
 }
