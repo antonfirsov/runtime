@@ -233,6 +233,7 @@ namespace System.Net.Http
                 _disposed = true;
                 if (_content != null)
                 {
+                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Log.HandlerMessage(-1, -1, _requestMessage != null ? _requestMessage.GetHashCode() : -1, $"HttpResponseMessage.Dispose({disposing})", "-> _content.Dispose()");
                     _content.Dispose();
                 }
             }
