@@ -1723,7 +1723,7 @@ namespace System.Net.Http
                 {
                     Debug.Assert(_availableHttp11Connections.Count == 0, $"With {_availableHttp11Connections.Count} available HTTP/1.1 connections, we shouldn't have a waiter.");
 
-                    if (NetEventSource.Log.IsEnabled()) connection.Trace("Dequeued waiting HTTP/1.1 request.");
+                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"Dequeued waiting HTTP/1.1 request. _disposed:{connection._disposed}");
                     return;
                 }
 

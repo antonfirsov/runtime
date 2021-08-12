@@ -71,7 +71,7 @@ namespace System.Net.Http
 
         private const int Status_Disposed = 1;
         private const int Status_NotDisposedAndTrackedByTelemetry = 2;
-        private int _disposed;
+        internal int _disposed;
 
         public HttpConnection(
             HttpConnectionPool pool,
@@ -2016,7 +2016,7 @@ namespace System.Net.Http
             // Otherwise, it will be returned when the connection is no longer in use (i.e. Release above is called).
             if (!_inUse)
             {
-                if (NetEventSource.Log.IsEnabled()) Trace($"CompleteResponse -> ReturnConnectionToPool(): CALLER: {callerName} L{callerLine} {callerFile}");
+                if (NetEventSource.Log.IsEnabled()) Trace($"CompleteResponse -> ReturnConnectionToPool(): _disposed:{_disposed} CALLER: {callerName} L{callerLine} {callerFile}");
                 ReturnConnectionToPool();
             }
         }
@@ -2110,6 +2110,30 @@ namespace System.Net.Http
                 GetHashCode(),                       // connection ID
                 _currentRequest?.GetHashCode() ?? 0, // request ID
                 memberName,                          // method name
-                message);                            // message
+                message);                            // messagev
+
+        public void TraceDisposedState(
+            CancellationToken ctrToken = default,
+            [CallerMemberName] string callerName = "",
+            [CallerFilePath] string callerFile = "",
+            [CallerLineNumber] int callerLine = -1) =>
+            NetEventSource.Log.HandlerMessage(
+                _pool?.GetHashCode() ?? 0,           // pool ID
+                GetHashCode(),                       // connection ID
+                _currentRequest?.GetHashCode() ?? 0, // request ID
+                callerName,                          // method name
+                $"_disposed: {_disposed} token: {ctrToken.IsCancellationRequested} L{callerLine} {callerFile}");
+
+        public void TraceDisposedState(
+            [CallerMemberName] string callerName = "",
+            [CallerFilePath] string callerFile = "",
+            [CallerLineNumber] int callerLine = -1) =>
+            NetEventSource.Log.HandlerMessage(
+                _pool?.GetHashCode() ?? 0,           // pool ID
+                GetHashCode(),                       // connection ID
+                _currentRequest?.GetHashCode() ?? 0, // request ID
+                callerName,                          // method name
+                $"_disposed:{_disposed} L{callerLine} {callerFile}");
+
     }
 }

@@ -358,8 +358,23 @@ namespace System.Net.Http
                                     // we then return a connection to the pool that has been or will be disposed
                                     // (e.g. if a timer is used and has already queued its callback but the
                                     // callback hasn't yet run).
+                                    int disposed1 = _connection._disposed;
+                                    bool cancelled1 = cancellationRegistration.Token.IsCancellationRequested;
+
                                     cancellationRegistration.Dispose();
+
+                                    int disposed2 = _connection._disposed;
+                                    bool cancelled2 = cancellationRegistration.Token.IsCancellationRequested;
+
                                     CancellationHelper.ThrowIfCancellationRequested(cancellationRegistration.Token);
+
+                                    int disposed3 = _connection._disposed;
+                                    bool cancelled3 = cancellationRegistration.Token.IsCancellationRequested;
+
+                                    if (NetEventSource.Log.IsEnabled())
+                                    {
+                                        _connection.Trace($"d/c[1]={disposed1}/{cancelled1} | d/c[2]={disposed2}/{cancelled2} | d/c[3]={disposed3}/{cancelled3}");
+                                    }
 
                                     _state = ParsingState.Done;
                                     _connection.CompleteResponse();
