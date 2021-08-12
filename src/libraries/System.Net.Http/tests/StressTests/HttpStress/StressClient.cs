@@ -209,7 +209,7 @@ namespace HttpStress
                     {
                         _aggregator.RecordCancellation(opIndex, stopwatch.Elapsed);
                     }
-                    catch (HttpRequestException e) when (e.InnerException is ObjectDisposedException)
+                    catch (HttpRequestException e) when (e.InnerException is ObjectDisposedException || e.Message.StartsWith("FATALITY") || e.InnerException?.Message?.StartsWith("FATALITY") == true)
                     {
                         _aggregator.RecordFailure(e, opIndex, stopwatch.Elapsed, requestContext.IsCancellationRequested, taskNum: taskNum, iteration: i);
                         _eventListener?.WriteLine($"FATAL FAILURE: [{e.GetHashCode()}/{e.InnerException?.GetHashCode()}] {e}");

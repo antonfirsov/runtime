@@ -49,7 +49,7 @@ namespace System.Net.Http
                 if (disposing && NeedsDrain)
                 {
                     if (NetEventSource.Log.IsEnabled()) _connection?.Trace("HttpContentReadStream.Dispose -> DrainOnDisposeAsync");
-
+                    if (_connection != null && _connection._disposed == 1) throw new Exception($"FATALITY connection [{_connection.GetHashCode()}]");
                     // Start the asynchronous drain.
                     // It may complete synchronously, in which case the connection will be put back in the pool synchronously.
                     // Skip the call to base.Dispose -- it will be deferred until DrainOnDisposeAsync finishes.
