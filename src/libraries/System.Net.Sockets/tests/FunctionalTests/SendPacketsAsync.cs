@@ -3,9 +3,10 @@
 
 using System.Buffers;
 using System.IO;
+using System.Linq;
 using System.Net.Test.Common;
 using System.Threading;
-
+using System.Threading.Tasks;
 using Microsoft.DotNet.XUnitExtensions;
 
 using Xunit;
@@ -20,8 +21,8 @@ namespace System.Net.Sockets.Tests
         private IPAddress _serverAddress = IPAddress.IPv6Loopback;
         // Accessible directories for UWP app:
         // C:\Users\<UserName>\AppData\Local\Packages\<ApplicationPackageName>\
-        private string TestFileName = Environment.GetEnvironmentVariable("LocalAppData") + @"\NCLTest.Socket.SendPacketsAsync.testpayload";
-        private static int s_testFileSize = 1024;
+        private static string TestFileName = Environment.GetEnvironmentVariable("LocalAppData") + @$"\NCLTest.Socket.SendPacketsAsync.{Guid.NewGuid()}.testpayload";
+        private static int s_testFileSize = 1024 * 1024;
 
         #region Additional test attributes
 
@@ -334,73 +335,73 @@ namespace System.Net.Sockets.Tests
             SendPackets(elements, SocketError.Success, 40);
         }
 
-        [Fact]
-        public void SendPacketsElement_FileLargeOffset_Throws()
-        {
-            // Length is validated on Send
-            SendPackets(new SendPacketsElement(TestFileName, 11000, 1), SocketError.InvalidArgument, 0);
-        }
+        //[Fact]
+        //public void SendPacketsElement_FileLargeOffset_Throws()
+        //{
+        //    // Length is validated on Send
+        //    SendPackets(new SendPacketsElement(TestFileName, 11000, 1), SocketError.InvalidArgument, 0);
+        //}
 
-        [Fact]
-        public void SendPacketsElement_FileLargeCount_Throws()
-        {
-            // Length is validated on Send
-            SendPackets(new SendPacketsElement(TestFileName, 5, 10000), SocketError.InvalidArgument, 0);
-        }
+        //[Fact]
+        //public void SendPacketsElement_FileLargeCount_Throws()
+        //{
+        //    // Length is validated on Send
+        //    SendPackets(new SendPacketsElement(TestFileName, 5, 10000), SocketError.InvalidArgument, 0);
+        //}
 
-        [Fact]
-        public void SendPacketsElement_FileStreamIsReleasedOnError()
-        {
-            // this test checks that FileStreams opened by the implementation of SendPacketsAsync
-            // are properly disposed of when the SendPacketsAsync operation fails asynchronously.
-            // To trigger this codepath we must call SendPacketsAsync with a wrong offset (to create an error),
-            // and twice (to avoid synchronous completion).
+        //[Fact]
+        //public void SendPacketsElement_FileStreamIsReleasedOnError()
+        //{
+        //    // this test checks that FileStreams opened by the implementation of SendPacketsAsync
+        //    // are properly disposed of when the SendPacketsAsync operation fails asynchronously.
+        //    // To trigger this codepath we must call SendPacketsAsync with a wrong offset (to create an error),
+        //    // and twice (to avoid synchronous completion).
 
-            SendPacketsElement[] goodElements = new[] { new SendPacketsElement(TestFileName, 0, 0) };
-            SendPacketsElement[] badElements = new[] { new SendPacketsElement(TestFileName, 50_000, 10) };
-            EventWaitHandle completed1 = new ManualResetEvent(false);
-            EventWaitHandle completed2 = new ManualResetEvent(false);
+        //    SendPacketsElement[] goodElements = new[] { new SendPacketsElement(TestFileName, 0, 0) };
+        //    SendPacketsElement[] badElements = new[] { new SendPacketsElement(TestFileName, 50_000, 10) };
+        //    EventWaitHandle completed1 = new ManualResetEvent(false);
+        //    EventWaitHandle completed2 = new ManualResetEvent(false);
 
-            using (SocketTestServer.SocketTestServerFactory(SocketImplementationType.Async, _serverAddress, out int port))
-            {
-                using (Socket sock = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp))
-                {
-                    sock.Connect(new IPEndPoint(_serverAddress, port));
-                    bool r1, r2;
-                    using (SocketAsyncEventArgs args1 = new SocketAsyncEventArgs())
-                    using (SocketAsyncEventArgs args2 = new SocketAsyncEventArgs())
-                    {
-                        args1.Completed += OnCompleted;
-                        args1.UserToken = completed1;
-                        args1.SendPacketsElements = goodElements;
+        //    using (SocketTestServer.SocketTestServerFactory(SocketImplementationType.Async, _serverAddress, out int port))
+        //    {
+        //        using (Socket sock = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp))
+        //        {
+        //            sock.Connect(new IPEndPoint(_serverAddress, port));
+        //            bool r1, r2;
+        //            using (SocketAsyncEventArgs args1 = new SocketAsyncEventArgs())
+        //            using (SocketAsyncEventArgs args2 = new SocketAsyncEventArgs())
+        //            {
+        //                args1.Completed += OnCompleted;
+        //                args1.UserToken = completed1;
+        //                args1.SendPacketsElements = goodElements;
 
-                        args2.Completed += OnCompleted;
-                        args2.UserToken = completed2;
-                        args2.SendPacketsElements = badElements;
+        //                args2.Completed += OnCompleted;
+        //                args2.UserToken = completed2;
+        //                args2.SendPacketsElements = badElements;
 
-                        r1 = sock.SendPacketsAsync(args1);
-                        r2 = sock.SendPacketsAsync(args2);
+        //                r1 = sock.SendPacketsAsync(args1);
+        //                r2 = sock.SendPacketsAsync(args2);
 
-                        if (r1)
-                        {
-                            Assert.True(completed1.WaitOne(TestSettings.PassingTestTimeout), "Timed out");
-                        }
-                        Assert.Equal(SocketError.Success, args1.SocketError);
+        //                if (r1)
+        //                {
+        //                    Assert.True(completed1.WaitOne(TestSettings.PassingTestTimeout), "Timed out");
+        //                }
+        //                Assert.Equal(SocketError.Success, args1.SocketError);
 
-                        if (r2)
-                        {
-                            Assert.True(completed2.WaitOne(TestSettings.PassingTestTimeout), "Timed out");
-                        }
-                        Assert.Equal(SocketError.InvalidArgument, args2.SocketError);
+        //                if (r2)
+        //                {
+        //                    Assert.True(completed2.WaitOne(TestSettings.PassingTestTimeout), "Timed out");
+        //                }
+        //                Assert.Equal(SocketError.InvalidArgument, args2.SocketError);
 
-                        using (var fs = new FileStream(TestFileName, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
-                        {
-                            // If a SendPacketsAsync call did not dispose of its FileStreams, the FileStream ctor throws.
-                        }
-                    }
-                }
-            }
-        }
+        //                using (var fs = new FileStream(TestFileName, FileMode.Open, FileAccess.ReadWrite, FileShare.Read))
+        //                {
+        //                    // If a SendPacketsAsync call did not dispose of its FileStreams, the FileStream ctor throws.
+        //                }
+        //            }
+        //        }
+        //    }
+        //}
 
         [Fact]
         public void SendPacketsElement_FileZeroCount_OffsetLong_Success()
@@ -435,12 +436,12 @@ namespace System.Net.Sockets.Tests
             SendPackets(new SendPacketsElement(TestFileName, (long)uint.MaxValue + 11000, 1), SocketError.InvalidArgument, 0);
         }
 
-        [Fact]
-        public void SendPacketsElement_FileLargeCount_OffsetLong_Throws()
-        {
-            // Length is validated on Send
-            SendPackets(new SendPacketsElement(TestFileName, 5L, 10000), SocketError.InvalidArgument, 0);
-        }
+        //[Fact]
+        //public void SendPacketsElement_FileLargeCount_OffsetLong_Throws()
+        //{
+        //    // Length is validated on Send
+        //    SendPackets(new SendPacketsElement(TestFileName, 5L, 10000), SocketError.InvalidArgument, 0);
+        //}
 
         #endregion Files
 
@@ -527,12 +528,15 @@ namespace System.Net.Sockets.Tests
             }
         }
 
-        public static bool IsNotWindows11 = !PlatformDetection.IsWindows10Version22000OrGreater;
+        //public static bool IsNotWindows11 = !PlatformDetection.IsWindows10Version22000OrGreater;
 
-        [ActiveIssue("https://github.com/dotnet/runtime/issues/58898")]
-        [ConditionalFact(nameof(IsNotWindows11))]
-        public void SendPacketsElement_FileStreamLargeOffset_Throws()
+        public static readonly object[][] DummyData = Enumerable.Range(0, 4_000).Select(x => new object[] { x }).ToArray();
+
+        [Theory]
+        [MemberData(nameof(DummyData))]
+        public void SendPacketsElement_FileStreamLargeOffset_Throws(int dummy)
         {
+            Assert.Equal(dummy + dummy, 2 * dummy);
             using (var stream = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, useAsync: true))
             {
                 stream.Seek(s_testFileSize / 2, SeekOrigin.Begin);
@@ -553,10 +557,13 @@ namespace System.Net.Sockets.Tests
             }
         }
 
-        [ActiveIssue("https://github.com/dotnet/runtime/issues/58898")]
-        [ConditionalFact(nameof(IsNotWindows11))]
-        public void SendPacketsElement_FileStreamWithOptions_Success() {
-            using (var stream = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.Asynchronous | FileOptions.SequentialScan)) {
+        [Theory]
+        [MemberData(nameof(DummyData))]
+        public void SendPacketsElement_FileStreamWithOptions_Success(int dummy)
+        {
+            Assert.Equal(dummy + dummy, 2 * dummy);
+            using (var stream = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.Asynchronous | FileOptions.SequentialScan))
+            {
                 var element = new SendPacketsElement(stream, 0, s_testFileSize);
                 SendPackets(element, s_testFileSize, GetExpectedContent(element));
             }
@@ -567,8 +574,10 @@ namespace System.Net.Sockets.Tests
         #region Mixed Buffer, FilePath, FileStream tests
 
         [Fact]
-        public void SendPacketsElement_FileStreamMultiPartMixed_Success() {
-            using (var stream = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous)) {
+        public void SendPacketsElement_FileStreamMultiPartMixed_Success()
+        {
+            using (var stream = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous))
+            {
                 var elements = new[]
                 {
                     new SendPacketsElement(new byte[] { 5, 6, 7 }, 0, 3),
@@ -585,11 +594,14 @@ namespace System.Net.Sockets.Tests
             }
         }
 
-        [ActiveIssue("https://github.com/dotnet/runtime/issues/58898")]
-        [ConditionalFact(nameof(IsNotWindows11))]
-        public void SendPacketsElement_FileStreamMultiPartMixed_MultipleFileStreams_Success() {
+        [Theory]
+        [MemberData(nameof(DummyData))]
+        public void SendPacketsElement_FileStreamMultiPartMixed_MultipleFileStreams_Success(int dummy)
+        {
+            Assert.Equal(dummy + dummy, 2 * dummy);
             using (var stream = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous))
-            using (var stream2 = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous)) {
+            using (var stream2 = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous))
+            {
                 var elements = new[]
                 {
                     new SendPacketsElement(new ReadOnlyMemory<byte>(new byte[] { 11, 12, 13 }, 0, 3)),
@@ -606,9 +618,123 @@ namespace System.Net.Sockets.Tests
             }
         }
 
+        //[Fact]
+        //public void SendPacketHangMinimal()
+        //{
+        //    string tempFile = Path.GetTempFileName();
+        //    byte[] content = new byte[1024];
+        //    File.WriteAllBytes(tempFile, content);
+        //    using FileStream fileStream1 = new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
+        //    using FileStream fileStream2 = new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
+
+        //    using Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        //    listener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        //    int port = ((IPEndPoint)listener.LocalEndPoint).Port;
+        //    listener.Listen();
+
+        //    EventWaitHandle completed = new ManualResetEvent(false);
+        //    using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        //    client.Connect(new IPEndPoint(IPAddress.Loopback, port));
+        //    using Socket server = listener.Accept();
+
+        //    for (int i = 0; i < 10_000; i++)
+        //    {
+        //        completed.Reset();
+
+        //        using SocketAsyncEventArgs args = new SocketAsyncEventArgs();
+
+        //        args.Completed += static (_, e) => ((EventWaitHandle)e.UserToken).Set();
+        //        args.UserToken = completed;
+        //        args.SendPacketsElements = GetElements();
+
+        //        if (client.SendPacketsAsync(args))
+        //        {
+        //            if (!completed.WaitOne(30_000))
+        //            {
+        //                throw new Exception($"Timed out @ {i}");
+        //            }
+        //        }
+        //    }
+
+
+        //    SendPacketsElement[] GetElements()
+        //    {
+        //        const int N = 64;
+        //        int part = (int)fileStream1.Length / N;
+        //        SendPacketsElement[] result = new SendPacketsElement[N];
+        //        for (int i = 0; i < result.Length; i++)
+        //        {
+        //            result[i] = new SendPacketsElement(i % 2 == 0 ? fileStream1 : fileStream2, i * part, 10);
+        //        }
+        //        return result;
+        //    }
+        //}
+
+        //[Fact]
+        //public void EvilRepro()
+        //{
+        //    byte[] expected = null;
+        //    using (var stream1Temp = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous))
+        //    //using (var stream2Temp = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous))
+        //    {
+        //        expected = GetExpectedContent(GetElements2(stream1Temp));
+        //    }
+
+        //    Parallel.For(0, 8, _ =>
+        //    {
+        //        using (SocketTestServer.SocketTestServerFactory(SocketImplementationType.Async, _serverAddress, out int port))
+        //        {
+        //            using Socket sock = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+        //            sock.Connect(new IPEndPoint(_serverAddress, port));
+
+        //            for (int i = 0; i < 5_000; i++)
+        //            {
+        //                TestSocket(sock, expected);
+        //            }
+        //        }
+        //    });
+
+        //    SendPacketsElement[] GetElements2(FileStream stream)
+        //    {
+        //        const int N = 64;
+        //        int part = (int)stream.Length / N;
+        //        SendPacketsElement[] result = new SendPacketsElement[N];
+        //        for (int i = 0; i < result.Length; i++)
+        //        {
+        //            result[i] = new SendPacketsElement(stream, i * part, 10);
+        //        }
+        //        return result;
+        //    }
+
+        //    void TestSocket(Socket sock, byte[] expected)
+        //    {
+        //        using var stream1 = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
+        //        //using var stream2 = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
+        //        var elements = GetElements2(stream1);
+
+        //        EventWaitHandle completed = new ManualResetEvent(false);
+
+        //        using (SocketAsyncEventArgs args = new SocketAsyncEventArgs())
+        //        {
+        //            args.Completed += OnCompleted;
+        //            args.UserToken = completed;
+        //            args.SendPacketsElements = elements;
+
+        //            if (sock.SendPacketsAsync(args))
+        //            {
+        //                Assert.True(completed.WaitOne(10_000), $"Timed out ({10_000} ms)");
+        //            }
+        //            Assert.Equal(SocketError.Success, args.SocketError);
+        //            Assert.Equal(expected.Length, args.BytesTransferred);
+        //        }
+        //    }
+        //}
+
         [Fact]
-        public void SendPacketsElement_FileStreamMultiPartMixed_MultipleWholeFiles_Success() {
-            using (var stream = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous)) {
+        public void SendPacketsElement_FileStreamMultiPartMixed_MultipleWholeFiles_Success()
+        {
+            using (var stream = new FileStream(TestFileName, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous))
+            {
                 var elements = new[]
                 {
                     new SendPacketsElement(stream, 0L, 0),
@@ -622,7 +748,7 @@ namespace System.Net.Sockets.Tests
         }
 
         #endregion
-        
+
         #region Helpers
 
         private void SendPackets(SendPacketsElement element, TransmitFileOptions flags, int bytesExpected)
@@ -697,19 +823,21 @@ namespace System.Net.Sockets.Tests
 
                         if (sock.SendPacketsAsync(args))
                         {
-                            Assert.True(completed.WaitOne(TestSettings.PassingTestTimeout), "Timed out");
+                            Assert.True(completed.WaitOne(TestSettings.PassingTestLongTimeout), $"Timed out ({TestSettings.PassingTestLongTimeout} ms)");
                         }
                         Assert.Equal(expectedResult, args.SocketError);
                         Assert.Equal(bytesExpected, args.BytesTransferred);
 
                     }
 
-                    if (contentExpected != null) {
+                    if (contentExpected != null)
+                    {
                         // test server just echos back, so read number of expected bytes from the stream
                         var contentActual = new byte[bytesExpected];
                         int bytesReceived = 0;
-                        while (bytesReceived < bytesExpected) {
-                            bytesReceived += sock.Receive(contentActual, bytesReceived, bytesExpected-bytesReceived, SocketFlags.None);
+                        while (bytesReceived < bytesExpected)
+                        {
+                            bytesReceived += sock.Receive(contentActual, bytesReceived, bytesExpected - bytesReceived, SocketFlags.None);
                         }
                         Assert.Equal(bytesExpected, bytesReceived);
                         AssertExtensions.SequenceEqual(contentExpected, contentActual);
@@ -730,48 +858,61 @@ namespace System.Net.Sockets.Tests
         /// </summary>
         /// <param name="elements"></param>
         /// <returns></returns>
-        private byte[] GetExpectedContent(params SendPacketsElement[] elements) {
+        private byte[] GetExpectedContent(params SendPacketsElement[] elements)
+        {
 
-            void ReadFromFile(string filePath, long offset, long count, byte[] destination, ref long destinationOffset) {
-                using (FileStream fs = new FileStream(filePath, FileMode.Open,FileAccess.Read, FileShare.Read)) {
+            void ReadFromFile(string filePath, long offset, long count, byte[] destination, ref long destinationOffset)
+            {
+                using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
                     // Passing a zero count to SendPacketsElement means it sends the whole file.
-                    if (count == 0) {
+                    if (count == 0)
+                    {
                         count = fs.Length;
                     }
                     fs.Position = offset;
                     int actualRead = 0;
-                    do {
-                        actualRead += fs.Read(destination, (int) destinationOffset + actualRead, (int) count - actualRead);
+                    do
+                    {
+                        actualRead += fs.Read(destination, (int)destinationOffset + actualRead, (int)count - actualRead);
                     } while (actualRead != count && fs.Position < fs.Length);
                     destinationOffset += actualRead;
                 }
             }
 
-            int FileCount(SendPacketsElement element) {
+            int FileCount(SendPacketsElement element)
+            {
                 if (element.Count != 0) return element.Count;
-                if (element.FilePath != null) {
-                    return (int) new FileInfo(element.FilePath).Length;
+                if (element.FilePath != null)
+                {
+                    return (int)new FileInfo(element.FilePath).Length;
                 }
-                else if (element.FileStream != null) {
-                    return (int) element.FileStream.Length;
+                else if (element.FileStream != null)
+                {
+                    return (int)element.FileStream.Length;
                 }
                 throw new ArgumentException("Expected SendPacketsElement with FilePath or FileStream set.", nameof(element));
             }
 
             int totalCount = 0;
-            foreach (var element in elements) {
+            foreach (var element in elements)
+            {
                 totalCount += element.Buffer != null ? element.Count : FileCount(element);
             }
             var result = new byte[totalCount];
             long resultOffset = 0L;
-            foreach (var spe in elements) {
-                if (spe.FilePath != null) {
+            foreach (var spe in elements)
+            {
+                if (spe.FilePath != null)
+                {
                     ReadFromFile(spe.FilePath, spe.OffsetLong, spe.Count, result, ref resultOffset);
                 }
-                else if (spe.FileStream != null) {
+                else if (spe.FileStream != null)
+                {
                     ReadFromFile(spe.FileStream.Name, spe.OffsetLong, spe.Count, result, ref resultOffset);
                 }
-                else if (spe.MemoryBuffer != null && spe.Count > 0) {
+                else if (spe.MemoryBuffer != null && spe.Count > 0)
+                {
                     spe.MemoryBuffer.Value.CopyTo(result.AsMemory((int)resultOffset));
                     resultOffset += spe.Count;
                 }
@@ -828,184 +969,5 @@ namespace System.Net.Sockets.Tests
             };
 
         #endregion Helpers
-
-        [Fact]
-        public void KillYourself()
-        {
-            string tempFile = Path.GetTempFileName();
-            byte[] content = new byte[1024];
-            File.WriteAllBytes(tempFile, content);
-            using FileStream fileStream1 = new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
-
-            using Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            listener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-            int port = ((IPEndPoint)listener.LocalEndPoint).Port;
-            listener.Listen();
-
-            EventWaitHandle completed = new ManualResetEvent(false);
-            using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            client.Connect(new IPEndPoint(IPAddress.Loopback, port));
-            using Socket server = listener.Accept();
-
-            int lastCompleted = -1;
-            for (int i = 0; i < 10_000; i++)
-            {
-                completed.Reset();
-
-                using SocketAsyncEventArgs args = new SocketAsyncEventArgs();
-
-                args.Completed += (_, e) => { ((EventWaitHandle)e.UserToken).Set(); lastCompleted = i; };
-                args.UserToken = completed;
-                args.SendPacketsElements = GetElements();
-
-                if (client.SendPacketsAsync(args))
-                {
-                    if (!completed.WaitOne(30_000))
-                    {
-                        throw new Exception($"Timed out @ {i} | lastCompleted: {lastCompleted}");
-                    }
-                }
-
-                if (i % 50 == 0)
-                {
-                    Thread.Sleep(15);
-                }
-            }
-
-
-            SendPacketsElement[] GetElements()
-            {
-                const int N = 64;
-                int part = (int)fileStream1.Length / N;
-                SendPacketsElement[] result = new SendPacketsElement[N];
-                for (int i = 0; i < result.Length; i++)
-                {
-                    result[i] = new SendPacketsElement(fileStream1, i * part, 10);
-                }
-                return result;
-            }
-        }
-
-        [Fact]
-        public void RoflikCz()
-        {
-            string tempFile = Path.GetTempFileName();
-            byte[] content = new byte[1024];
-            File.WriteAllBytes(tempFile, content);
-            using FileStream fileStream1 = new FileStream(tempFile, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous);
-
-            using Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            listener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-            int port = ((IPEndPoint)listener.LocalEndPoint).Port;
-            listener.Listen();
-
-            EventWaitHandle completed = new ManualResetEvent(false);
-            using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            client.Connect(new IPEndPoint(IPAddress.Loopback, port));
-            using Socket server = listener.Accept();
-
-            int lastCompleted = -1;
-            for (int i = 0; i < 10_000; i++)
-            {
-                completed.Reset();
-
-                using SocketAsyncEventArgs args = new SocketAsyncEventArgs();
-
-                args.Completed += (_, e) => { ((EventWaitHandle)e.UserToken).Set(); lastCompleted = i; };
-                args.UserToken = completed;
-                args.SendPacketsElements = GetElements();
-
-                if (client.SendPacketsAsync(args))
-                {
-                    if (!completed.WaitOne(30_000))
-                    {
-                        throw new Exception($"Timed out @ {i} | lastCompleted: {lastCompleted}");
-                    }
-                }
-            }
-
-
-            SendPacketsElement[] GetElements()
-            {
-                const int N = 64;
-                byte[] data = new byte[fileStream1.Length];
-                int part = (int)fileStream1.Length / N;
-                SendPacketsElement[] result = new SendPacketsElement[N];
-                for (int i = 0; i < result.Length; i++)
-                {
-                    result[i] = new SendPacketsElement(data, i * part, 10);
-                }
-                return result;
-            }
-        }
-
-
-        [Fact]
-        public void SuicidePls()
-        {
-            string tempFile = Path.GetTempFileName();
-            byte[] content = new byte[1024];
-            File.WriteAllBytes(tempFile, content);
-
-            using Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            listener.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-            int port = ((IPEndPoint)listener.LocalEndPoint).Port;
-            listener.Listen();
-
-            EventWaitHandle completed = new ManualResetEvent(false);
-            using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            client.Connect(new IPEndPoint(IPAddress.Loopback, port));
-            using Socket server = listener.Accept();
-
-            _ = ReceiveThread();
-
-            int syncCompleted = 0;
-            byte[] recvBuffer = new byte[1024];
-            for (int i = 0; i < 10_000; i++)
-            {
-                completed.Reset();
-
-                using SocketAsyncEventArgs args = new SocketAsyncEventArgs();
-
-                args.Completed += static (_, e) => ((EventWaitHandle)e.UserToken).Set();
-                args.UserToken = completed;
-                args.SendPacketsElements = GetElements();
-
-                if (client.SendPacketsAsync(args))
-                {
-                    if (!completed.WaitOne(30_000))
-                    {
-                        throw new Exception($"Timed out @ {i}. SyncCompleted:{syncCompleted}");
-                    }
-                }
-                else
-                {
-                    syncCompleted++;
-                }
-            }
-
-            async System.Threading.Tasks.Task ReceiveThread()
-            {
-                byte[] receiveData = new byte[4096];
-
-                const int Total = 64 * 10 * 10_000;
-                for (int received = 0; received < Total; received += await server.ReceiveAsync(receiveData))
-                {
-                }                
-            }
-
-            SendPacketsElement[] GetElements()
-            {
-                const int N = 64;
-                byte[] data = new byte[s_testFileSize];
-                int part = s_testFileSize / N;
-                SendPacketsElement[] result = new SendPacketsElement[N];
-                for (int i = 0; i < result.Length; i++)
-                {
-                    result[i] = new SendPacketsElement(data, i * part, 10);
-                }
-                return result;
-            }
-        }
     }
 }
