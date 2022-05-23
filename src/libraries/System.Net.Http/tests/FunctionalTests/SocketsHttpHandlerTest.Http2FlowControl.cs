@@ -82,7 +82,7 @@ namespace System.Net.Http.Functional.Tests
             NoAutoPingResponseHttp2Options);
         }
 
-        [OuterLoop("Runs long")]
+        // [OuterLoop("Runs long")]
         [Fact]
         public async Task HighBandwidthDelayProduct_ClientStreamReceiveWindowWindowScalesUp()
         {
@@ -96,7 +96,7 @@ namespace System.Net.Http.Functional.Tests
             Assert.True(maxCredit > 1024 * 1024);
         }
 
-        [OuterLoop("Runs long")]
+        // [OuterLoop("Runs long")]
         [Fact]
         public void DisableDynamicWindowScaling_HighBandwidthDelayProduct_WindowRemainsConstant()
         {
@@ -116,7 +116,7 @@ namespace System.Net.Http.Functional.Tests
             RemoteExecutor.Invoke(RunTest).Dispose();
         }
 
-        [OuterLoop("Runs long")]
+        // [OuterLoop("Runs long")]
         [Fact]
         public void MaxStreamWindowSize_WhenSet_WindowDoesNotScaleAboveMaximum()
         {
@@ -139,7 +139,7 @@ namespace System.Net.Http.Functional.Tests
             RemoteExecutor.Invoke(RunTest, options).Dispose();
         }
 
-        [OuterLoop("Runs long")]
+        // [OuterLoop("Runs long")]
         [Fact]
         public void StreamWindowScaleThresholdMultiplier_HighValue_WindowScalesSlower()
         {
@@ -160,7 +160,7 @@ namespace System.Net.Http.Functional.Tests
             RemoteExecutor.Invoke(RunTest, options).Dispose();
         }
 
-        [OuterLoop("Runs long")]
+        // [OuterLoop("Runs long")]
         [Fact]
         public void StreamWindowScaleThresholdMultiplier_LowValue_WindowScalesFaster()
         {
