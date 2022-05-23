@@ -96,6 +96,26 @@ namespace System.Net.Http.Functional.Tests
             Assert.True(maxCredit > 1024 * 1024);
         }
 
+        public enum PingAccountingRule
+        {
+            DoNotCount,
+            ResetOnSend,
+            ResetOnReceive
+        }
+
+        [Theory]
+        [InlineData(PingAccountingRule.ResetOnSend)]
+        [InlineData(PingAccountingRule.ResetOnReceive)]
+        public async Task DoesNotViolateServerPingRules(PingAccountingRule pingCounterRules)
+        {
+            await TestClientWindowScalingAsync(
+                TimeSpan.Zero,
+                TimeSpan.Zero,
+                4 * 1024 * 1024,
+                _output,
+                pingAccountingRule: pingCounterRules);
+        }
+
         // [OuterLoop("Runs long")]
         [Fact]
         public void DisableDynamicWindowScaling_HighBandwidthDelayProduct_WindowRemainsConstant()
@@ -187,7 +207,8 @@ namespace System.Net.Http.Functional.Tests
             int bytesToDownload,
             ITestOutputHelper output = null,
             int maxWindowForPingStopValidation = int.MaxValue, // set to actual maximum to test if we stop sending PING when window reached maximum
-            Action<SocketsHttpHandler> configureHandler = null)
+            Action<SocketsHttpHandler> configureHandler = null,
+            PingAccountingRule pingAccountingRule = PingAccountingRule.DoNotCount)
         {
             TimeSpan timeout = TimeSpan.FromSeconds(30);
             CancellationTokenSource timeoutCts = new CancellationTokenSource(timeout);
@@ -225,13 +246,16 @@ namespace System.Net.Http.Functional.Tests
             using SemaphoreSlim writeSemaphore = new SemaphoreSlim(1);
             int remainingBytes = bytesToDownload;
 
+            int pingCounter = 0;
             bool pingReceivedAfterReachingMaxWindow = false;
             bool unexpectedFrameReceived = false;
+            bool violatedPingRules = false;
             CancellationTokenSource stopFrameProcessingCts = new CancellationTokenSource();
             
             CancellationTokenSource linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stopFrameProcessingCts.Token, timeoutCts.Token);
             Task processFramesTask = ProcessIncomingFramesAsync(linkedCts.Token);
             byte[] buffer = new byte[16384];
+
 
             while (remainingBytes > 0)
             {
@@ -246,6 +270,12 @@ namespace System.Net.Http.Functional.Tests
                 await writeSemaphore.WaitAsync();
                 Interlocked.Add(ref credit, -bytesToSend);
                 await connection.SendResponseDataAsync(streamId, responseData, endStream);
+                if (pingAccountingRule == PingAccountingRule.ResetOnSend)
+                {
+                    output?.WriteLine("!! Reset pingCounter");
+                    Interlocked.Exchange(ref pingCounter, 0);
+                }
+
                 writeSemaphore.Release();
                 output?.WriteLine($"Sent {bytesToSend}, credit reduced to: {credit}");
 
@@ -261,11 +291,13 @@ namespace System.Net.Http.Functional.Tests
             Assert.Equal(bytesToDownload, dataReceived);
             Assert.False(pingReceivedAfterReachingMaxWindow, "Server received a PING after reaching max window");
             Assert.False(unexpectedFrameReceived, "Server received an unexpected frame, see test output for more details.");
+            Assert.False(violatedPingRules, $"Client sent too many pings according to accounting rule {pingAccountingRule}.");
 
             return maxCredit;
 
             async Task ProcessIncomingFramesAsync(CancellationToken cancellationToken)
             {
+                
                 // If credit > 90% of the maximum window, we are safe to assume we reached the max window.
                 // We should not receive any more RTT PING's after this point
                 int maxWindowCreditThreshold = (int) (0.9 * maxWindowForPingStopValidation);
@@ -291,11 +323,31 @@ namespace System.Net.Http.Functional.Tests
                             }
 
                             await writeSemaphore.WaitAsync(cancellationToken);
-                            await connection.SendPingAckAsync(pingFrame.Data, cancellationToken);
+
+                            Interlocked.Increment(ref pingCounter);
+                            output?.WriteLine($"pingCounter={pingCounter}");
+                            if (pingCounter >= 2)
+                            {
+                                Volatile.Write(ref violatedPingRules, true);
+                                await connection.SendGoAway(streamId, ProtocolErrors.ENHANCE_YOUR_CALM);
+                            }
+                            else
+                            {
+                                await connection.SendPingAckAsync(pingFrame.Data, cancellationToken);
+                            }
+                            
                             writeSemaphore.Release();
                         }
                         else if (frame is WindowUpdateFrame windowUpdateFrame)
                         {
+                            if (pingAccountingRule == PingAccountingRule.ResetOnReceive)
+                            {
+                                // Note: we should also reset on DATA and HEADERS if there will be new tests sending DATA or HEADERS,
+                                // for now those frames are handled as unexpected in the last else if branch.
+                                Interlocked.Exchange(ref pingCounter, 0);
+                                output?.WriteLine("!! Reset pingCounter");
+                            }
+
                             // Ignore connection window:
                             if (windowUpdateFrame.StreamId != streamId) continue;
 
