@@ -3,8 +3,8 @@ on:
   issue_comment:
     types: [created]
   schedule:
-    # once a day at 13:00 UTC
-    - cron: '0 13 * * *'
+    # every five minutes
+    - cron: '*/5 * * * *'
 
 permissions:
   contents: write
@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   cleanup_old_runs:
-    if: github.event.schedule == '0 13 * * *'
+    if: github.event.schedule == '*/5 * * * *'
     runs-on: ubuntu-20.04
     permissions:
       actions: write
@@ -23,10 +23,13 @@ jobs:
     - name: Delete old workflow runs
       run: |
         _UrlPath="/repos/$GITHUB_REPOSITORY/actions/workflows"
+        echo "Initial _UrlPath: $_UrlPath"
 
         _CurrentWorkflowID="$(gh api -X GET "$_UrlPath" | jq '.workflows[] | select(.name == '\""$GITHUB_WORKFLOW"\"') | .id')"
+        echo "WorkflowID: $_CurrentWorkflowID="
 
         _UrlPath="$_UrlPath/$_CurrentWorkflowID/runs"
+        echo "New URL: $_UrlPath"
 
         # delete workitems which are 'completed'. (other candidate values of status field are: 'queued' and 'in_progress')
 
