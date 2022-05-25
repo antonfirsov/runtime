@@ -161,13 +161,15 @@ namespace System.Net.Http
                 TerminatingMayReceivePingAck
             }
 
-            private const double PingIntervalInSeconds = 2;
             private const int InitialBurstCount = 4;
+            private const int MaxPingsWithoutSending = 2;
+            private const double PingIntervalInSeconds = 2;
             private static readonly long PingIntervalInTicks = (long)(PingIntervalInSeconds * Stopwatch.Frequency);
 
             private State _state;
             private long _pingSentTimestamp;
             private long _pingCounter;
+            private int _sendPolicyCounter;
             private int _initialBurst;
             private long _minRtt;
 
@@ -197,6 +199,7 @@ namespace System.Net.Http
             internal void OnDataOrHeadersReceived(Http2Connection connection)
             {
                 if (_state != State.Waiting) return;
+                if (_sendPolicyCounter >= MaxPingsWithoutSending) return;
 
                 long now = Stopwatch.GetTimestamp();
                 bool initial = _initialBurst > 0;
@@ -206,6 +209,7 @@ namespace System.Net.Http
 
                     // Send a PING
                     _pingCounter--;
+                    Interlocked.Increment(ref _sendPolicyCounter);
                     if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Sending RTT PING with payload {_pingCounter}");
                     connection.LogExceptions(connection.SendPingAsync(_pingCounter, isAck: false));
                     _pingSentTimestamp = now;
@@ -251,6 +255,12 @@ namespace System.Net.Http
                 {
                     _state = State.Disabled;
                 }
+            }
+
+            // Reset the ping policy counter
+            internal void OnDataOrHeadersOrWindowUpdateSent()
+            {
+                Interlocked.Exchange(ref _sendPolicyCounter, 0);
             }
 
             private void RefreshRtt(Http2Connection connection)
