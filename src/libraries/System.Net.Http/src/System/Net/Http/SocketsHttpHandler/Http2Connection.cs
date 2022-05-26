@@ -1217,6 +1217,8 @@ namespace System.Net.Http
                 FrameHeader.WriteTo(span, FrameHeader.PingLength, FrameType.Ping, state.isAck ? FrameFlags.Ack: FrameFlags.None, streamId: 0);
                 BinaryPrimitives.WriteInt64BigEndian(span.Slice(FrameHeader.Size), state.pingContent);
 
+                state.thisRef._rttEstimator.OnPingSent();
+
                 return true;
             });
 

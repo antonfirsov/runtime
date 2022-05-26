@@ -209,7 +209,6 @@ namespace System.Net.Http
 
                     // Send a PING
                     _pingCounter--;
-                    Interlocked.Increment(ref _sendPolicyCounter);
                     if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Sending RTT PING with payload {_pingCounter}");
                     connection.LogExceptions(connection.SendPingAsync(_pingCounter, isAck: false));
                     _pingSentTimestamp = now;
@@ -257,11 +256,10 @@ namespace System.Net.Http
                 }
             }
 
+            internal void OnPingSent() => Interlocked.Increment(ref _sendPolicyCounter);
+
             // Reset the ping policy counter
-            internal void OnDataOrHeadersOrWindowUpdateSent()
-            {
-                Interlocked.Exchange(ref _sendPolicyCounter, 0);
-            }
+            internal void OnDataOrHeadersOrWindowUpdateSent() => Interlocked.Exchange(ref _sendPolicyCounter, 0);
 
             private void RefreshRtt(Http2Connection connection)
             {
