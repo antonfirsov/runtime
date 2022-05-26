@@ -138,18 +138,25 @@ namespace System.Net.Http
         // Assuming that the network characteristics of the connection wouldn't change much within its lifetime, we are maintaining a running minimum value.
         // The more PINGs we send, the more accurate is the estimation of MinRtt, however we should be careful not to send too many of them,
         // to avoid triggering the server's PING flood protection which may result in an unexpected GOAWAY.
-        // With most servers we are fine to send PINGs, as long as we are reading their data, this rule is well formalized for gRPC:
-        // https://github.com/grpc/proposal/blob/master/A8-client-side-keepalive.md
-        // As a rule of thumb, we can send send a PING whenever we receive DATA or HEADERS, however, there are some servers which allow receiving only
-        // a limited amount of PINGs within a given timeframe.
-        // To deal with the conflicting requirements:
-        // - We send an initial burst of 'InitialBurstCount' PINGs, to get a relatively good estimation fast
-        // - Afterwards, we send PINGs with the maximum frequency of 'PingIntervalInSeconds' PINGs per second
         //
-        // Threading:
-        // OnInitialSettingsSent() is called during initialization, all other methods are triggered by HttpConnection.ProcessIncomingFramesAsync(),
-        // therefore the assumption is that the invocation of RttEstimator's methods is sequential, and there is no race beetween them.
-        // Http2StreamWindowManager is reading MinRtt from another concurrent thread, therefore its value has to be changed atomically.
+        // Several strategies have been implemented to conform with real life servers.
+        // 1. With most servers we are fine to send PINGs as long as we are reading their data, a rule formalized by a gRPC spec:
+        // https://github.com/grpc/proposal/blob/master/A8-client-side-keepalive.md
+        // According to this rule, we are OK to send a PING whenever we receive DATA or HEADERS, since the servers conforming to this doc
+        // will reset their unsolicited ping counter whenever they *send* DATA or HEADERS.
+        // 2. Some servers allow receiving only a limited amount of PINGs within a given timeframe.
+        // To deal with this, we send an initial burst of 'InitialBurstCount' PINGs, to get a relatively good estimation fast. Afterwards,
+        // we send PINGs each 'PingIntervalInSeconds' second, to maintain our estimations without triggering these servers.
+        // 3. Certain backend proxy servers reset their unsolicited ping counter when they *receive* DATA, HEADERS, or WINDOW_UPDATE,
+        // allowing up to 2 unsolicited PINGs. To deal with these servers, we maitain a counter '_sendPolicyCounter'.
+        //
+        // Threading and synchronization:
+        // - OnInitialSettingsSent() is called during initialization
+        // - OnDataOrHeadersOrWindowUpdateSent() and OnPingSent() are called from Http2Connection.ProcessOutgoingFramesAsync(),
+        //   access to _sendPolicyCounter has to be synchronized with OnDataOrHeadersReceived.
+        // - The XyzReceived() methods are invoked from HttpConnection.ProcessIncomingFramesAsync(),
+        //   therefore the the invocation of those methods is sequential, and there is no race beetween them.
+        // - Http2StreamWindowManager is reading MinRtt from another concurrent thread, therefore its value has to be changed atomically.
         private struct RttEstimator
         {
             private enum State
@@ -157,18 +164,18 @@ namespace System.Net.Http
                 Disabled,
                 Init,
                 Waiting,
-                PingSent,
+                PingSent, // We do not send RTT PING-s while there is an unacknowledged RTT PING in-flight
                 TerminatingMayReceivePingAck
             }
 
+            private const int MaxPingsWithoutSending = 2; // Number of PING-s allowed to send without also sending DATA, HEADERS or WINDOW_UPDATE
             private const int InitialBurstCount = 4;
-            private const int MaxPingsWithoutSending = 2;
             private const double PingIntervalInSeconds = 2;
             private static readonly long PingIntervalInTicks = (long)(PingIntervalInSeconds * Stopwatch.Frequency);
 
             private State _state;
             private long _pingSentTimestamp;
-            private long _pingCounter;
+            private long _pingPayloadCounter;
             private int _sendPolicyCounter;
             private int _initialBurst;
             private long _minRtt;
@@ -208,9 +215,9 @@ namespace System.Net.Http
                     if (initial) _initialBurst--;
 
                     // Send a PING
-                    _pingCounter--;
-                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Sending RTT PING with payload {_pingCounter}");
-                    connection.LogExceptions(connection.SendPingAsync(_pingCounter, isAck: false));
+                    _pingPayloadCounter--;
+                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Sending RTT PING with payload {_pingPayloadCounter}");
+                    connection.LogExceptions(connection.SendPingAsync(_pingPayloadCounter, isAck: false));
                     _pingSentTimestamp = now;
                     _state = State.PingSent;
                 }
@@ -233,9 +240,9 @@ namespace System.Net.Http
                 // RTT PINGs always carry negative payload, positive values indicate a response to KeepAlive PING.
                 Debug.Assert(payload < 0);
 
-                if (_pingCounter != payload)
+                if (_pingPayloadCounter != payload)
                 {
-                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Unexpected RTT PING ACK payload {payload}, should be {_pingCounter}.");
+                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Unexpected RTT PING ACK payload {payload}, should be {_pingPayloadCounter}.");
                     ThrowProtocolError();
                 }
 
@@ -258,7 +265,6 @@ namespace System.Net.Http
 
             internal void OnPingSent() => Interlocked.Increment(ref _sendPolicyCounter);
 
-            // Reset the ping policy counter
             internal void OnDataOrHeadersOrWindowUpdateSent() => Interlocked.Exchange(ref _sendPolicyCounter, 0);
 
             private void RefreshRtt(Http2Connection connection)
