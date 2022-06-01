@@ -146,14 +146,14 @@ namespace System.Net.Http
         // will reset their unsolicited ping counter whenever they *send* DATA or HEADERS.
         // 2. Some servers allow receiving only a limited amount of PINGs within a given timeframe.
         // To deal with this, we send an initial burst of 'InitialBurstCount' PINGs, to get a relatively good estimation fast. Afterwards,
-        // we send PINGs each 'PingIntervalInSeconds' second, to maintain our estimations without triggering these servers.
+        // we send PINGs each 'PingIntervalInSeconds' second, to maintain our estimation without triggering these servers.
         // 3. Certain backend proxy servers reset their unsolicited ping counter when they *receive* DATA, HEADERS, or WINDOW_UPDATE,
         // allowing up to 2 unsolicited PINGs. To deal with these servers, we maitain a counter '_sendPolicyCounter'.
         //
         // Threading and synchronization:
         // - OnInitialSettingsSent() is called during initialization
         // - OnDataOrHeadersOrWindowUpdateSent() and OnPingSent() are called from Http2Connection.ProcessOutgoingFramesAsync(),
-        //   access to _sendPolicyCounter has to be synchronized with OnDataOrHeadersReceived.
+        //   access to _sendPolicyCounter has to be synchronized with OnDataOrHeadersReceived().
         // - The XyzReceived() methods are invoked from HttpConnection.ProcessIncomingFramesAsync(),
         //   therefore the the invocation of those methods is sequential, and there is no race beetween them.
         // - Http2StreamWindowManager is reading MinRtt from another concurrent thread, therefore its value has to be changed atomically.
@@ -162,8 +162,8 @@ namespace System.Net.Http
             private enum State
             {
                 Disabled,
-                Init,
-                Waiting,
+                Init,     // Waiting for SETTINGS ACK before starting to send PING-s
+                Waiting,  // Waiting to receive DATA or HEADERS so we can send a PING
                 PingSent, // We do not send RTT PING-s while there is an unacknowledged RTT PING in-flight
                 TerminatingMayReceivePingAck
             }
@@ -175,8 +175,8 @@ namespace System.Net.Http
 
             private State _state;
             private long _pingSentTimestamp;
-            private long _pingPayloadCounter;
-            private int _sendPolicyCounter;
+            private long _pingPayloadCounter; // count the negative PING payload values for RTT PING-s
+            private int _sendPolicyCounter; // count the number of PING-s sent without also sending DATA, HEADERS or WINDOW_UPDATE
             private int _initialBurst;
             private long _minRtt;
 

@@ -1217,6 +1217,7 @@ namespace System.Net.Http
                 FrameHeader.WriteTo(span, FrameHeader.PingLength, FrameType.Ping, state.isAck ? FrameFlags.Ack: FrameFlags.None, streamId: 0);
                 BinaryPrimitives.WriteInt64BigEndian(span.Slice(FrameHeader.Size), state.pingContent);
 
+                // RTT PING bookeeping
                 state.thisRef._rttEstimator.OnPingSent();
 
                 return true;
@@ -1568,7 +1569,7 @@ namespace System.Net.Http
                     span = span.Slice(current.Length);
                     if (NetEventSource.Log.IsEnabled()) s.thisRef.Trace(s.http2Stream.StreamId, $"Wrote HEADERS frame. Length={current.Length}, flags={flags}");
 
-                    // RTT ping policy maintenance
+                    // RTT PING bookeeping
                     s.thisRef._rttEstimator.OnDataOrHeadersOrWindowUpdateSent();
 
                     // Copy CONTINUATION frames, if any.
@@ -1640,7 +1641,7 @@ namespace System.Net.Http
                         FrameHeader.WriteTo(writeBuffer.Span, s.current.Length, FrameType.Data, FrameFlags.None, s.streamId);
                         s.current.CopyTo(writeBuffer.Slice(FrameHeader.Size));
 
-                        // RTT ping policy maintenance
+                        // RTT PING bookeeping
                         s.thisRef._rttEstimator.OnDataOrHeadersOrWindowUpdateSent();
 
                         return s.flush;
@@ -1677,7 +1678,7 @@ namespace System.Net.Http
                 FrameHeader.WriteTo(span, FrameHeader.WindowUpdateLength, FrameType.WindowUpdate, FrameFlags.None, s.streamId);
                 BinaryPrimitives.WriteInt32BigEndian(span.Slice(FrameHeader.Size), s.amount);
 
-                // RTT ping policy maintenance
+                // RTT PING bookeeping
                 s.thisRef._rttEstimator.OnDataOrHeadersOrWindowUpdateSent();
 
                 return true;
