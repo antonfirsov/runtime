@@ -1579,7 +1579,6 @@ namespace System.Net.Http
                         flags = remaining.Length == 0 ? FrameFlags.EndHeaders : FrameFlags.None;
 
                         FrameHeader.WriteTo(span, current.Length, FrameType.Continuation, flags, s.http2Stream.StreamId);
-
                         span = span.Slice(FrameHeader.Size);
                         current.Span.CopyTo(span);
                         span = span.Slice(current.Length);
