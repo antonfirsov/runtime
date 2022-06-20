@@ -3,10 +3,11 @@
 
 #include "ep-rt-config.h"
 
+#include <minipal/utils.h>
+
 #ifdef ENABLE_PERFTRACING
 #include "ep-types.h"
 
-#define EP_ARRAY_SIZE(expr) ep_rt_redefine
 #define EP_INFINITE_WAIT ep_rt_redefine
 
 #define EP_GCX_PREEMP_ENTER ep_rt_redefine
@@ -180,6 +181,10 @@ ep_rt_atomic_dec_int64_t (volatile int64_t *value);
 static
 size_t
 ep_rt_atomic_compare_exchange_size_t (volatile size_t *target, size_t expected, size_t value);
+
+static
+ep_char8_t *
+eo_rt_atomic_compare_exchange_utf8_string (volatile ep_char8_t **target, ep_char8_t *expected, ep_char8_t *value);
 
 /*
  * EventPipe.

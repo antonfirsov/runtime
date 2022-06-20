@@ -8,22 +8,15 @@
 .assembly extern mscorlib
 {
 }
-.assembly 'bug'
+.assembly 'indcall'
 {
 
   
 }
-.assembly extern xunit.core
+.assembly extern xunit.core {}
+.namespace JitTest_indcall_refany_il
 {
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module 'bug.exe'
-.namespace JitTest
-{
-  .class private auto ansi Test extends ['mscorlib']System.Object
+  .class public auto ansi Test extends ['mscorlib']System.Object
   {
     .method private hidebysig instance int32 DoStuff(method instance int32 *(refany)) il managed
     {
@@ -61,7 +54,7 @@
 			ret
     } // end of method 'Test::DoStuff'
 
-    .method private hidebysig static int32 Main() il managed
+    .method public hidebysig static int32 Main() il managed
     {
 			.custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
 			    01 00 00 00
@@ -69,9 +62,9 @@
 			.entrypoint
 			.maxstack  6
 			.locals (int32 V_0, int32)
-			newobj		instance void JitTest.Test::.ctor()
-			ldftn 		instance int32 JitTest.Test::DummyMethod(refany)
-			ldftn		instance int32 JitTest.Test::DoStuff(method instance int32 *(refany))
+			newobj		instance void JitTest_indcall_refany_il.Test::.ctor()
+			ldftn 		instance int32 JitTest_indcall_refany_il.Test::DummyMethod(refany)
+			ldftn		instance int32 JitTest_indcall_refany_il.Test::DoStuff(method instance int32 *(refany))
 			tail. calli		instance int32 (method instance int32 *(refany))
 			ret
     } // end of method 'Test::Main'
@@ -86,4 +79,4 @@
 
   } // end of class 'Test'
 
-} // end of namespace 'JitTest'
+} // end of namespace 'JitTest_indcall_refany_il'

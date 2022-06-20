@@ -35,11 +35,7 @@ namespace System.Net
         // 0.5 seconds per request.  Respond with a 400 Bad Request.
         private const int UnknownHeaderLimit = 1000;
 
-        private static readonly byte[] s_wwwAuthenticateBytes = new byte[]
-        {
-            (byte) 'W', (byte) 'W', (byte) 'W', (byte) '-', (byte) 'A', (byte) 'u', (byte) 't', (byte) 'h',
-            (byte) 'e', (byte) 'n', (byte) 't', (byte) 'i', (byte) 'c', (byte) 'a', (byte) 't', (byte) 'e'
-        };
+        private static readonly byte[] s_wwwAuthenticateBytes = "WWW-Authenticate"u8.ToArray();
 
         private HttpListenerSession? _currentSession;
 
@@ -96,15 +92,13 @@ namespace System.Net
 
         private void SetUrlGroupProperty(Interop.HttpApi.HTTP_SERVER_PROPERTY property, IntPtr info, uint infosize)
         {
-            uint statusCode = Interop.HttpApi.ERROR_SUCCESS;
-
             Debug.Assert(_urlGroupId != 0, "SetUrlGroupProperty called with invalid url group id");
             Debug.Assert(info != IntPtr.Zero, "SetUrlGroupProperty called with invalid pointer");
 
             //
             // Set the url group property using Http Api.
             //
-            statusCode = Interop.HttpApi.HttpSetUrlGroupProperty(
+            uint statusCode = Interop.HttpApi.HttpSetUrlGroupProperty(
                 _urlGroupId, property, info, infosize);
 
             if (statusCode != Interop.HttpApi.ERROR_SUCCESS)
@@ -153,7 +147,6 @@ namespace System.Net
 
         private void SetupV2Config()
         {
-            uint statusCode = Interop.HttpApi.ERROR_SUCCESS;
             ulong id = 0;
 
             //
@@ -175,7 +168,7 @@ namespace System.Net
 
             try
             {
-                statusCode = Interop.HttpApi.HttpCreateServerSession(
+                uint statusCode = Interop.HttpApi.HttpCreateServerSession(
                     Interop.HttpApi.s_version, &id, 0);
 
                 if (statusCode != Interop.HttpApi.ERROR_SUCCESS)
@@ -508,7 +501,14 @@ namespace System.Net
                 uint size = 4096;
                 ulong requestId = 0;
                 memoryBlob = new SyncRequestContext((int)size);
-                HttpListenerSession session = _currentSession!;
+                HttpListenerSession? session = _currentSession;
+
+                // Because there is no synchronization, the listener can be stopped or closed while the method is executing,
+                // resulting in a null session
+                if (session == null)
+                {
+                    throw new HttpListenerException((int)Interop.HttpApi.ERROR_INVALID_PARAMETER);
+                }
 
                 while (true)
                 {
@@ -617,10 +617,20 @@ namespace System.Net
                 {
                     throw new InvalidOperationException(SR.Format(SR.net_listener_mustcall, "Start()"));
                 }
+
+                HttpListenerSession? session = _currentSession;
+
+                // Because there is no synchronization, the listener can be stopped or closed while the method is executing,
+                // resulting in a null session
+                if (session == null)
+                {
+                    throw new HttpListenerException((int)Interop.HttpApi.ERROR_INVALID_PARAMETER);
+                }
+
                 // prepare the ListenerAsyncResult object (this will have it's own
                 // event that the user can wait on for IO completion - which means we
                 // need to signal it when IO completes)
-                asyncResult = new ListenerAsyncResult(_currentSession!, state, callback);
+                asyncResult = new ListenerAsyncResult(session, state, callback);
                 uint statusCode = asyncResult.QueueBeginGetContext();
                 if (statusCode != Interop.HttpApi.ERROR_SUCCESS &&
                     statusCode != Interop.HttpApi.ERROR_IO_PENDING)
@@ -645,10 +655,7 @@ namespace System.Net
             try
             {
                 CheckDisposed();
-                if (asyncResult == null)
-                {
-                    throw new ArgumentNullException(nameof(asyncResult));
-                }
+                ArgumentNullException.ThrowIfNull(asyncResult);
                 if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"asyncResult: {asyncResult}");
                 if (!(asyncResult is ListenerAsyncResult castedAsyncResult) || !(castedAsyncResult.AsyncObject is HttpListenerSession session) || session.Listener != this)
                 {
@@ -837,7 +844,7 @@ namespace System.Net
                 // See if we found an acceptable auth header
                 if (headerScheme == AuthenticationSchemes.None)
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, SR.Format(SR.net_log_listener_unmatched_authentication_scheme, authenticationScheme.ToString(), (authorizationHeader == null ? "<null>" : authorizationHeader)));
+                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Error(this, SR.Format(SR.net_log_listener_unmatched_authentication_scheme, authenticationScheme.ToString(), authorizationHeader ?? "<null>"));
 
                     // If anonymous is allowed, just return the context.  Otherwise go for the 401.
                     if ((authenticationScheme & AuthenticationSchemes.Anonymous) != AuthenticationSchemes.None)
@@ -1009,7 +1016,7 @@ namespace System.Net
                                     {
                                         if (userContext != null)
                                         {
-                                            userContext.Close();
+                                            userContext.Dispose();
                                         }
                                     }
                                 }
@@ -1271,9 +1278,8 @@ namespace System.Net
             HttpListenerResponse response = context.Response;
 
             // We use the cached results from the delegates so that we don't have to call them again here.
-            NTAuthentication? newContext;
             ArrayList? challenges = BuildChallenge(context.AuthenticationSchemes, request._connectionId,
-                out newContext, context.ExtendedProtectionPolicy, request.IsSecureConnection);
+                out _, context.ExtendedProtectionPolicy, request.IsSecureConnection);
 
             // Setting 401 without setting WWW-Authenticate is a protocol violation
             // but throwing from HttpListener would be a breaking change.
@@ -1447,7 +1453,7 @@ namespace System.Net
             return (isSecureConnection && scenario == ProtectionScenario.TransportSelected);
         }
 
-        private ContextFlagsPal GetContextFlags(ExtendedProtectionPolicy policy, bool isSecureConnection)
+        private static ContextFlagsPal GetContextFlags(ExtendedProtectionPolicy policy, bool isSecureConnection)
         {
             ContextFlagsPal result = ContextFlagsPal.Connection;
             if (policy.PolicyEnforcement != PolicyEnforcement.Never)
@@ -1467,7 +1473,7 @@ namespace System.Net
         }
 
         // This only works for context-destroying errors.
-        private HttpStatusCode HttpStatusFromSecurityStatus(SecurityStatusPalErrorCode statusErrorCode)
+        private static HttpStatusCode HttpStatusFromSecurityStatus(SecurityStatusPalErrorCode statusErrorCode)
         {
             if (IsCredentialFailure(statusErrorCode))
             {

@@ -1,20 +1,20 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using System.IO;
+using System.Globalization;
+using System.Collections;
+using System.Xml.XPath;
+using System.Xml.Xsl.Runtime;
+using MS.Internal.Xml.XPath;
+using System.Reflection;
+using System.Security;
+using System.Runtime.Versioning;
+using System.Diagnostics.CodeAnalysis;
+
 namespace System.Xml.Xsl.XsltOld
 {
-    using System.Diagnostics;
-    using System.IO;
-    using System.Globalization;
-    using System.Collections;
-    using System.Xml.XPath;
-    using System.Xml.Xsl.Runtime;
-    using MS.Internal.Xml.XPath;
-    using System.Reflection;
-    using System.Security;
-    using System.Runtime.Versioning;
-    using System.Diagnostics.CodeAnalysis;
-
     internal sealed class XsltCompileContext : XsltContext
     {
         private InputScopeManager? _manager;
@@ -108,7 +108,7 @@ namespace System.Xml.Xsl.XsltOld
             return _processor!.Stylesheet.PreserveWhiteSpace(_processor, node);
         }
 
-        private MethodInfo? FindBestMethod(MethodInfo[] methods, bool ignoreCase, bool publicOnly, string name, XPathResultType[]? argTypes)
+        private static MethodInfo? FindBestMethod(MethodInfo[] methods, bool ignoreCase, bool publicOnly, string name, XPathResultType[]? argTypes)
         {
             int length = methods.Length;
             int free = 0;
@@ -178,7 +178,6 @@ namespace System.Xml.Xsl.XsltOld
                     methods[free++] = methods[i];
                 }
             }
-            length = free;
             return methods[0];
         }
 
@@ -215,7 +214,7 @@ namespace System.Xml.Xsl.XsltOld
 
         public override IXsltContextFunction ResolveFunction(string prefix, string name, XPathResultType[] argTypes)
         {
-            IXsltContextFunction? func = null;
+            IXsltContextFunction? func;
             if (prefix.Length == 0)
             {
                 func = s_FunctionTable[name] as IXsltContextFunction;
@@ -485,8 +484,7 @@ namespace System.Xml.Xsl.XsltOld
             else
             {
                 // Is this script or extention function?
-                object? extension;
-                return GetExtentionMethod(ns, name, /*argTypes*/null, out extension) != null;
+                return GetExtentionMethod(ns, name, /*argTypes*/null, out _) != null;
             }
         }
 

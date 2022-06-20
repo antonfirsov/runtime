@@ -346,7 +346,7 @@ bb_formation_il_pass (const unsigned char *start, const unsigned char *end, Mono
 	current = bb;
 
 	while (ip < end) {
-		cli_addr = ip - start;
+		cli_addr = GPTRDIFF_TO_UINT (ip - start);
 		size = mono_opcode_value_and_size (&ip, end, &value);
 		if (size < 0) {
 			mono_error_set_not_verifiable (error, method, "Invalid instruction %x", *ip);
@@ -363,7 +363,7 @@ bb_formation_il_pass (const unsigned char *start, const unsigned char *end, Mono
 			ip++;
 			if (!mono_opcode_has_static_branch (value) || ip >= end)
 				break;
-			if (!(next = bb_split (bb, current, root, ip - start, FALSE, method, error)))
+			if (!(next = bb_split (bb, current, root, GPTRDIFF_TO_UINT (ip - start), FALSE, method, error)))
 				return;
 
 			bb_unlink (current, next);
@@ -383,7 +383,7 @@ bb_formation_il_pass (const unsigned char *start, const unsigned char *end, Mono
 			ip += 5;
 			if (value != MONO_CEE_JMP || ip >= end)
 				break;
-			if (!(next = bb_split (bb, current, root, ip - start, FALSE, method, error)))
+			if (!(next = bb_split (bb, current, root, GPTRDIFF_TO_UINT (ip - start), FALSE, method, error)))
 				return;
 
 			bb_unlink (current, next);
@@ -410,7 +410,7 @@ bb_formation_il_pass (const unsigned char *start, const unsigned char *end, Mono
 				offset = cli_addr + 5 + (gint32)read32 (ip + 1);
 				ip += 5;
 			}
-			
+
 			branch = bb_split (bb, current, root, offset, TRUE, method, error);
 			if (!branch)
 				return;
@@ -419,7 +419,7 @@ bb_formation_il_pass (const unsigned char *start, const unsigned char *end, Mono
 			if (offset < cli_addr && branch->start > current->start)
 				current = branch;
 			if (ip < end) {
-				next = bb_split (bb, current, root, ip - start, opcode->flow_type != MONO_FLOW_BRANCH, method, error);
+				next = bb_split (bb, current, root, GPTRDIFF_TO_UINT (ip - start), opcode->flow_type != MONO_FLOW_BRANCH, method, error);
 				if (!next)
 					return;
 			} else {
@@ -442,7 +442,7 @@ bb_formation_il_pass (const unsigned char *start, const unsigned char *end, Mono
 				return;
 
 			bb_link (current, next);
-			tmp = next;			
+			tmp = next;
 
 			for (j = 0; j < n; ++j) {
 				if (ip >= end) {
@@ -537,7 +537,7 @@ mono_basic_block_split (MonoMethod *method, MonoError *error, MonoMethodHeader *
 
 	bb = g_new0 (MonoSimpleBasicBlock, 1);
 	bb->start = 0;
-	bb->end = end - start;
+	bb->end = GPTRDIFF_TO_INT (end - start);
 	bb->colour = BLACK;
 	bb->dead = FALSE;
 
@@ -545,7 +545,7 @@ mono_basic_block_split (MonoMethod *method, MonoError *error, MonoMethodHeader *
 	bb_formation_il_pass (start, end, bb, &root, method, error);
 	if (!is_ok (error))
 		goto fail;
-	
+
 	bb_formation_eh_pass (header, bb, &root, method, error);
 	if (!is_ok (error))
 		goto fail;
@@ -567,14 +567,14 @@ fail:
  * mono_opcode_value_and_size:
  *
  * Returns the size of the opcode starting at *@ip, or -1 on error.
- * Value is the opcode number. 
+ * Value is the opcode number.
 */
 int
 mono_opcode_value_and_size (const unsigned char **ip, const unsigned char *end, MonoOpcodeEnum *value)
 {
 	const unsigned char *start = *ip, *p;
 	int i = *value = mono_opcode_value (ip, end);
-	int size = 0; 
+	int size = 0;
 	if (i < 0 || i >= MONO_CEE_LAST)
 		return -1;
 	p = *ip;
@@ -623,7 +623,7 @@ mono_opcode_value_and_size (const unsigned char **ip, const unsigned char *end, 
 	if (ADDP_IS_GREATER_OR_OVF (p, size, end))
 		return -1;
 
-	return (p - start) + size;
+	return GPTRDIFF_TO_INT ((p - start) + size);
 }
 
 /*

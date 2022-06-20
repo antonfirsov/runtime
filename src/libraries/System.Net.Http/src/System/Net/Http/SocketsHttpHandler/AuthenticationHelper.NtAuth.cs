@@ -61,7 +61,7 @@ namespace System.Net.Http
 
             foreach (string v in values)
             {
-                if (v == "Session-Based-Authentication")
+                if (v.Equals("Session-Based-Authentication", StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
@@ -154,15 +154,27 @@ namespace System.Net.Http
                             NetEventSource.Info(connection, $"Authentication: {challenge.AuthenticationType}, SPN: {spn}");
                         }
 
+                        ContextFlagsPal contextFlags = ContextFlagsPal.Connection;
+                        // When connecting to proxy server don't enforce the integrity to avoid
+                        // compatibility issues. The assumption is that the proxy server comes
+                        // from a trusted source. On macOS we always need to enforce the integrity
+                        // to avoid the GSSAPI implementation generating corrupted authentication
+                        // tokens.
+                        if (!isProxyAuth || OperatingSystem.IsMacOS())
+                        {
+                            contextFlags |= ContextFlagsPal.InitIntegrity;
+                        }
+
                         ChannelBinding? channelBinding = connection.TransportContext?.GetChannelBinding(ChannelBindingKind.Endpoint);
-                        NTAuthentication authContext = new NTAuthentication(isServer: false, challenge.SchemeName, challenge.Credential, spn, ContextFlagsPal.Connection | ContextFlagsPal.InitIntegrity, channelBinding);
+                        NTAuthentication authContext = new NTAuthentication(isServer: false, challenge.SchemeName, challenge.Credential, spn, contextFlags, channelBinding);
                         string? challengeData = challenge.ChallengeData;
                         try
                         {
                             while (true)
                             {
-                                string? challengeResponse = authContext.GetOutgoingBlob(challengeData);
-                                if (challengeResponse == null)
+                                SecurityStatusPal statusCode;
+                                string? challengeResponse = authContext.GetOutgoingBlob(challengeData, throwOnError: false, out statusCode);
+                                if (statusCode.ErrorCode > SecurityStatusPalErrorCode.TryAgain || challengeResponse == null)
                                 {
                                     // Response indicated denial even after login, so stop processing and return current response.
                                     break;
@@ -176,8 +188,21 @@ namespace System.Net.Http
                                 SetRequestAuthenticationHeaderValue(request, new AuthenticationHeaderValue(challenge.SchemeName, challengeResponse), isProxyAuth);
 
                                 response = await InnerSendAsync(request, async, isProxyAuth, connectionPool, connection, cancellationToken).ConfigureAwait(false);
-                                if (authContext.IsCompleted || !TryGetRepeatedChallenge(response, challenge.SchemeName, isProxyAuth, out challengeData))
+                                if (authContext.IsCompleted || !TryGetChallengeDataForScheme(challenge.SchemeName, GetResponseAuthenticationHeaderValues(response, isProxyAuth), out challengeData))
                                 {
+                                    break;
+                                }
+
+                                if (!IsAuthenticationChallenge(response, isProxyAuth))
+                                {
+                                    // Tail response for Negoatiate on successful authentication. Validate it before we proceed.
+                                    authContext.GetOutgoingBlob(challengeData, throwOnError: false, out statusCode);
+                                    if (statusCode.ErrorCode != SecurityStatusPalErrorCode.OK)
+                                    {
+                                        isNewConnection = false;
+                                        connection.Dispose();
+                                        throw new HttpRequestException(SR.Format(SR.net_http_authvalidationfailure, statusCode.ErrorCode), null, HttpStatusCode.Unauthorized);
+                                    }
                                     break;
                                 }
 

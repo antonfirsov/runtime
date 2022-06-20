@@ -2,10 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 import corebindings from "./corebindings";
-import { GCHandle, JSHandle, JSHandleDisposed, JSHandleNull, MonoObject, MonoObjectNull } from "./types";
+import { GCHandle, JSHandle, JSHandleDisposed, JSHandleNull, MonoObjectRef } from "./types";
+import { setI32_unchecked } from "./memory";
+import { create_weak_ref } from "./weak-ref";
 
 export const _use_finalization_registry = typeof globalThis.FinalizationRegistry === "function";
-export const _use_weak_ref = typeof globalThis.WeakRef === "function";
 export let _js_owned_object_registry: FinalizationRegistry<any>;
 
 // this is array, not map. We maintain list of gaps in _js_handle_free_list so that it could be as compact as possible
@@ -24,12 +25,13 @@ export const js_owned_gc_handle_symbol = Symbol.for("wasm js_owned_gc_handle");
 export const cs_owned_js_handle_symbol = Symbol.for("wasm cs_owned_js_handle");
 
 
-export function get_js_owned_object_by_gc_handle(gc_handle: GCHandle): MonoObject {
+export function get_js_owned_object_by_gc_handle_ref(gc_handle: GCHandle, result: MonoObjectRef): void {
     if (!gc_handle) {
-        return MonoObjectNull;
+        setI32_unchecked(result, 0);
+        return;
     }
     // this is always strong gc_handle
-    return corebindings._get_js_owned_object_by_gc_handle(gc_handle);
+    corebindings._get_js_owned_object_by_gc_handle_ref(gc_handle, result);
 }
 
 export function mono_wasm_get_jsobj_from_js_handle(js_handle: JSHandle): any {
@@ -40,11 +42,12 @@ export function mono_wasm_get_jsobj_from_js_handle(js_handle: JSHandle): any {
 
 // when should_add_in_flight === true, the JSObject would be temporarily hold by Normal gc_handle, so that it would not get collected during transition to the managed stack.
 // its InFlight gc_handle would be freed when the instance arrives to managed side via Interop.Runtime.ReleaseInFlight
-export function get_cs_owned_object_by_js_handle(js_handle: JSHandle, should_add_in_flight: boolean): MonoObject {
+export function get_cs_owned_object_by_js_handle_ref(js_handle: JSHandle, should_add_in_flight: boolean, result: MonoObjectRef): void {
     if (js_handle === JSHandleNull || js_handle === JSHandleDisposed) {
-        return MonoObjectNull;
+        setI32_unchecked(result, 0);
+        return;
     }
-    return corebindings._get_cs_owned_object_by_js_handle(js_handle, should_add_in_flight ? 1 : 0);
+    corebindings._get_cs_owned_object_by_js_handle_ref(js_handle, should_add_in_flight ? 1 : 0, result);
 }
 
 export function get_js_obj(js_handle: JSHandle): any {
@@ -78,18 +81,7 @@ export function _lookup_js_owned_object(gc_handle: GCHandle): any {
 
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export function _register_js_owned_object(gc_handle: GCHandle, js_obj: any): void {
-    let wr;
-    if (_use_weak_ref) {
-        wr = new WeakRef(js_obj);
-    }
-    else {
-        // this is trivial WeakRef replacement, which holds strong refrence, instead of weak one, when the browser doesn't support it
-        wr = {
-            deref: () => {
-                return js_obj;
-            }
-        };
-    }
+    const wr = create_weak_ref(js_obj);
     _js_owned_object_table.set(gc_handle, wr);
 }
 
@@ -105,13 +97,13 @@ export function mono_wasm_get_js_handle(js_obj: any): JSHandle {
     return js_handle as JSHandle;
 }
 
-export function mono_wasm_release_cs_owned_object(js_handle: JSHandle): any {
+export function mono_wasm_release_cs_owned_object(js_handle: JSHandle): void {
     const obj = _cs_owned_objects_by_js_handle[<any>js_handle];
     if (typeof obj !== "undefined" && obj !== null) {
         // if this is the global object then do not
         // unregister it.
         if (globalThis === obj)
-            return obj;
+            return;
 
         if (typeof obj[cs_owned_js_handle_symbol] !== "undefined") {
             obj[cs_owned_js_handle_symbol] = undefined;
@@ -120,5 +112,4 @@ export function mono_wasm_release_cs_owned_object(js_handle: JSHandle): any {
         _cs_owned_objects_by_js_handle[<any>js_handle] = undefined;
         _js_handle_free_list.push(js_handle);
     }
-    return obj;
 }

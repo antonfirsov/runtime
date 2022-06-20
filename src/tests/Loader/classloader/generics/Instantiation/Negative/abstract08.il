@@ -2,24 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 .assembly extern System.Console { }
+.assembly extern xunit.core {}
 // DESCRIPTION:
 // 
 // This tests that a generic struct that implements a generic abstract interface cannot 
 // be loaded without implementing all methods declared on that interface.
 // Here, Gen<T> implements GenBase<T>, but does not implement GenBase.Dummy(T).
 
-
-
-
-
-
-
-//  Microsoft (R) .NET Framework IL Disassembler.  Version 1.1.2019.0
-//  Copyright (C) Microsoft Corporation 1998-2002. All rights reserved.
-
-
-
-// Metadata version: v1.1.2019
 .assembly extern mscorlib
 {
   .publickeytoken = (B7 7A 5C 56 19 34 E0 89 )                         // .z\V.4..
@@ -27,7 +16,7 @@
            42 87 88 29 )                                     // B..)
   .ver 1:1:3300:0
 }
-.assembly abstract01
+.assembly 'abstract08'
 {
 
   // --- The following custom attribute is added automatically, do not uncomment -------
@@ -37,7 +26,6 @@
   .hash algorithm 0x00008004
   .ver 0:0:0:0
 }
-.module abstract01.exe
 // MVID: {C66B38D1-A1E8-4754-85FF-7C2036CAF09B}
 .imagebase 0x00400000
 .subsystem 0x00000003
@@ -174,6 +162,9 @@
 
   .method public hidebysig static int32  Main() cil managed
   {
+    .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
+        01 00 00 00
+    )
     .entrypoint
     // Code size       113 (0x71)
     .maxstack  1

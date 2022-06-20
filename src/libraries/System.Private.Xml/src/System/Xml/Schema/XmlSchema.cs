@@ -1,17 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO;
+using System.Collections;
+using System.ComponentModel;
+using System.Xml.Serialization;
+using System.Threading;
+using System.Diagnostics;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+
 namespace System.Xml.Schema
 {
-    using System.IO;
-    using System.Collections;
-    using System.ComponentModel;
-    using System.Xml.Serialization;
-    using System.Threading;
-    using System.Diagnostics;
-    using System.Collections.Generic;
-    using System.Diagnostics.CodeAnalysis;
-
     [XmlRoot("schema", Namespace = XmlSchema.Namespace)]
     public class XmlSchema : XmlSchemaObject
     {
@@ -139,7 +139,7 @@ namespace System.Xml.Schema
                 bool ignoreXS = false;
                 if (this.Namespaces != null)
                 { //User may have set both nsManager and Namespaces property on the XmlSchema object
-                    ignoreXS = this.Namespaces.TryLookupPrefix("xs", out string? p) || this.Namespaces.TryLookupNamespace(XmlReservedNs.NsXs, out string? n);
+                    ignoreXS = this.Namespaces.TryLookupPrefix("xs", out _) || this.Namespaces.TryLookupNamespace(XmlReservedNs.NsXs, out _);
                 }
                 if (!ignoreXS && namespaceManager.LookupPrefix(XmlReservedNs.NsXs) == null &&
                     namespaceManager.LookupNamespace("xs") == null)
@@ -156,7 +156,7 @@ namespace System.Xml.Schema
             }
             else if (this.Namespaces != null && this.Namespaces.Count > 0)
             {
-                if (!this.Namespaces.TryLookupPrefix("xs", out string? p) && !this.Namespaces.TryLookupNamespace(XmlReservedNs.NsXs, out string? n))
+                if (!this.Namespaces.TryLookupPrefix("xs", out _) && !this.Namespaces.TryLookupNamespace(XmlReservedNs.NsXs, out _))
                 { //Prefix xs not defined AND schema namespace not already mapped to a prefix
                     this.Namespaces.Add("xs", XmlReservedNs.NsXs);
                 }
@@ -174,7 +174,7 @@ namespace System.Xml.Schema
             serializer.Serialize(writer, this, ns);
         }
 
-        [Obsolete("XmlSchema.Compile has been deprecated. Use System.Xml.Schema.XmlSchemaSet for schema compilation and validation instead.")]
+        [Obsolete("XmlSchema.Compile has been deprecated. Use System.Xml.Schema.XmlSchemaSet for schema compilation and validation.")]
         public void Compile(ValidationEventHandler? validationEventHandler)
         {
             SchemaInfo sInfo = new SchemaInfo();
@@ -182,7 +182,7 @@ namespace System.Xml.Schema
             CompileSchema(null, null, sInfo, null, validationEventHandler, NameTable, false);
         }
 
-        [Obsolete("XmlSchema.Compile has been deprecated. Use System.Xml.Schema.XmlSchemaSet for schema compilation and validation instead.")]
+        [Obsolete("XmlSchema.Compile has been deprecated. Use System.Xml.Schema.XmlSchemaSet for schema compilation and validation.")]
         public void Compile(ValidationEventHandler? validationEventHandler, XmlResolver? resolver)
         {
             SchemaInfo sInfo = new SchemaInfo();

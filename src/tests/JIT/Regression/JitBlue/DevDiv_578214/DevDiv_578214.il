@@ -1,19 +1,10 @@
-//  Microsoft (R) .NET Framework IL Disassembler.  Version 4.7.3108.0
-//  Copyright (c) Microsoft Corporation.  All rights reserved.
-
-// This test originally hit an error in dead code elimination phase that overwrote flag that trigers next iteration if the current iteration has deleted something (fgStmtRemoved)
-// from true to false during the iteration.
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
 
 // Metadata version: v4.0.30319
 .assembly extern System.Runtime { auto }
 .assembly DevDiv_578214 {}
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
+.assembly extern xunit.core {}
 
 .class private auto ansi beforefieldinit DevDiv_578214.Program
        extends [System.Runtime]System.Object

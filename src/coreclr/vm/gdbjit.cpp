@@ -1245,7 +1245,7 @@ void FunctionMember::MangleName(char *buf, int &buf_offset, const char *name)
     int name_length = strlen(name);
 
     char tmp[20];
-    int tmp_len = sprintf_s(tmp, _countof(tmp), "%i", name_length);
+    int tmp_len = sprintf_s(tmp, ARRAY_SIZE(tmp), "%i", name_length);
     if (tmp_len <= 0)
         return;
 
@@ -2901,7 +2901,7 @@ bool NotifyGdb::EmitDebugInfo(Elf_Builder &elfBuilder, MethodDesc* methodDescPtr
     {
         char name[256];
 
-        sprintf_s(name, _countof(name), ".thunk_%i", i);
+        sprintf_s(name, ARRAY_SIZE(name), ".thunk_%i", i);
 
         Elf_SectionTracker *thunk = elfBuilder.OpenSection(name, SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
         thunk->DisableHeaderUpdate();
@@ -3166,7 +3166,7 @@ public:
     }
 };
 
-/* Buid the source files table for DWARF source line info */
+/* Build the source files table for DWARF source line info */
 bool NotifyGdb::BuildFileTable(MemBuf& buf, SymbolsInfo* lines, unsigned nlines, const char * &cuPath)
 {
     FileTableBuilder fileTable(nlines);
@@ -3672,6 +3672,8 @@ Elf64_Ehdr::Elf64_Ehdr()
     e_machine = EM_X86_64;
 #elif defined(TARGET_ARM64)
     e_machine = EM_AARCH64;
+#elif defined(TARGET_LOONGARCH64)
+    e_machine = EM_LOONGARCH;
 #endif
     e_flags = 0;
     e_version = 1;

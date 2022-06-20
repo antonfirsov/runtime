@@ -21,7 +21,9 @@ namespace System.IO.Tests
         protected static bool LowTemporalResolution => PlatformDetection.IsBrowser || isHFS;
         protected static bool HighTemporalResolution => !LowTemporalResolution;
 
-        protected abstract T GetExistingItem();
+        protected abstract bool CanBeReadOnly { get; }
+
+        protected abstract T GetExistingItem(bool readOnly = false);
         protected abstract T GetMissingItem();
 
         protected abstract T CreateSymlink(string path, string pathToTarget);
@@ -84,7 +86,19 @@ namespace System.IO.Tests
             SettingUpdatesPropertiesCore(item);
         }
 
-        [Theory]
+        [Fact]
+        public void SettingUpdatesPropertiesWhenReadOnly()
+        {
+            if (!CanBeReadOnly)
+            {
+                return; // directories can't be read only, so automatic pass
+            }
+
+            T item = GetExistingItem(readOnly: true);
+            SettingUpdatesPropertiesCore(item);
+        }
+
+        [ConditionalTheory(typeof(MountHelper), nameof(MountHelper.CanCreateSymbolicLinks))]
         [PlatformSpecific(~TestPlatforms.Browser)] // Browser is excluded as it doesn't support symlinks
         [InlineData(false)]
         [InlineData(true)]
@@ -134,7 +148,7 @@ namespace System.IO.Tests
             T item = GetExistingItem();
 
             // These linq calls make an IEnumerable of pairs of functions that are not identical
-            // (eg. not (creationtime, creationtime)), includes both orders as seperate entries
+            // (eg. not (creationtime, creationtime)), includes both orders as separate entries
             // as they it have different behavior in reverse order (of functions), in addition
             // to the pairs of functions, there is a reverse bool that allows a test for both
             // increasing and decreasing timestamps as to not limit the test unnecessarily.
@@ -164,7 +178,7 @@ namespace System.IO.Tests
                 TimeFunction function1 = functions.x;
                 TimeFunction function2 = functions.y;
                 bool reverse = functions.reverse;
-                
+
                 // Checking that milliseconds are not dropped after setter.
                 DateTime dt1 = new DateTime(2002, 12, 1, 12, 3, 3, LowTemporalResolution ? 0 : 321, DateTimeKind.Utc);
                 DateTime dt2 = new DateTime(2001, 12, 1, 12, 3, 3, LowTemporalResolution ? 0 : 321, DateTimeKind.Utc);

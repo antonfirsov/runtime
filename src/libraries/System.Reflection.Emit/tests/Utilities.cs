@@ -54,9 +54,16 @@ namespace System.Reflection.Emit.Tests
             return DynamicAssembly(assemblyName).DefineDynamicModule(moduleName);
         }
 
-        public static TypeBuilder DynamicType(TypeAttributes attributes, string assemblyName = "TestAssembly", string moduleName = "TestModule", string typeName = "TestType")
+        public static TypeBuilder DynamicType(TypeAttributes attributes, string assemblyName = "TestAssembly", string moduleName = "TestModule", string typeName = "TestType", Type? baseType = null)
         {
-            return DynamicModule(assemblyName, moduleName).DefineType(typeName, attributes);
+            if (baseType is null)
+            {
+                return DynamicModule(assemblyName, moduleName).DefineType(typeName, attributes);
+            }
+            else
+            {
+                return DynamicModule(assemblyName, moduleName).DefineType(typeName, attributes, baseType);
+            }
         }
 
         public static EnumBuilder DynamicEnum(TypeAttributes visibility, Type underlyingType, string enumName = "TestEnum", string assemblyName = "TestAssembly", string moduleName = "TestModule")
@@ -98,10 +105,9 @@ namespace System.Reflection.Emit.Tests
                 Assert.Equal(type.AsType().GetNestedTypes(AllFlags), createdType.GetNestedTypes(AllFlags));
                 Assert.Equal(type.AsType().GetNestedType(name, AllFlags), createdType.GetNestedType(name, AllFlags));
 
-                // [ActiveIssue("https://github.com/dotnet/runtime/issues/18231", TestPlatforms.AnyUnix)]
-                // Assert.Equal(createdType, module.GetType(name, true, true));
-                // Assert.Equal(createdType, module.GetType(name.ToLowerInvariant(), true, true));
-                // Assert.Equal(createdType, module.GetType(name.ToUpperInvariant(), true, true));
+                Assert.Equal(createdType, module.GetType(name, true, true));
+                Assert.Equal(createdType, module.GetType(name.ToLowerInvariant(), true, true));
+                Assert.Equal(createdType, module.GetType(name.ToUpperInvariant(), true, true));
             }
         }
 

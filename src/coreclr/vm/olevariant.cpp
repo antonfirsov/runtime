@@ -2812,7 +2812,7 @@ void OleVariant::MarshalOleVariantForObject(OBJECTREF * const & pObj, VARIANT *p
         }
         else if (pMT == CoreLibBinder::GetElementType(ELEMENT_TYPE_BOOLEAN))
         {
-            V_BOOL(pOle) = *(U1*)( (*pObj)->GetData() ) ? VARIANT_TRUE : VARIANT_FALSE;
+            V_BOOL(pOle) = *(CLR_BOOL*)( (*pObj)->GetData() ) ? VARIANT_TRUE : VARIANT_FALSE;
             V_VT(pOle) = VT_BOOL;
         }
         else if (pMT == CoreLibBinder::GetElementType(ELEMENT_TYPE_I))
@@ -2985,7 +2985,7 @@ HRESULT OleVariant::MarshalCommonOleRefVariantForObject(OBJECTREF *pObj, VARIANT
         // deallocation of old value optimized away since there's nothing to
         // deallocate for this vartype.
 
-        *(V_BOOLREF(pOle)) =  ( *(U1*)( (*pObj)->GetData() ) ) ? VARIANT_TRUE : VARIANT_FALSE;
+        *(V_BOOLREF(pOle)) =  ( *(CLR_BOOL*)( (*pObj)->GetData() ) ) ? VARIANT_TRUE : VARIANT_FALSE;
     }
     else if ( (V_VT(pOle) == (VT_BYREF | VT_INT) || V_VT(pOle) == (VT_BYREF | VT_UINT)) && (pMT == CoreLibBinder::GetElementType(ELEMENT_TYPE_I4) || pMT == CoreLibBinder::GetElementType(ELEMENT_TYPE_U4)) )
     {
@@ -4796,7 +4796,7 @@ void OleVariant::TransposeArrayData(BYTE *pDestData, BYTE *pSrcData, SIZE_T dwNu
             aDestElemCount[iDims] = pSafeArray->rgsabound[iDims].cElements;
     }
 
-    // Initalize the indexes for each dimension to 0.
+    // Initialize the indexes for each dimension to 0.
     memset(aDestIndex, 0, pSafeArray->cDims * sizeof(int));
 
     // Set all the destination data positions to the start of the array.

@@ -75,14 +75,7 @@ class My {
   .hash algorithm 0x00008004
   .ver 0:0:0:0
 }
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module initializearray_enum.exe
+.assembly extern xunit.core {}
 // MVID: {88A311DA-3D49-42AC-8FA7-6DB1266177BC}
 .imagebase 0x00400000
 .file alignment 0x00000200
@@ -103,7 +96,7 @@ class My {
   .field public static literal valuetype Color Blue = int32(0x00000002)
 } // end of class Color
 
-.class private auto ansi beforefieldinit My
+.class public auto ansi beforefieldinit My
        extends [mscorlib]System.Object
 {
   .method private hidebysig static valuetype Color[] 
@@ -134,7 +127,7 @@ class My {
     IL_0011:  ret
   } // end of method My::WithMinOpts
 
-  .method private hidebysig static int32 
+  .method public hidebysig static int32 
           Main() cil managed
   {
     .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (

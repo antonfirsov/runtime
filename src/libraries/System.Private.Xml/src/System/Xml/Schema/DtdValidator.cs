@@ -1,18 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System;
+using System.Collections;
+using System.Text;
+using System.IO;
+using System.Net;
+using System.Diagnostics;
+using System.Xml.Schema;
+using System.Xml.XPath;
+using System.Diagnostics.CodeAnalysis;
+
 namespace System.Xml.Schema
 {
-    using System;
-    using System.Collections;
-    using System.Text;
-    using System.IO;
-    using System.Net;
-    using System.Diagnostics;
-    using System.Xml.Schema;
-    using System.Xml.XPath;
-    using System.Diagnostics.CodeAnalysis;
-
 #pragma warning disable 618
 
     internal sealed class DtdValidator : BaseValidator
@@ -149,7 +149,7 @@ namespace System.Xml.Schema
             Debug.Assert(reader.NodeType == XmlNodeType.Element);
             if (context!.NeedValidateChildren)
             { //i think i can get away with removing this if cond since won't make this call for documentelement
-                int errorCode = 0;
+                int errorCode;
                 context.ElementDecl!.ContentValidator!.ValidateElement(elementName, context, out errorCode);
                 if (errorCode < 0)
                 {
@@ -427,7 +427,7 @@ namespace System.Xml.Schema
 
         public override object? FindId(string name)
         {
-            return _IDs == null ? null : _IDs[name];
+            return _IDs?[name];
         }
 
         private bool GenEntity(XmlQualifiedName qname)

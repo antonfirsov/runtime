@@ -267,8 +267,6 @@ inline MethodDesc *Module::LookupMethodDef(mdMethodDef token)
     CONTRACTL_END
 
     _ASSERTE(TypeFromToken(token) == mdtMethodDef);
-    g_IBCLogger.LogRidMapAccess( MakePair( this, token ) );
-
     return m_MethodDefToDescMap.GetElement(RidFromToken(token));
 }
 
@@ -277,7 +275,6 @@ inline MethodDesc *Module::LookupMemberRefAsMethod(mdMemberRef token)
     LIMITED_METHOD_DAC_CONTRACT;
 
     _ASSERTE(TypeFromToken(token) == mdtMemberRef);
-    g_IBCLogger.LogRidMapAccess( MakePair( this, token ) );
     BOOL flags = FALSE;
     PTR_MemberRef pMemberRef = m_pMemberRefToDescHashTable->GetValue(token, &flags);
     return flags ? dac_cast<PTR_MethodDesc>(pMemberRef) : NULL;
@@ -297,25 +294,25 @@ inline Assembly *Module::LookupAssemblyRef(mdAssemblyRef token)
 inline void Module::ForceStoreAssemblyRef(mdAssemblyRef token, Assembly *value)
 {
     WRAPPER_NO_CONTRACT; // THROWS/GC_NOTRIGGER/INJECT_FAULT()/MODE_ANY
-    _ASSERTE(value->GetManifestModule());
+    _ASSERTE(value->GetModule());
     _ASSERTE(TypeFromToken(token) == mdtAssemblyRef);
 
-    m_ManifestModuleReferencesMap.AddElement(this, RidFromToken(token), value->GetManifestModule());
+    m_ManifestModuleReferencesMap.AddElement(this, RidFromToken(token), value->GetModule());
 }
 
 inline void Module::StoreAssemblyRef(mdAssemblyRef token, Assembly *value)
 {
     WRAPPER_NO_CONTRACT;
-    _ASSERTE(value->GetManifestModule());
+    _ASSERTE(value->GetModule());
     _ASSERTE(TypeFromToken(token) == mdtAssemblyRef);
-    m_ManifestModuleReferencesMap.TrySetElement(RidFromToken(token), value->GetManifestModule());
+    m_ManifestModuleReferencesMap.TrySetElement(RidFromToken(token), value->GetModule());
 }
 
 inline mdAssemblyRef Module::FindAssemblyRef(Assembly *targetAssembly)
 {
     WRAPPER_NO_CONTRACT;
 
-    return m_ManifestModuleReferencesMap.Find(targetAssembly->GetManifestModule()) | mdtAssemblyRef;
+    return m_ManifestModuleReferencesMap.Find(targetAssembly->GetModule()) | mdtAssemblyRef;
 }
 
 #endif //DACCESS_COMPILE
@@ -335,7 +332,7 @@ FORCEINLINE BOOL Module::FixupDelayList(TADDR pFixupList, BOOL mayUsePrecompiled
     WRAPPER_NO_CONTRACT;
 
     COUNT_T nImportSections;
-    PTR_CORCOMPILE_IMPORT_SECTION pImportSections = GetImportSections(&nImportSections);
+    PTR_READYTORUN_IMPORT_SECTION pImportSections = GetImportSections(&nImportSections);
 
     return FixupDelayListAux(pFixupList, this, &Module::FixupNativeEntry, pImportSections, nImportSections, GetReadyToRunImage(), mayUsePrecompiledNDirectMethods);
 }
@@ -343,7 +340,7 @@ FORCEINLINE BOOL Module::FixupDelayList(TADDR pFixupList, BOOL mayUsePrecompiled
 template<typename Ptr, typename FixupNativeEntryCallback>
 BOOL Module::FixupDelayListAux(TADDR pFixupList,
                                Ptr pThis, FixupNativeEntryCallback pfnCB,
-                               PTR_CORCOMPILE_IMPORT_SECTION pImportSections, COUNT_T nImportSections,
+                               PTR_READYTORUN_IMPORT_SECTION pImportSections, COUNT_T nImportSections,
                                PEDecoder * pNativeImage, BOOL mayUsePrecompiledNDirectMethods)
 {
     CONTRACTL
@@ -422,7 +419,7 @@ BOOL Module::FixupDelayListAux(TADDR pFixupList,
         // Get the correct section to work with. This is stored in the first two nibbles (first byte)
 
         _ASSERTE(curTableIndex < nImportSections);
-        PTR_CORCOMPILE_IMPORT_SECTION pImportSection = pImportSections + curTableIndex;
+        PTR_READYTORUN_IMPORT_SECTION pImportSection = pImportSections + curTableIndex;
 
         COUNT_T cbData;
         TADDR pData = pNativeImage->GetDirectoryData(&pImportSection->Section, &cbData);

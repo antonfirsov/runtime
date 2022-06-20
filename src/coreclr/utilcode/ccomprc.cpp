@@ -221,9 +221,7 @@ void CCompRC::Destroy()
     // Free all resource libraries
 
     //*****************************************************************************
-    // Free the loaded library if we ever loaded it and only if we are not on
-    // Win 95 which has a known bug with DLL unloading (it randomly unloads a
-    // dll on shut down, not necessarily the one you asked for).  This is done
+    // Free the loaded library if we ever loaded it. This is done
     // only in debug mode to make coverage runs accurate.
     //*****************************************************************************
 
@@ -461,7 +459,7 @@ Exit:
 // We load the localized libraries and cache the handle for future use.
 // Mutliple threads may call this, so the cache structure is thread safe.
 //*****************************************************************************
-HRESULT CCompRC::LoadString(ResourceCategory eCategory, UINT iResourceID, __out_ecount(iMax) LPWSTR szBuffer, int iMax,  int *pcwchUsed)
+HRESULT CCompRC::LoadString(ResourceCategory eCategory, UINT iResourceID, _Out_writes_(iMax) LPWSTR szBuffer, int iMax,  int *pcwchUsed)
 {
     WRAPPER_NO_CONTRACT;
     LocaleIDValue langIdValue;
@@ -487,7 +485,7 @@ HRESULT CCompRC::LoadString(ResourceCategory eCategory, UINT iResourceID, __out_
     return LoadString(eCategory, langId, iResourceID, szBuffer, iMax, pcwchUsed);
 }
 
-HRESULT CCompRC::LoadString(ResourceCategory eCategory, LocaleID langId, UINT iResourceID, __out_ecount(iMax) LPWSTR szBuffer, int iMax, int *pcwchUsed)
+HRESULT CCompRC::LoadString(ResourceCategory eCategory, LocaleID langId, UINT iResourceID, _Out_writes_(iMax) LPWSTR szBuffer, int iMax, int *pcwchUsed)
 {
 #ifdef DBI_COMPONENT_MONO
     return E_NOTIMPL;
@@ -635,9 +633,6 @@ HRESULT CCompRC::LoadLibraryHelper(HRESOURCEDLL *pHInst,
             {
                 rcPathName.Append(m_pResourceFile);
             }
-
-            // Feedback for debugging to eliminate unecessary loads.
-            DEBUG_STMT(DbgWriteEx(W("Loading %s to load strings.\n"), rcPath.GetUnicode()));
 
             // Load the resource library as a data file, so that the OS doesn't have
             // to allocate it as code.  This only works so long as the file contains

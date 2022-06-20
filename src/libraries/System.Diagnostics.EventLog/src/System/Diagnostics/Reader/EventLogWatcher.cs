@@ -51,11 +51,7 @@ namespace System.Diagnostics.Eventing.Reader
 
         public EventLogWatcher(EventLogQuery eventQuery, EventBookmark bookmark, bool readExistingEvents)
         {
-
-            if (eventQuery == null)
-            {
-                throw new ArgumentNullException(nameof(eventQuery));
-            }
+            ArgumentNullException.ThrowIfNull(eventQuery);
 
             if (bookmark != null)
             {
@@ -260,10 +256,7 @@ namespace System.Diagnostics.Eventing.Reader
 
         private void IssueCallback(EventRecordWrittenEventArgs eventArgs)
         {
-            if (EventRecordWritten != null)
-            {
-                EventRecordWritten(this, eventArgs);
-            }
+            EventRecordWritten?.Invoke(this, eventArgs);
         }
 
         private void HandleEventsRequestCompletion()

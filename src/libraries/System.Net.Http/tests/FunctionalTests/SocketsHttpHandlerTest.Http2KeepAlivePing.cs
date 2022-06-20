@@ -13,7 +13,7 @@ using Xunit.Abstractions;
 
 namespace System.Net.Http.Functional.Tests
 {
-    [Collection(nameof(NonParallelTestCollection))]
+    [Collection(nameof(DisableParallelization))]
     [ConditionalClass(typeof(SocketsHttpHandler_Http2KeepAlivePing_Test), nameof(IsSupported))]
     public sealed class SocketsHttpHandler_Http2KeepAlivePing_Test : HttpClientHandlerTestBase
     {
@@ -40,6 +40,7 @@ namespace System.Net.Http.Functional.Tests
 
         [OuterLoop("Runs long")]
         [Fact]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/69870", TestPlatforms.Android)]
         public async Task KeepAlivePingDelay_Infinite_NoKeepAlivePingIsSent()
         {
             await Http2LoopbackServer.CreateClientAndServerAsync(async uri =>
@@ -100,6 +101,7 @@ namespace System.Net.Http.Functional.Tests
         [Theory]
         [InlineData(HttpKeepAlivePingPolicy.Always)]
         [InlineData(HttpKeepAlivePingPolicy.WithActiveRequests)]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/69870", TestPlatforms.Android)]
         public async Task KeepAliveConfigured_KeepAlivePingsAreSentAccordingToPolicy(HttpKeepAlivePingPolicy policy)
         {
             await Http2LoopbackServer.CreateClientAndServerAsync(async uri =>
@@ -179,6 +181,7 @@ namespace System.Net.Http.Functional.Tests
 
         [OuterLoop("Runs long")]
         [Fact]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/69870", TestPlatforms.Android)]
         public async Task KeepAliveConfigured_NoPingResponseDuringActiveStream_RequestShouldFail()
         {
             await Http2LoopbackServer.CreateClientAndServerAsync(async uri =>
@@ -229,6 +232,7 @@ namespace System.Net.Http.Functional.Tests
 
         [OuterLoop("Runs long")]
         [Fact]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/69870", TestPlatforms.Android)]
         public async Task HttpKeepAlivePingPolicy_Always_NoPingResponseBetweenStreams_SecondRequestShouldFail()
         {
             await Http2LoopbackServer.CreateClientAndServerAsync(async uri =>

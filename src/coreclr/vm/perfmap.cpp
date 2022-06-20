@@ -247,7 +247,7 @@ void PerfMap::LogImage(PEAssembly * pPEAssembly)
     EX_TRY
     {
         WCHAR wszSignature[39];
-        GetNativeImageSignature(pPEAssembly, wszSignature, lengthof(wszSignature));
+        GetNativeImageSignature(pPEAssembly, wszSignature, ARRAY_SIZE(wszSignature));
 
         m_PerfInfo->LogImage(pPEAssembly, wszSignature);
     }
@@ -302,7 +302,7 @@ void PerfMap::LogPreCompiledMethod(MethodDesc * pMethod, PCODE pCode)
 
         if (s_ShowOptimizationTiers)
         {
-            name.AppendPrintf(W("[PreJIT]"));
+            name.Append(W("[PreJIT]"));
         }
 
         // NGEN can split code between hot and cold sections which are separate in memory.
@@ -317,7 +317,7 @@ void PerfMap::LogPreCompiledMethod(MethodDesc * pMethod, PCODE pCode)
             if (s_ShowOptimizationTiers)
             {
                 pMethod->GetFullMethodInfo(name);
-                name.AppendPrintf(W("[PreJit-cold]"));
+                name.Append(W("[PreJit-cold]"));
             }
             PAL_PerfJitDump_LogMethod((void*)methodRegionInfo.coldStartAddress, methodRegionInfo.coldSize, name.GetANSI(scratch), nullptr, nullptr);
         }
@@ -393,7 +393,7 @@ NativeImagePerfMap::NativeImagePerfMap(Assembly * pAssembly, BSTR pDestPath)
     // Get the native image signature (GUID).
     // Used to ensure that we match symbols to the correct NGEN image.
     WCHAR wszSignature[39];
-    GetNativeImageSignature(pAssembly->GetManifestFile(), wszSignature, lengthof(wszSignature));
+    GetNativeImageSignature(pAssembly->GetPEAssembly(), wszSignature, ARRAY_SIZE(wszSignature));
 
     // Build the path to the perfmap file, which consists of <inputpath><imagesimplename>.ni.<signature>.map.
     // Example: /tmp/System.Private.CoreLib.ni.{GUID}.map

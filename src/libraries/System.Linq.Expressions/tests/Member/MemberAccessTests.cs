@@ -398,6 +398,7 @@ namespace System.Linq.Expressions.Tests
 
         [Theory]
         [ClassData(typeof(CompilationTypes))]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/70012", typeof(PlatformDetection), nameof(PlatformDetection.IsNativeAot), nameof(PlatformDetection.IsArm64Process))]
         public static void CheckMemberAccessClassInstanceIndexerAssignNullReferenceTest(bool useInterpreter)
         {
             Expression<Func<int>> e =
@@ -552,8 +553,7 @@ namespace System.Linq.Expressions.Tests
             AssertExtensions.Throws<ArgumentException>("member", () => Expression.MakeMemberAccess(Expression.Constant(new PC()), member));
         }
 
-#if FEATURE_COMPILE
-        [Fact]
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsReflectionEmitSupported))]
         [ActiveIssue("https://github.com/mono/mono/issues/14920", TestRuntimes.Mono)]
         public static void Property_NoGetOrSetAccessors_ThrowsArgumentException()
         {
@@ -575,7 +575,6 @@ namespace System.Linq.Expressions.Tests
 
             AssertExtensions.Throws<ArgumentException>("property", () => Expression.MakeMemberAccess(expression, createdProperty));
         }
-#endif
 
         [Fact]
         public static void ToStringTest()

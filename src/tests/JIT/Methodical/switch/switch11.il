@@ -11,20 +11,15 @@
 
 
 }
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
+.assembly extern xunit.core {}
 
-.module 'switch11.exe'
 
 .class public auto ansi Test_switch11
        extends ['mscorlib']System.Object
 {
-  .method public hidebysig static void Main() il managed
+  .field private static int32 s_exitCode;
+
+  .method public hidebysig static int32 Main() il managed
   {
     .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
         01 00 00 00
@@ -37,12 +32,11 @@
     IL_0002:  br.s       IL_0004
 
     IL_0004:  ldc.i4.s   100
-    IL_0006:  call       void ['System.Runtime.Extensions']System.Environment::set_ExitCode(int32)
+    IL_0006:  stsfld     int32 Test_switch11::s_exitCode
     IL_000b:  ldstr      "Test passed"
     IL_0010:  call       void ['mscorlib']System.Console::WriteLine(class System.String)
     IL_0015:  pop
-              call       int32 ['System.Runtime.Extensions']System.Environment::get_ExitCode()
-              call       void ['System.Runtime.Extensions']System.Environment::Exit(int32)
+              ldsfld     int32 Test_switch11::s_exitCode
               ret
   }
 

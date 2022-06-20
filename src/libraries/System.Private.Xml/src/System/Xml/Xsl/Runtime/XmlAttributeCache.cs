@@ -1,16 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System;
+using System.Diagnostics;
+using System.Xml;
+using System.Xml.XPath;
+using System.Xml.Schema;
+
 #nullable disable
 namespace System.Xml.Xsl.Runtime
 {
-    using System;
-    using System.Diagnostics;
-    using System.Xml;
-    using System.Xml.XPath;
-    using System.Xml.Schema;
-
-
     /// <summary>
     /// This writer supports only writer methods which write attributes.  Attributes are stored in a
     /// data structure until StartElementContent() is called, at which time the attributes are flushed
@@ -150,8 +149,8 @@ namespace System.Xml.Xsl.Runtime
         }
 
         /// <summary>
-        /// All other WriteValue methods are implemented by XmlWriter to delegate to WriteValue(object) or WriteValue(string), so
-        /// only these two methods need to be implemented.
+        /// All other WriteValue methods are implemented by XmlWriter to delegate to WriteValue(object), so
+        /// only this method needs to be implemented.
         /// </summary>
         public override void WriteValue(object value)
         {
@@ -159,11 +158,6 @@ namespace System.Xml.Xsl.Runtime
             Debug.Assert(_arrAttrs != null && _numEntries != 0);
             EnsureAttributeCache();
             _arrAttrs[_numEntries++].Init((XmlAtomicValue)value);
-        }
-
-        public override void WriteValue(string value)
-        {
-            WriteValue(value);
         }
 
         /// <summary>
@@ -195,6 +189,11 @@ namespace System.Xml.Xsl.Runtime
             Debug.Fail("Should never be called on XmlAttributeCache.");
         }
         public override void WriteEntityRef(string name)
+        {
+            Debug.Fail("Should never be called on XmlAttributeCache.");
+        }
+
+        public override void WriteValue(string value)
         {
             Debug.Fail("Should never be called on XmlAttributeCache.");
         }
@@ -262,8 +261,7 @@ namespace System.Xml.Xsl.Runtime
             }
 
             // Notify event listener that attributes have been flushed
-            if (_onRemove != null)
-                _onRemove(_wrapped);
+            _onRemove?.Invoke(_wrapped);
         }
 
         private struct AttrNameVal

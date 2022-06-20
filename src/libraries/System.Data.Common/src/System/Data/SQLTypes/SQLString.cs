@@ -34,7 +34,7 @@ namespace System.Data.SqlTypes
     [StructLayout(LayoutKind.Sequential)]
     [XmlSchemaProvider("GetXsdType")]
     [System.Runtime.CompilerServices.TypeForwardedFrom("System.Data, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089")]
-    public struct SqlString : INullable, IComparable, IXmlSerializable
+    public struct SqlString : INullable, IComparable, IXmlSerializable, IEquatable<SqlString>
     {
         private string? m_value; // Do not rename (binary serialization)
         private CompareInfo? m_cmpInfo; // Do not rename (binary serialization)
@@ -351,7 +351,7 @@ namespace System.Data.SqlTypes
                 throw new SqlTypeException(SQLResource.ConcatDiffCollationMessage);
 
             return new SqlString(x.m_lcid, x.m_flag, x.m_value + y.m_value,
-                    (x.m_cmpInfo == null) ? y.m_cmpInfo : x.m_cmpInfo);
+                    x.m_cmpInfo ?? y.m_cmpInfo);
         }
 
         // StringCompare: Common compare function which is used by Compare and CompareTo
@@ -409,7 +409,7 @@ namespace System.Data.SqlTypes
 
             int iCmpResult = StringCompare(x, y);
 
-            bool fResult = false;
+            bool fResult;
 
             switch (ecExpectedResult)
             {
@@ -836,10 +836,8 @@ namespace System.Data.SqlTypes
         // If object is not of same type, this method throws an ArgumentException.
         public int CompareTo(object? value)
         {
-            if (value is SqlString)
+            if (value is SqlString i)
             {
-                SqlString i = (SqlString)value;
-
                 return CompareTo(i);
             }
             throw ADP.WrongType(value!.GetType(), typeof(SqlString));
@@ -871,20 +869,15 @@ namespace System.Data.SqlTypes
         }
 
         // Compares this instance with a specified object
-        public override bool Equals([NotNullWhen(true)] object? value)
-        {
-            if (!(value is SqlString))
-            {
-                return false;
-            }
+        public override bool Equals([NotNullWhen(true)] object? value) =>
+            value is SqlString other && Equals(other);
 
-            SqlString i = (SqlString)value;
-
-            if (i.IsNull || IsNull)
-                return (i.IsNull && IsNull);
-            else
-                return (this == i).Value;
-        }
+        /// <summary>Indicates whether the current instance is equal to another instance of the same type.</summary>
+        /// <param name="other">An instance to compare with this instance.</param>
+        /// <returns>true if the current instance is equal to the other instance; otherwise, false.</returns>
+        public bool Equals(SqlString other) =>
+            other.IsNull || IsNull ? other.IsNull && IsNull :
+            (this == other).Value;
 
         // For hashing purpose
         public override int GetHashCode()

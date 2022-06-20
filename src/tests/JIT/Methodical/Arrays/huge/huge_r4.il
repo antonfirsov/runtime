@@ -19,27 +19,20 @@
            
   
 }
-.assembly 'test'
+.assembly 'huge_r4'
 {
 
 
   
   
 }
-.assembly extern xunit.core
+.assembly extern xunit.core {}
+.namespace JitTest_huge_r4_huge_il
 {
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module 'test.exe'
-.namespace JitTest
-{
-  .class private auto ansi Test
+  .class public auto ansi Test
          extends [mscorlib]System.Object
   {
-    .method private hidebysig static int32
+    .method public hidebysig static int32
             Main() il managed
     {
       .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
@@ -500,4 +493,4 @@
     
   } // end of class 'Test'
   
-} // end of namespace 'JitTest'
+} // end of namespace 'JitTest_huge_r4_huge_il'

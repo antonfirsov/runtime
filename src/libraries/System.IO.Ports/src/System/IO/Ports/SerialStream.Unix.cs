@@ -335,6 +335,7 @@ namespace System.IO.Ports
             }
         }
 
+#pragma warning disable CA1822
         internal bool DiscardNull
         {
             set
@@ -350,6 +351,7 @@ namespace System.IO.Ports
                 // Ignore.
             }
         }
+#pragma warning restore CA1822
 
         internal void DiscardInBuffer()
         {
@@ -517,7 +519,7 @@ namespace System.IO.Ports
                 eventsToPoll |= Interop.PollEvents.POLLOUT;
             }
 
-            Interop.PollEvents events = Interop.PollEvents.POLLNONE;
+            Interop.PollEvents events;
             Interop.Error ret = Interop.Serial.Poll(
                 _handle,
                 eventsToPoll,
@@ -553,7 +555,7 @@ namespace System.IO.Ports
         public override void EndWrite(IAsyncResult asyncResult)
             => EndReadWrite(asyncResult);
 
-        private int EndReadWrite(IAsyncResult asyncResult)
+        private static int EndReadWrite(IAsyncResult asyncResult)
         {
             try
             {
@@ -569,10 +571,7 @@ namespace System.IO.Ports
         internal SerialStream(string portName, int baudRate, Parity parity, int dataBits, StopBits stopBits, int readTimeout, int writeTimeout, Handshake handshake,
             bool dtrEnable, bool rtsEnable, bool discardNull, byte parityReplace)
         {
-            if (portName == null)
-            {
-                throw new ArgumentNullException(nameof(portName));
-            }
+            ArgumentNullException.ThrowIfNull(portName);
 
             CheckBaudRate(baudRate);
 
@@ -710,9 +709,9 @@ namespace System.IO.Ports
             if (_dataReceived != null)
             {
                 ThreadPool.QueueUserWorkItem(s => {
-                        var thisRef = (SerialStream)s;
-                        thisRef._dataReceived?.Invoke(thisRef, new SerialDataReceivedEventArgs(SerialData.Chars));
-                    }, this);
+                    var thisRef = (SerialStream)s;
+                    thisRef._dataReceived?.Invoke(thisRef, new SerialDataReceivedEventArgs(SerialData.Chars));
+                }, this);
             }
         }
 
@@ -721,9 +720,9 @@ namespace System.IO.Ports
             if (_pinChanged != null)
             {
                 ThreadPool.QueueUserWorkItem(s => {
-                        var thisRef = (SerialStream)s;
-                        thisRef._pinChanged?.Invoke(thisRef, new SerialPinChangedEventArgs(pinChanged));
-                    }, this);
+                    var thisRef = (SerialStream)s;
+                    thisRef._pinChanged?.Invoke(thisRef, new SerialPinChangedEventArgs(pinChanged));
+                }, this);
             }
         }
 
@@ -732,13 +731,9 @@ namespace System.IO.Ports
             if (_dataReceived != null)
             {
                 ThreadPool.QueueUserWorkItem(s => {
-                        var thisRef = (SerialStream)s;
-                        SerialDataReceivedEventHandler dataReceived = thisRef._dataReceived;
-                        if (dataReceived != null)
-                        {
-                            dataReceived(thisRef, new SerialDataReceivedEventArgs(SerialData.Eof));
-                        }
-                    }, this);
+                    var thisRef = (SerialStream)s;
+                    thisRef._dataReceived?.Invoke(thisRef, new SerialDataReceivedEventArgs(SerialData.Eof));
+                }, this);
             }
         }
 

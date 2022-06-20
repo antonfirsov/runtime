@@ -21,7 +21,7 @@
 #include "arraylist.h"
 #include "comreflectioncache.hpp"
 #include "comutilnative.h"
-#include "domainfile.h"
+#include "domainassembly.h"
 #include "fptrstubs.h"
 #include "gcheaputilities.h"
 #include "gchandleutilities.h"
@@ -201,18 +201,18 @@ struct DomainLocalModule
     static SIZE_T GetOffsetOfDataBlob() { return offsetof(DomainLocalModule, m_pDataBlob); }
     static SIZE_T GetOffsetOfGCStaticPointer() { return offsetof(DomainLocalModule, m_pGCStatics); }
 
-    inline DomainFile* GetDomainFile()
+    inline DomainAssembly* GetDomainAssembly()
     {
         LIMITED_METHOD_CONTRACT
         SUPPORTS_DAC;
-        return m_pDomainFile;
+        return m_pDomainAssembly;
     }
 
 #ifndef DACCESS_COMPILE
-    inline void        SetDomainFile(DomainFile* pDomainFile)
+    inline void        SetDomainAssembly(DomainAssembly* pDomainAssembly)
     {
         LIMITED_METHOD_CONTRACT
-        m_pDomainFile = pDomainFile;
+        m_pDomainAssembly = pDomainAssembly;
     }
 #endif
 
@@ -236,7 +236,7 @@ struct DomainLocalModule
 
         if (pMT->IsDynamicStatics())
         {
-            _ASSERTE(GetDomainFile()->GetModule() == pMT->GetModuleForStatics());
+            _ASSERTE(GetDomainAssembly()->GetModule() == pMT->GetModuleForStatics());
             return GetDynamicEntryGCStaticsBasePointer(pMT->GetModuleDynamicEntryID(), pMT->GetLoaderAllocator());
         }
         else
@@ -252,7 +252,7 @@ struct DomainLocalModule
 
         if (pMT->IsDynamicStatics())
         {
-            _ASSERTE(GetDomainFile()->GetModule() == pMT->GetModuleForStatics());
+            _ASSERTE(GetDomainAssembly()->GetModule() == pMT->GetModuleForStatics());
             return GetDynamicEntryNonGCStaticsBasePointer(pMT->GetModuleDynamicEntryID(), pMT->GetLoaderAllocator());
         }
         else
@@ -403,7 +403,7 @@ struct DomainLocalModule
     FORCEINLINE MethodTable * GetMethodTableFromClassDomainID(DWORD dwClassDomainID)
     {
         DWORD rid = (DWORD)(dwClassDomainID) + 1;
-        TypeHandle th = GetDomainFile()->GetModule()->LookupTypeDef(TokenFromRid(rid, mdtTypeDef));
+        TypeHandle th = GetDomainAssembly()->GetModule()->LookupTypeDef(TokenFromRid(rid, mdtTypeDef));
         _ASSERTE(!th.IsNull());
         MethodTable * pMT = th.AsMethodTable();
         PREFIX_ASSUME(pMT != NULL);
@@ -416,7 +416,7 @@ private:
     void SetClassFlags(MethodTable* pMT, DWORD dwFlags);
     DWORD GetClassFlags(MethodTable* pMT, DWORD iClassIndex);
 
-    PTR_DomainFile           m_pDomainFile;
+    PTR_DomainAssembly           m_pDomainAssembly;
     VolatilePtr<DynamicClassInfo, PTR_DynamicClassInfo> m_pDynamicClassTable;   // used for generics and reflection.emit in memory
     Volatile<SIZE_T>         m_aDynamicEntries;      // number of entries in dynamic table
     VolatilePtr<UMEntryThunk> m_pADThunkTable;
@@ -671,7 +671,7 @@ private:
 
 //--------------------------------------------------------------------------------------
 // Base class for domains. It provides an abstract way of finding the first assembly and
-// for creating assemblies in the the domain. The system domain only has one assembly, it
+// for creating assemblies in the domain. The system domain only has one assembly, it
 // contains the classes that are logically shared between domains. All other domains can
 // have multiple assemblies. Iteration is done be getting the first assembly and then
 // calling the Next() method on the assembly.
@@ -747,7 +747,7 @@ typedef PEFileListLock::Holder PEFileListLockHolder;
 
 // Loading infrastructure:
 //
-// a DomainFile is a file being loaded.  Files are loaded in layers to enable loading in the
+// a DomainAssembly is a file being loaded.  Files are loaded in layers to enable loading in the
 // presence of dependency loops.
 //
 // FileLoadLevel describes the various levels available.  These are implemented slightly
@@ -761,7 +761,7 @@ typedef PEFileListLock::Holder PEFileListLockHolder;
 // The PendingLoadQueue is a per thread data structure which serves two purposes.  First, it
 // holds a "load limit" which automatically restricts the level of recursive loads to be
 // one less than the current load which is preceding.  This, together with the AppDomain
-// LoadLock level behavior, will prevent any deadlocks from occuring due to circular
+// LoadLock level behavior, will prevent any deadlocks from occurring due to circular
 // dependencies.  (Note that it is important that the loading logic understands this restriction,
 // and any given level of loading must deal with the fact that any recursive loads will be partially
 // unfulfilled in a specific way.)
@@ -773,14 +773,14 @@ class FileLoadLock : public ListLockEntry
 {
 private:
     FileLoadLevel           m_level;
-    DomainFile              *m_pDomainFile;
+    DomainAssembly          *m_pDomainAssembly;
     HRESULT                 m_cachedHR;
 
 public:
-    static FileLoadLock *Create(PEFileListLock *pLock, PEAssembly *pPEAssembly, DomainFile *pDomainFile);
+    static FileLoadLock *Create(PEFileListLock *pLock, PEAssembly *pPEAssembly, DomainAssembly *pDomainAssembly);
 
     ~FileLoadLock();
-    DomainFile *GetDomainFile();
+    DomainAssembly *GetDomainAssembly();
     FileLoadLevel GetLoadLevel();
 
     // CanAcquire will return FALSE if Acquire will definitely not take the lock due
@@ -807,7 +807,7 @@ public:
 
 private:
 
-    FileLoadLock(PEFileListLock *pLock, PEAssembly *pPEAssembly, DomainFile *pDomainFile);
+    FileLoadLock(PEFileListLock *pLock, PEAssembly *pPEAssembly, DomainAssembly *pDomainAssembly);
 
     static void HolderLeave(FileLoadLock *pThis);
 
@@ -1307,7 +1307,7 @@ enum AssemblyIterationFlags
                                         // (all m_level values)
     kIncludeAvailableToProfilers
                           = 0x00000020, // include assemblies available to profilers
-                                        // See comment at code:DomainFile::IsAvailableToProfilers
+                                        // See comment at code:DomainAssembly::IsAvailableToProfilers
 
     // Execution / introspection flags
     kIncludeExecution     = 0x00000004, // include assemblies that are loaded for execution only
@@ -1453,7 +1453,6 @@ public:
 //
 struct FailedAssembly {
     SString displayName;
-    SString location;
     HRESULT error;
 
     void Initialize(AssemblySpec *pSpec, Exception *ex)
@@ -1467,7 +1466,6 @@ struct FailedAssembly {
         CONTRACTL_END;
 
         displayName.SetASCII(pSpec->GetName());
-        location.Set(pSpec->GetCodeBase());
         error = ex->GetHR();
 
         //
@@ -1797,13 +1795,12 @@ public:
 
     CHECK CheckCanLoadTypes(Assembly *pAssembly);
     CHECK CheckCanExecuteManagedCode(MethodDesc* pMD);
-    CHECK CheckLoading(DomainFile *pFile, FileLoadLevel level);
+    CHECK CheckLoading(DomainAssembly *pFile, FileLoadLevel level);
 
-    FileLoadLevel GetDomainFileLoadLevel(DomainFile *pFile);
-    BOOL IsLoading(DomainFile *pFile, FileLoadLevel level);
+    BOOL IsLoading(DomainAssembly *pFile, FileLoadLevel level);
     static FileLoadLevel GetThreadFileLoadLevel();
 
-    void LoadDomainFile(DomainFile *pFile,
+    void LoadDomainAssembly(DomainAssembly *pFile,
                         FileLoadLevel targetLevel);
 
     enum FindAssemblyOptions
@@ -1839,10 +1836,10 @@ public:
     // private:
     void LoadSystemAssemblies();
 
-    DomainFile *LoadDomainFile(FileLoadLock *pLock,
+    DomainAssembly *LoadDomainAssembly(FileLoadLock *pLock,
                                FileLoadLevel targetLevel);
 
-    void TryIncrementalLoad(DomainFile *pFile, FileLoadLevel workLevel, FileLoadLockHolder &lockHolder);
+    void TryIncrementalLoad(DomainAssembly *pFile, FileLoadLevel workLevel, FileLoadLockHolder &lockHolder);
 
 #ifndef DACCESS_COMPILE // needs AssemblySpec
 
@@ -2004,14 +2001,14 @@ public:
     {
         LIMITED_METHOD_CONTRACT;
         _ASSERTE(m_dwIterHolders);
-        FastInterlockDecrement(&m_dwIterHolders);
+        InterlockedDecrement(&m_dwIterHolders);
     }
 
 
     void IteratorAcquire()
     {
         LIMITED_METHOD_CONTRACT;
-        FastInterlockIncrement(&m_dwIterHolders);
+        InterlockedIncrement(&m_dwIterHolders);
     }
 
 #endif
@@ -2155,7 +2152,7 @@ private:
         STRESS_LOG1(LF_APPDOMAIN, LL_INFO100,"Updating AD stage, stage=%d\n",stage);
         Stage lastStage=m_Stage;
         while (lastStage !=stage)
-            lastStage = (Stage)FastInterlockCompareExchange((LONG*)&m_Stage,stage,lastStage);
+            lastStage = (Stage)InterlockedCompareExchange((LONG*)&m_Stage,stage,lastStage);
     };
 
     // List of unloaded LoaderAllocators, protected by code:GetLoaderAllocatorReferencesLock (for now)
@@ -2453,7 +2450,7 @@ public:
     {
         WRAPPER_NO_CONTRACT;
 
-        return SystemAssembly()->GetManifestModule();
+        return SystemAssembly()->GetModule();
     }
 
     static BOOL IsSystemLoaded()
@@ -2492,8 +2489,6 @@ public:
     //****************************************************************************************
     // Methods used to get the callers module and hence assembly and app domain.
 
-    static MethodDesc* GetCallersMethod(StackCrawlMark* stackMark);
-    static MethodTable* GetCallersType(StackCrawlMark* stackMark);
     static Module* GetCallersModule(StackCrawlMark* stackMark);
     static Assembly* GetCallersAssembly(StackCrawlMark* stackMark);
 
@@ -2580,7 +2575,7 @@ public:
 
         // Or, it might be the location of CoreLib
         if (System()->SystemAssembly() != NULL
-            && path.EqualsCaseInsensitive(System()->SystemAssembly()->GetManifestFile()->GetPath()))
+            && path.EqualsCaseInsensitive(System()->SystemAssembly()->GetPEAssembly()->GetPath()))
             return TRUE;
 
         return FALSE;
@@ -2653,8 +2648,6 @@ private:
     static CrstStatic       m_SystemDomainCrst;
 
     static GlobalStringLiteralMap *m_pGlobalStringLiteralMap;
-
-    static DWORD        m_dwLowestFreeIndex;
 #endif // DACCESS_COMPILE
 
 public:

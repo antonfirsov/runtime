@@ -277,7 +277,7 @@ void MemberLoader::GetDescFromMemberRef(Module * pModule,
     {
     case mdtModuleRef:
         {
-            DomainFile *pTargetModule = pModule->LoadModule(GetAppDomain(), parent);
+            DomainAssembly *pTargetModule = pModule->LoadModule(GetAppDomain(), parent);
             if (pTargetModule == NULL)
                 COMPlusThrowHR(COR_E_BADIMAGEFORMAT);
             typeHnd = TypeHandle(pTargetModule->GetModule()->GetGlobalMethodTable());
@@ -1440,7 +1440,7 @@ MemberLoader::FindConstructor(MethodTable * pMT, PCCOR_SIGNATURE pSignature,DWOR
             continue;
         }
 
-        // Find only the constructor for for this object
+        // Find only the constructor for this object
         _ASSERTE(pCurMethod->GetMethodTable() == pMT->GetCanonicalMethodTable());
 
         PCCOR_SIGNATURE pCurMethodSig;

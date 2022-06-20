@@ -1635,14 +1635,13 @@ void ILVBByValStrWMarshaler::EmitConvertContentsNativeToCLR(ILCodeStream* pslILE
     EmitLoadNativeValue(pslILEmit);
     pslILEmit->EmitBRFALSE(pNullRefLabel);
 
-    pslILEmit->EmitLDNULL();            // this
     EmitLoadNativeValue(pslILEmit);     // ptr
     pslILEmit->EmitLDC(0);              // startIndex
     pslILEmit->EmitLDLOC(m_dwCCHLocal); // length
 
     // String CtorCharPtrStartLength(char *ptr, int startIndex, int length)
     // TODO Phase5: Why do we call this weirdo?
-    pslILEmit->EmitCALL(METHOD__STRING__CTORF_CHARPTR_START_LEN, 4, 1);
+    pslILEmit->EmitCALL(METHOD__STRING__CTORF_CHARPTR_START_LEN, 3, 1);
 
     EmitStoreManagedValue(pslILEmit);
     pslILEmit->EmitLabel(pNullRefLabel);
@@ -1939,97 +1938,100 @@ void ILFixedCSTRMarshaler::EmitConvertContentsNativeToCLR(ILCodeStream* pslILEmi
 
 LocalDesc ILCUTF8Marshaler::GetManagedType()
 {
-	LIMITED_METHOD_CONTRACT;
+    LIMITED_METHOD_CONTRACT;
+    return LocalDesc(ELEMENT_TYPE_STRING);
+}
 
-	return LocalDesc(ELEMENT_TYPE_STRING);
+LocalDesc ILCUTF8Marshaler::GetNativeType()
+{
+    LIMITED_METHOD_CONTRACT;
+    return LocalDesc(ELEMENT_TYPE_I);
+}
+
+bool ILCUTF8Marshaler::NeedsClearNative()
+{
+    LIMITED_METHOD_CONTRACT;
+    return true;
 }
 
 void ILCUTF8Marshaler::EmitConvertContentsCLRToNative(ILCodeStream* pslILEmit)
 {
-	STANDARD_VM_CONTRACT;
+    STANDARD_VM_CONTRACT;
 
-	DWORD dwUtf8MarshalFlags =
-		(m_pargs->m_pMarshalInfo->GetBestFitMapping() & 0xFF) |
-		(m_pargs->m_pMarshalInfo->GetThrowOnUnmappableChar() << 8);
+    if (m_dwInstance == LOCAL_NUM_UNUSED)
+        m_dwInstance = pslILEmit->NewLocal(LocalDesc(CoreLibBinder::GetClass(CLASS__UTF8STRINGMARSHALLER)));
 
-	bool bPassByValueInOnly = IsIn(m_dwMarshalFlags) && !IsOut(m_dwMarshalFlags) && !IsByref(m_dwMarshalFlags);
-	if (bPassByValueInOnly)
-	{
-		DWORD dwBufSize = pslILEmit->NewLocal(ELEMENT_TYPE_I4);
-		m_dwLocalBuffer = pslILEmit->NewLocal(ELEMENT_TYPE_I);
+    bool bPassByValueInOnly = IsIn(m_dwMarshalFlags) && !IsOut(m_dwMarshalFlags) && !IsByref(m_dwMarshalFlags);
+    if (bPassByValueInOnly)
+    {
+        DWORD dwBuffer = pslILEmit->NewLocal(ELEMENT_TYPE_I);
+        pslILEmit->EmitLDC(LOCAL_BUFFER_LENGTH);
+        pslILEmit->EmitLOCALLOC();
+        pslILEmit->EmitSTLOC(dwBuffer);
 
-		// LocalBuffer = 0
-		pslILEmit->EmitLoadNullPtr();
-		pslILEmit->EmitSTLOC(m_dwLocalBuffer);
+        EmitLoadManagedValue(pslILEmit);
 
-		ILCodeLabel* pNoOptimize = pslILEmit->NewCodeLabel();
+        // Create ReadOnlySpan<byte> from the stack-allocated buffer
+        pslILEmit->EmitLDLOC(dwBuffer);
+        pslILEmit->EmitLDC(LOCAL_BUFFER_LENGTH);
+        TypeHandle thByte = CoreLibBinder::GetClass(CLASS__BYTE);
+        MethodDesc* pSpanCtor = MethodDesc::FindOrCreateAssociatedMethodDesc(CoreLibBinder::GetMethod(METHOD__SPAN__CTOR_PTR_INT),
+            TypeHandle(CoreLibBinder::GetClass(CLASS__SPAN)).Instantiate(Instantiation(&thByte, 1)).AsMethodTable(),
+            FALSE, Instantiation(), FALSE);
+        pslILEmit->EmitNEWOBJ(pslILEmit->GetToken(pSpanCtor), 2);
 
-		// if == NULL, goto NoOptimize
-		EmitLoadManagedValue(pslILEmit);
-		pslILEmit->EmitBRFALSE(pNoOptimize);
+        pslILEmit->EmitNEWOBJ(METHOD__UTF8STRINGMARSHALLER__CTOR_SPAN, 2);
+        pslILEmit->EmitSTLOC(m_dwInstance);
 
-		// (String.Length + 1)
-		// Characters would be # of characters + 1 in case left over high surrogate is ?
-		EmitLoadManagedValue(pslILEmit);
-		pslILEmit->EmitCALL(METHOD__STRING__GET_LENGTH, 1, 1);
-		pslILEmit->EmitLDC(1);
-		pslILEmit->EmitADD();
+    }
+    else
+    {
+        EmitLoadManagedValue(pslILEmit);
+        pslILEmit->EmitNEWOBJ(METHOD__UTF8STRINGMARSHALLER__CTOR, 1);
+        pslILEmit->EmitSTLOC(m_dwInstance);
+    }
 
-		// Max 3 bytes per char.
-		// (String.Length + 1) * 3
-		pslILEmit->EmitLDC(3);
-		pslILEmit->EmitMUL();
-
-		// +1 for the 0x0 that we put in.
-		// ((String.Length + 1) * 3) + 1
-		pslILEmit->EmitLDC(1);
-		pslILEmit->EmitADD();
-
-		// BufSize = ( (String.Length+1) * 3) + 1
-		pslILEmit->EmitSTLOC(dwBufSize);
-
-		// if (MAX_LOCAL_BUFFER_LENGTH < BufSize ) goto NoOptimize
-		pslILEmit->EmitLDC(MAX_LOCAL_BUFFER_LENGTH);
-		pslILEmit->EmitLDLOC(dwBufSize);
-		pslILEmit->EmitCLT();
-		pslILEmit->EmitBRTRUE(pNoOptimize);
-
-		// LocalBuffer = localloc(BufSize);
-		pslILEmit->EmitLDLOC(dwBufSize);
-		pslILEmit->EmitLOCALLOC();
-		pslILEmit->EmitSTLOC(m_dwLocalBuffer);
-
-		// NoOptimize:
-		pslILEmit->EmitLabel(pNoOptimize);
-	}
-
-	// UTF8Marshaler.ConvertToNative(dwUtf8MarshalFlags,pManaged, pLocalBuffer)
-	pslILEmit->EmitLDC(dwUtf8MarshalFlags);
-	EmitLoadManagedValue(pslILEmit);
-
-	if (m_dwLocalBuffer != LOCAL_NUM_UNUSED)
-	{
-		pslILEmit->EmitLDLOC(m_dwLocalBuffer);
-	}
-	else
-	{
-		pslILEmit->EmitLoadNullPtr();
-	}
-
-	pslILEmit->EmitCALL(METHOD__CUTF8MARSHALER__CONVERT_TO_NATIVE, 3, 1);
-
-	EmitStoreNativeValue(pslILEmit);
+    pslILEmit->EmitLDLOCA(m_dwInstance);
+    pslILEmit->EmitCALL(METHOD__UTF8STRINGMARSHALLER__TO_NATIVE_VALUE, 1, 1);
+    EmitStoreNativeValue(pslILEmit);
 }
 
 void ILCUTF8Marshaler::EmitConvertContentsNativeToCLR(ILCodeStream* pslILEmit)
 {
-	STANDARD_VM_CONTRACT;
+    STANDARD_VM_CONTRACT;
 
-	EmitLoadNativeValue(pslILEmit);
-	pslILEmit->EmitCALL(METHOD__CUTF8MARSHALER__CONVERT_TO_MANAGED, 1, 1);
-	EmitStoreManagedValue(pslILEmit);
+    if (m_dwInstance == LOCAL_NUM_UNUSED)
+        m_dwInstance = pslILEmit->NewLocal(LocalDesc(CoreLibBinder::GetClass(CLASS__UTF8STRINGMARSHALLER)));
+
+    pslILEmit->EmitLDLOCA(m_dwInstance);
+    EmitLoadNativeValue(pslILEmit);
+    pslILEmit->EmitCALL(METHOD__UTF8STRINGMARSHALLER__FROM_NATIVE_VALUE, 2, 0);
+
+    pslILEmit->EmitLDLOCA(m_dwInstance);
+    pslILEmit->EmitCALL(METHOD__UTF8STRINGMARSHALLER__TO_MANAGED, 1, 1);
+    EmitStoreManagedValue(pslILEmit);
 }
 
+void ILCUTF8Marshaler::EmitClearNative(ILCodeStream* pslILEmit)
+{
+    STANDARD_VM_CONTRACT;
+
+    bool bPassByValueInOnly = IsIn(m_dwMarshalFlags) && !IsOut(m_dwMarshalFlags) && !IsByref(m_dwMarshalFlags);
+    if (bPassByValueInOnly)
+    {
+        _ASSERTE(m_dwInstance != LOCAL_NUM_UNUSED);
+
+        pslILEmit->EmitLDLOCA(m_dwInstance);
+        pslILEmit->EmitCALL(METHOD__UTF8STRINGMARSHALLER__FREE_NATIVE, 1, 0);
+    }
+    else
+    {
+        // The marshaller instance is not guaranteed to be initialized with the latest native value.
+        // Free the native value directly.
+        EmitLoadNativeValue(pslILEmit);
+        pslILEmit->EmitCALL(METHOD__MARSHAL__FREE_CO_TASK_MEM, 1, 0);
+    }
+}
 
 LocalDesc ILCSTRMarshaler::GetManagedType()
 {
@@ -4342,8 +4344,8 @@ FCIMPL3(void, MngdNativeArrayMarshaler::ConvertSpaceToNative, MngdNativeArrayMar
         if (cbElement == 0)
             COMPlusThrow(kArgumentException, IDS_EE_COM_UNSUPPORTED_SIG);
 
-        SIZE_T cbArray = cElements;
-        if ( (!SafeMulSIZE_T(&cbArray, cbElement)) || cbArray > MAX_SIZE_FOR_INTEROP)
+        SIZE_T cbArray;
+        if ( (!ClrSafeInt<SIZE_T>::multiply(cElements, cbElement, cbArray)) || cbArray > MAX_SIZE_FOR_INTEROP)
             COMPlusThrow(kArgumentException, IDS_EE_STRUCTARRAYTOOLARGE);
 
         *pNativeHome = CoTaskMemAlloc(cbArray);
@@ -4372,7 +4374,7 @@ FCIMPL3(void, MngdNativeArrayMarshaler::ConvertContentsToNative, MngdNativeArray
         SIZE_T cElements = (*pArrayRef)->GetNumComponents();
         if (pMarshaler == NULL || pMarshaler->ComToOleArray == NULL)
         {
-            if ( (!SafeMulSIZE_T(&cElements, OleVariant::GetElementSizeForVarType(pThis->m_vt, pThis->m_pElementMT))) || cElements > MAX_SIZE_FOR_INTEROP)
+            if ( (!ClrSafeInt<SIZE_T>::multiply(cElements, OleVariant::GetElementSizeForVarType(pThis->m_vt, pThis->m_pElementMT), cElements)) || cElements > MAX_SIZE_FOR_INTEROP)
                 COMPlusThrow(kArgumentException, IDS_EE_STRUCTARRAYTOOLARGE);
 
             _ASSERTE(!GetTypeHandleForCVType(OleVariant::GetCVTypeForVarType(pThis->m_vt)).GetMethodTable()->ContainsPointers());
@@ -4432,8 +4434,8 @@ FCIMPL3(void, MngdNativeArrayMarshaler::ConvertContentsToManaged, MngdNativeArra
 
         if (pMarshaler == NULL || pMarshaler->OleToComArray == NULL)
         {
-            SIZE_T cElements = (*pArrayRef)->GetNumComponents();
-            if ( (!SafeMulSIZE_T(&cElements, OleVariant::GetElementSizeForVarType(pThis->m_vt, pThis->m_pElementMT))) || cElements > MAX_SIZE_FOR_INTEROP)
+            SIZE_T cElements;
+            if ( (!ClrSafeInt<SIZE_T>::multiply((*pArrayRef)->GetNumComponents(), OleVariant::GetElementSizeForVarType(pThis->m_vt, pThis->m_pElementMT), cElements)) || cElements > MAX_SIZE_FOR_INTEROP)
                 COMPlusThrow(kArgumentException, IDS_EE_STRUCTARRAYTOOLARGE);
 
                 // If we are copying variants, strings, etc, we need to use write barrier
@@ -4923,8 +4925,8 @@ FCIMPL3(void, MngdSafeArrayMarshaler::ConvertSpaceToManaged, MngdSafeArrayMarsha
             {
                 WCHAR strExpectedRank[64];
                 WCHAR strActualRank[64];
-                _ltow_s(pThis->m_iRank, strExpectedRank, COUNTOF(strExpectedRank), 10);
-                _ltow_s(iSafeArrayRank, strActualRank, COUNTOF(strActualRank), 10);
+                _ltow_s(pThis->m_iRank, strExpectedRank, ARRAY_SIZE(strExpectedRank), 10);
+                _ltow_s(iSafeArrayRank, strActualRank, ARRAY_SIZE(strActualRank), 10);
                 COMPlusThrow(kSafeArrayRankMismatchException, IDS_EE_SAFEARRAYRANKMISMATCH, strActualRank, strExpectedRank);
             }
         }

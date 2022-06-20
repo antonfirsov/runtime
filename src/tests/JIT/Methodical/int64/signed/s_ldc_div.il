@@ -13,21 +13,14 @@
   .publickeytoken = (B0 3F 5F 7F 11 D5 0A 3A )
   .ver 4:0:0:0
 }
-.assembly 'ldc_div'// as "ldc_div"
+.assembly 's_ldc_div'// as "ldc_div"
 {
 }
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module 'ldc_div.exe'
+.assembly extern xunit.core {}
 // MVID: {907922FB-D56B-4407-A016-0118205F2F38}
-.namespace JitTest
+.namespace JitTest_s_ldc_div_signed_il
 {
-  .class private auto ansi Test
+  .class public auto ansi Test
          extends ['mscorlib']System.Object
   {
     .method private hidebysig static bool 
@@ -81,7 +74,7 @@
       IL_003e:  ret
     } // end of method 'Test::check'
 
-    .method private hidebysig static int32
+    .method public hidebysig static int32
             Main() il managed
     {
       .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
@@ -97,7 +90,7 @@
       IL_000b:  conv.i8
       IL_000c:  ldc.i8     0x3fffffff00000001
       IL_0015:  ldc.i4.0
-      IL_0016:  call       bool JitTest.Test::check(int64,
+      IL_0016:  call       bool JitTest_s_ldc_div_signed_il.Test::check(int64,
                                                     int64,
                                                     int64,
                                                     bool)
@@ -110,7 +103,7 @@
       IL_0030:  conv.i8
       IL_0031:  ldc.i8     0x7fffffff00000000
       IL_003a:  ldc.i4.0
-      IL_003b:  call       bool JitTest.Test::check(int64,
+      IL_003b:  call       bool JitTest_s_ldc_div_signed_il.Test::check(int64,
                                                     int64,
                                                     int64,
                                                     bool)
@@ -123,7 +116,7 @@
       IL_0051:  conv.i8
       IL_0052:  ldc.i8     0x7ffffffffffffffe
       IL_005b:  ldc.i4.0
-      IL_005c:  call       bool JitTest.Test::check(int64,
+      IL_005c:  call       bool JitTest_s_ldc_div_signed_il.Test::check(int64,
                                                     int64,
                                                     int64,
                                                     bool)
@@ -138,7 +131,7 @@
       IL_006d:  ldc.i4.2
       IL_006e:  conv.i8
       IL_006f:  ldc.i4.0
-      IL_0070:  call       bool JitTest.Test::check(int64,
+      IL_0070:  call       bool JitTest_s_ldc_div_signed_il.Test::check(int64,
                                                     int64,
                                                     int64,
                                                     bool)
@@ -151,7 +144,7 @@
       IL_0082:  ldc.i8     0x1000000000
       IL_008b:  ldc.i8     0x100000000000000
       IL_0094:  ldc.i4.0
-      IL_0095:  call       bool JitTest.Test::check(int64,
+      IL_0095:  call       bool JitTest_s_ldc_div_signed_il.Test::check(int64,
                                                     int64,
                                                     int64,
                                                     bool)
@@ -166,7 +159,7 @@
       IL_00a2:  ldc.i4.1
       IL_00a3:  conv.i8
       IL_00a4:  ldc.i4.0
-      IL_00a5:  call       bool JitTest.Test::check(int64,
+      IL_00a5:  call       bool JitTest_s_ldc_div_signed_il.Test::check(int64,
                                                     int64,
                                                     int64,
                                                     bool)
@@ -181,7 +174,7 @@
       IL_00b3:  ldc.i4.1
       IL_00b4:  conv.i8
       IL_00b5:  ldc.i4.0
-      IL_00b6:  call       bool JitTest.Test::check(int64,
+      IL_00b6:  call       bool JitTest_s_ldc_div_signed_il.Test::check(int64,
                                                     int64,
                                                     int64,
                                                     bool)
@@ -194,7 +187,7 @@
       IL_00c1:  ldc.i8     0x8000000000000001
       IL_00ca:  ldc.i8     0x7fffffffffffffff
       IL_00d3:  ldc.i4.0
-      IL_00d4:  call       bool JitTest.Test::check(int64,
+      IL_00d4:  call       bool JitTest_s_ldc_div_signed_il.Test::check(int64,
                                                     int64,
                                                     int64,
                                                     bool)
@@ -209,7 +202,7 @@
       IL_00e1:  ldc.i4     0x3e8
       IL_00e6:  conv.i8
       IL_00e7:  ldc.i4.1
-      IL_00e8:  call       bool JitTest.Test::check(int64,
+      IL_00e8:  call       bool JitTest_s_ldc_div_signed_il.Test::check(int64,
                                                     int64,
                                                     int64,
                                                     bool)
@@ -245,6 +238,6 @@
 
   } // end of class 'Test'
 
-} // end of namespace 'JitTest'
+} // end of namespace 'JitTest_s_ldc_div_signed_il'
 
 //*********** DISASSEMBLY COMPLETE ***********************

@@ -2,32 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 import { bind_runtime_method } from "./method-binding";
-
-export type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array;
-
-export interface ManagedPointer {
-    __brandManagedPointer: "ManagedPointer"
-}
-
-export interface NativePointer {
-    __brandNativePointer: "NativePointer"
-}
-
-export interface VoidPtr extends NativePointer {
-    __brand: "VoidPtr"
-}
-
-export interface CharPtr extends NativePointer {
-    __brand: "CharPtr"
-}
-
-export interface Int32Ptr extends NativePointer {
-    __brand: "Int32Ptr"
-}
-
-export interface CharPtrPtr extends NativePointer {
-    __brand: "CharPtrPtr"
-}
+import { CharPtr, EmscriptenModule, ManagedPointer, NativePointer, VoidPtr, Int32Ptr } from "./types/emscripten";
 
 export type GCHandle = {
     __brand: "GCHandle"
@@ -40,6 +15,9 @@ export interface MonoObject extends ManagedPointer {
 }
 export interface MonoString extends MonoObject {
     __brand: "MonoString"
+}
+export interface MonoInternedString extends MonoString {
+    __brandString: "MonoInternedString"
 }
 export interface MonoClass extends MonoObject {
     __brand: "MonoClass"
@@ -56,6 +34,15 @@ export interface MonoArray extends MonoObject {
 export interface MonoAssembly extends MonoObject {
     __brand: "MonoAssembly"
 }
+// Pointer to a MonoObject* (i.e. the address of a root)
+export interface MonoObjectRef extends ManagedPointer {
+    __brandMonoObjectRef: "MonoObjectRef"
+}
+// This exists for signature clarity, we need it to be structurally equivalent
+//  so that anything requiring MonoObjectRef will work
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+export interface MonoStringRef extends MonoObjectRef {
+}
 export const MonoMethodNull: MonoMethod = <MonoMethod><any>0;
 export const MonoObjectNull: MonoObject = <MonoObject><any>0;
 export const MonoArrayNull: MonoArray = <MonoArray><any>0;
@@ -63,13 +50,20 @@ export const MonoAssemblyNull: MonoAssembly = <MonoAssembly><any>0;
 export const MonoClassNull: MonoClass = <MonoClass><any>0;
 export const MonoTypeNull: MonoType = <MonoType><any>0;
 export const MonoStringNull: MonoString = <MonoString><any>0;
+export const MonoObjectRefNull: MonoObjectRef = <MonoObjectRef><any>0;
+export const MonoStringRefNull: MonoStringRef = <MonoStringRef><any>0;
 export const JSHandleDisposed: JSHandle = <JSHandle><any>-1;
 export const JSHandleNull: JSHandle = <JSHandle><any>0;
+export const GCHandleNull: GCHandle = <GCHandle><any>0;
 export const VoidPtrNull: VoidPtr = <VoidPtr><any>0;
 export const CharPtrNull: CharPtr = <CharPtr><any>0;
+export const NativePointerNull: NativePointer = <NativePointer><any>0;
 
 export function coerceNull<T extends ManagedPointer | NativePointer>(ptr: T | null | undefined): T {
-    return (<any>ptr | <any>0) as any;
+    if ((ptr === null) || (ptr === undefined))
+        return (0 as any) as T;
+    else
+        return ptr as T;
 }
 
 export type MonoConfig = {
@@ -78,7 +72,6 @@ export type MonoConfig = {
     assets: AllAssetEntryTypes[], // a list of assets to load along with the runtime. each asset is a dictionary-style Object with the following properties:
     debug_level?: number, // Either this or the next one needs to be set
     enable_debugging?: number, // Either this or the previous one needs to be set
-    fetch_file_cb?: Request, // a function (string) invoked to fetch a given file. If no callback is provided a default implementation appropriate for the current environment will be selected (readFileSync in node, fetch elsewhere). If no default implementation is available this call will fail.
     globalization_mode: GlobalizationMode, // configures the runtime's globalization mode
     diagnostic_tracing?: boolean // enables diagnostic log messages during startup
     remote_sources?: string[], // additional search locations for assets. Sources will be checked in sequential order until the asset is found. The string "./" indicates to load from the application directory (as with the files in assembly_list), and a fully-qualified URL like "https://example.com/" indicates that asset loads can be attempted from a remote server. Sources must end with a "/".
@@ -88,7 +81,8 @@ export type MonoConfig = {
     runtime_options?: string[], // array of runtime options as strings
     aot_profiler_options?: AOTProfilerOptions, // dictionary-style Object. If omitted, aot profiler will not be initialized.
     coverage_profiler_options?: CoverageProfilerOptions, // dictionary-style Object. If omitted, coverage profiler will not be initialized.
-    ignore_pdb_load_errors?: boolean
+    ignore_pdb_load_errors?: boolean,
+    wait_for_debugger?: number
 };
 
 export type MonoConfigError = {
@@ -107,6 +101,7 @@ export type AssetEntry = {
     culture?: string,
     load_remote?: boolean, // if true, an attempt will be made to load the asset from each location in @args.remote_sources.
     is_optional?: boolean // if true, any failure to load this asset will be ignored.
+    buffer?: ArrayBuffer // if provided, we don't have to fetch it
 }
 
 export interface AssemblyEntry extends AssetEntry {
@@ -138,7 +133,7 @@ export const enum AssetBehaviours {
 }
 
 export type RuntimeHelpers = {
-    get_call_sig: MonoMethod;
+    get_call_sig_ref: MonoMethod;
     runtime_namespace: string;
     runtime_classname: string;
     wasm_runtime_class: MonoClass;
@@ -149,6 +144,10 @@ export type RuntimeHelpers = {
 
     _box_buffer: VoidPtr;
     _unbox_buffer: VoidPtr;
+    _i52_error_scratch_buffer: Int32Ptr;
+    _box_root: any;
+    // A WasmRoot that is guaranteed to contain 0
+    _null_root: any;
     _class_int32: MonoClass;
     _class_uint32: MonoClass;
     _class_double: MonoClass;
@@ -158,6 +157,8 @@ export type RuntimeHelpers = {
 
     loaded_files: string[];
     config: MonoConfig | MonoConfigError;
+    wait_for_debugger?: number;
+    fetch: (url: string) => Promise<Response>;
 }
 
 export const wasm_type_symbol = Symbol.for("wasm type");
@@ -178,18 +179,109 @@ export type CoverageProfilerOptions = {
     send_to?: string // should be in the format <CLASS>::<METHODNAME>, default: 'WebAssembly.Runtime::DumpCoverageProfileData' (DumpCoverageProfileData stores the data into INTERNAL.coverage_profile_data.)
 }
 
-// how we extended emscripten Module
-export type EmscriptenModuleMono = EmscriptenModule & {
-    disableDotNet6Compatibility?: boolean,
+/// Options to configure the event pipe session
+/// The recommended method is to MONO.diagnostics.SesisonOptionsBuilder to create an instance of this type
+export interface EventPipeSessionOptions {
+    /// Whether to collect additional details (such as method and type names) at EventPipeSession.stop() time (default: true)
+    /// This is required for some use cases, and may allow some tools to better understand the events.
+    collectRundownEvents?: boolean;
+    /// The providers that will be used by this session.
+    /// See https://docs.microsoft.com/en-us/dotnet/core/diagnostics/eventpipe#trace-using-environment-variables
+    providers: string;
+}
 
-    // backward compatibility
+// how we extended emscripten Module
+export type DotnetModule = EmscriptenModule & DotnetModuleConfig;
+
+export type DotnetModuleConfig = {
+    disableDotnet6Compatibility?: boolean,
+
     config?: MonoConfig | MonoConfigError,
     configSrc?: string,
-    onConfigLoaded?: () => void;
-    onDotNetReady?: () => void;
+    onConfigLoaded?: (config: MonoConfig) => Promise<void>;
+    onDotnetReady?: () => void;
 
-    /**
-     * @deprecated DEPRECATED! backward compatibility https://github.com/search?q=mono_bind_static_method&type=Code
-     */
-    mono_bind_static_method: (fqn: string, signature: string) => Function,
+    imports?: DotnetModuleConfigImports;
+    exports?: string[];
+} & Partial<EmscriptenModule>
+
+export type DotnetModuleConfigImports = {
+    require?: (name: string) => any;
+    fetch?: (url: string) => Promise<Response>;
+    fs?: {
+        promises?: {
+            readFile?: (path: string) => Promise<string | Buffer>,
+        }
+        readFileSync?: (path: string, options: any | undefined) => string,
+    };
+    crypto?: {
+        randomBytes?: (size: number) => Buffer
+    };
+    ws?: WebSocket & { Server: any };
+    path?: {
+        normalize?: (path: string) => string,
+        dirname?: (path: string) => string,
+    };
+    url?: any;
+}
+
+// see src\mono\wasm\runtime\rollup.config.js
+// inline this, because the lambda could allocate closure on hot path otherwise
+export function mono_assert(condition: unknown, messageFactory: string | (() => string)): asserts condition {
+    if (!condition) {
+        const message = typeof messageFactory === "string"
+            ? messageFactory
+            : messageFactory();
+        throw new Error(`Assert failed: ${message}`);
+    }
+}
+
+// see src/mono/wasm/driver.c MARSHAL_TYPE_xxx and Runtime.cs MarshalType
+export const enum MarshalType {
+    NULL = 0,
+    INT = 1,
+    FP64 = 2,
+    STRING = 3,
+    VT = 4,
+    DELEGATE = 5,
+    TASK = 6,
+    OBJECT = 7,
+    BOOL = 8,
+    ENUM = 9,
+    URI = 22,
+    SAFEHANDLE = 23,
+    ARRAY_BYTE = 10,
+    ARRAY_UBYTE = 11,
+    ARRAY_UBYTE_C = 12,
+    ARRAY_SHORT = 13,
+    ARRAY_USHORT = 14,
+    ARRAY_INT = 15,
+    ARRAY_UINT = 16,
+    ARRAY_FLOAT = 17,
+    ARRAY_DOUBLE = 18,
+    FP32 = 24,
+    UINT32 = 25,
+    INT64 = 26,
+    UINT64 = 27,
+    CHAR = 28,
+    STRING_INTERNED = 29,
+    VOID = 30,
+    ENUM64 = 31,
+    POINTER = 32,
+    SPAN_BYTE = 33,
+}
+
+// see src/mono/wasm/driver.c MARSHAL_ERROR_xxx and Runtime.cs
+export const enum MarshalError {
+    BUFFER_TOO_SMALL = 512,
+    NULL_CLASS_POINTER = 513,
+    NULL_TYPE_POINTER = 514,
+    UNSUPPORTED_TYPE = 515,
+    FIRST = BUFFER_TOO_SMALL
+}
+
+// Evaluates whether a value is nullish (same definition used as the ?? operator,
+//  https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Nullish_coalescing_operator)
+export function is_nullish<T>(value: T | null | undefined): value is null | undefined {
+    return (value === undefined) || (value === null);
 }

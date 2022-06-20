@@ -561,7 +561,7 @@ private:
 public:
     //#LoaderModule
     // LoaderModule determines in which module an item gets placed.
-    // For everything except paramaterized types and methods the choice is easy.
+    // For everything except parameterized types and methods the choice is easy.
     //
     // If NGEN'ing we may choose to place the item into the current module (which is different from runtime behavior).
     //
@@ -874,7 +874,7 @@ public:
     //Creates a key with both the namespace and name converted to lowercase and
     //made into a proper namespace-path.
     VOID CreateCanonicallyCasedKey(LPCUTF8 pszNameSpace, LPCUTF8 pszName,
-                                      __out LPUTF8 *ppszOutNameSpace, __out LPUTF8 *ppszOutName);
+                                      _Out_ LPUTF8 *ppszOutNameSpace, _Out_ LPUTF8 *ppszOutName);
 
     static HRESULT FindTypeDefByExportedType(IMDInternalImport *pCTImport,
                                              mdExportedType mdCurrent,

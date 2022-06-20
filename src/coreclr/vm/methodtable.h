@@ -255,25 +255,6 @@ struct GenericsStaticsInfo
 };  // struct GenericsStaticsInfo
 typedef DPTR(GenericsStaticsInfo) PTR_GenericsStaticsInfo;
 
-
-// CrossModuleGenericsStaticsInfo is used in NGen images for statics of cross-module
-// generic instantiations. CrossModuleGenericsStaticsInfo is optional member of
-// MethodTableWriteableData.
-struct CrossModuleGenericsStaticsInfo
-{
-    // Module this method table statics are attached to.
-    //
-    // The statics has to be attached to module referenced from the generic instantiation
-    // in domain-neutral code. We need to guarantee that the module for the statics
-    // has a valid local represenation in an appdomain.
-    //
-    PTR_Module          m_pModuleForStatics;
-
-    // Method table ID for statics
-    SIZE_T              m_DynamicTypeID;
-};  // struct CrossModuleGenericsStaticsInfo
-typedef DPTR(CrossModuleGenericsStaticsInfo) PTR_CrossModuleGenericsStaticsInfo;
-
 //
 // This struct consolidates the writeable parts of the MethodTable
 // so that we can layout a read-only MethodTable with a pointer
@@ -337,8 +318,6 @@ struct MethodTableWriteableData
 
 #endif
 
-    // Optional CrossModuleGenericsStaticsInfo may be here.
-
 public:
 #ifdef _DEBUG
     inline BOOL IsParentMethodTablePointerValid() const
@@ -393,15 +372,6 @@ public:
         m_dwFlags &= ~(MethodTableWriteableData::enum_flag_HasApproxParent);
 
     }
-
-    inline CrossModuleGenericsStaticsInfo * GetCrossModuleGenericsStaticsInfo()
-    {
-        LIMITED_METHOD_DAC_CONTRACT;
-
-        SIZE_T size = sizeof(MethodTableWriteableData);
-        return PTR_CrossModuleGenericsStaticsInfo(dac_cast<TADDR>(this) + size);
-    }
-
 };  // struct MethodTableWriteableData
 
 typedef DPTR(MethodTableWriteableData) PTR_MethodTableWriteableData;
@@ -779,6 +749,10 @@ public:
     // during object construction.
     void CheckRunClassInitAsIfConstructingThrowing();
 
+#if defined(TARGET_LOONGARCH64)
+    static int GetLoongArch64PassStructInRegisterFlags(CORINFO_CLASS_HANDLE clh);
+#endif
+
 #if defined(UNIX_AMD64_ABI_ITF)
     // Builds the internal data structures and classifies struct eightbytes for Amd System V calling convention.
     bool ClassifyEightBytes(SystemVStructRegisterPassingHelperPtr helperPtr, unsigned int nestingLevel, unsigned int startOffsetOfStruct, bool isNativeStruct);
@@ -884,9 +858,7 @@ public:
     {
         LIMITED_METHOD_DAC_CONTRACT;
 
-        g_IBCLogger.LogMethodTableAccess(this);
-
-        return !(GetWriteableData()->m_dwFlags & MethodTableWriteableData::enum_flag_Unrestored);
+        return IsRestored_NoLogging();
     }
 
     //-------------------------------------------------------------------
@@ -914,7 +886,7 @@ public:
         PRECONDITION(!HasApproxParent());
         PRECONDITION(IsRestored_NoLogging());
 
-        FastInterlockAnd(&GetWriteableDataForWrite()->m_dwFlags, ~MethodTableWriteableData::enum_flag_IsNotFullyLoaded);
+        InterlockedAnd((LONG*)&GetWriteableDataForWrite()->m_dwFlags, ~MethodTableWriteableData::enum_flag_IsNotFullyLoaded);
     }
 
     // Equivalent to GetLoadLevel() == CLASS_LOADED
@@ -939,7 +911,7 @@ public:
         if (canCompare)
         {
             // Set checked and canCompare flags in one interlocked operation.
-            FastInterlockOr(&GetWriteableDataForWrite_NoLogging()->m_dwFlags,
+            InterlockedOr((LONG*)&GetWriteableDataForWrite_NoLogging()->m_dwFlags,
                 MethodTableWriteableData::enum_flag_HasCheckedCanCompareBitsOrUseFastGetHashCode | MethodTableWriteableData::enum_flag_CanCompareBitsOrUseFastGetHashCode);
         }
         else
@@ -957,7 +929,7 @@ public:
     inline void SetHasCheckedCanCompareBitsOrUseFastGetHashCode()
     {
         WRAPPER_NO_CONTRACT;
-        FastInterlockOr(&GetWriteableDataForWrite_NoLogging()->m_dwFlags, MethodTableWriteableData::enum_flag_HasCheckedCanCompareBitsOrUseFastGetHashCode);
+        InterlockedOr((LONG*)&GetWriteableDataForWrite_NoLogging()->m_dwFlags, MethodTableWriteableData::enum_flag_HasCheckedCanCompareBitsOrUseFastGetHashCode);
     }
 
     inline void SetIsDependenciesLoaded()
@@ -973,14 +945,12 @@ public:
         PRECONDITION(!HasApproxParent());
         PRECONDITION(IsRestored_NoLogging());
 
-        FastInterlockOr(&GetWriteableDataForWrite()->m_dwFlags, MethodTableWriteableData::enum_flag_DependenciesLoaded);
+        InterlockedOr((LONG*)&GetWriteableDataForWrite()->m_dwFlags, MethodTableWriteableData::enum_flag_DependenciesLoaded);
     }
 
     inline ClassLoadLevel GetLoadLevel()
     {
         LIMITED_METHOD_DAC_CONTRACT;
-
-        g_IBCLogger.LogMethodTableAccess(this);
 
         DWORD dwFlags = GetWriteableData()->m_dwFlags;
 
@@ -1183,7 +1153,6 @@ public:
     }
 
     BOOL HasSameTypeDefAs(MethodTable *pMT);
-    BOOL HasSameTypeDefAs_NoLogging(MethodTable *pMT);
 
     //-------------------------------------------------------------------
     // GENERICS & CODE SHARING
@@ -1251,7 +1220,6 @@ public:
         {
             // Non-virtual slots < GetNumVtableSlots live in a single chunk pointed to by an optional member
             _ASSERTE(HasNonVirtualSlotsArray());
-            g_IBCLogger.LogMethodTableNonVirtualSlotsAccess(this);
             return GetNonVirtualSlotsArray() + (slotNum - GetNumVirtuals());
         }
     }
@@ -1423,7 +1391,6 @@ public:
     {
         LIMITED_METHOD_DAC_CONTRACT;
 
-        g_IBCLogger.LogMethodTableAccess(this);
         return GetNumVirtuals_NoLogging();
     }
 
@@ -1447,7 +1414,6 @@ public:
             return 0;
         }
         MethodTable *pMTParent = GetParentMethodTable();
-        g_IBCLogger.LogMethodTableAccess(this);
         return pMTParent == NULL ? 0 : pMTParent->GetNumVirtuals();
     }
 
@@ -1517,6 +1483,8 @@ public:
     inline BOOL IsManagedSequential();
 
     inline BOOL HasExplicitSize();
+
+    inline BOOL IsAutoLayoutOrHasAutoLayoutField();
 
     UINT32 GetNativeSize();
 
@@ -1601,11 +1569,9 @@ public:
     //
     inline DWORD GetNumInstanceFieldBytes();
 
+    int GetFieldAlignmentRequirement();
+
     inline WORD GetNumIntroducedInstanceFields();
-
-    // <TODO> Does this always return the same (or related) size as GetBaseSize()? </TODO>
-    inline DWORD GetAlignedNumInstanceFieldBytes();
-
 
     // Note: This flag MUST be available even from an unrestored MethodTable - see GcScanRoots in siginfo.cpp.
     DWORD           ContainsPointers()
@@ -1673,18 +1639,6 @@ public:
     PTR_FieldDesc GetFieldDescByIndex(DWORD fieldIndex);
 
     DWORD GetIndexForFieldDesc(FieldDesc *pField);
-
-    inline bool RequiresFatDispatchTokens()
-    {
-        LIMITED_METHOD_CONTRACT;
-        return !!GetFlag(enum_flag_RequiresDispatchTokenFat);
-    }
-
-    inline void SetRequiresFatDispatchTokens()
-    {
-        LIMITED_METHOD_CONTRACT;
-        SetFlag(enum_flag_RequiresDispatchTokenFat);
-    }
 
     inline bool HasPreciseInitCctors()
     {
@@ -1793,7 +1747,7 @@ public:
     inline void SetHasExactParent()
     {
         WRAPPER_NO_CONTRACT;
-        FastInterlockAnd(&(GetWriteableDataForWrite()->m_dwFlags), ~MethodTableWriteableData::enum_flag_HasApproxParent);
+        InterlockedAnd((LONG*)&GetWriteableDataForWrite()->m_dwFlags, ~MethodTableWriteableData::enum_flag_HasApproxParent);
     }
 
 
@@ -1819,7 +1773,6 @@ public:
     {
         LIMITED_METHOD_DAC_CONTRACT;
         PRECONDITION(IsParentMethodTablePointerValid());
-        g_IBCLogger.LogMethodTableAccess(this);
         return GetParentMethodTable() == pMT;
     }
 
@@ -2137,9 +2090,17 @@ public:
     // Resolve virtual static interface method pInterfaceMD on this type.
     //
     // Specify allowNullResult to return NULL instead of throwing if the there is no implementation
-    // Specify verifyImplemented to verify that there is a match, but do not actually return a final useable MethodDesc
+    // Specify verifyImplemented to verify that there is a match, but do not actually return a final usable MethodDesc
     // Specify allowVariantMatches to permit generic interface variance
-    MethodDesc *ResolveVirtualStaticMethod(MethodTable* pInterfaceType, MethodDesc* pInterfaceMD, BOOL allowNullResult, BOOL verifyImplemented = FALSE, BOOL allowVariantMatches = TRUE);
+    // Specify uniqueResolution to store the flag saying whether the resolution was unambiguous;
+    // when NULL, throw an AmbiguousResolutionException upon hitting ambiguous SVM resolution.
+    MethodDesc *ResolveVirtualStaticMethod(
+        MethodTable* pInterfaceType,
+        MethodDesc* pInterfaceMD,
+        BOOL allowNullResult,
+        BOOL verifyImplemented = FALSE,
+        BOOL allowVariantMatches = TRUE,
+        BOOL *uniqueResolution = NULL);
 
     // Try a partial resolve of the constraint call, up to generic code sharing.
     //
@@ -2429,7 +2390,6 @@ public:
     OBJECTREF FastBox(void** data);
 #ifndef DACCESS_COMPILE
     BOOL UnBoxInto(void *dest, OBJECTREF src);
-    BOOL UnBoxIntoArg(ArgDestination *argDest, OBJECTREF src);
     void UnBoxIntoUnchecked(void *dest, OBJECTREF src);
 #endif
 
@@ -2768,7 +2728,6 @@ public:
     inline PTR_Const_MethodTableWriteableData GetWriteableData() const
     {
         LIMITED_METHOD_DAC_CONTRACT;
-        g_IBCLogger.LogMethodTableWriteableDataAccess(this);
         return GetWriteableData_NoLogging();
     }
 
@@ -2781,7 +2740,6 @@ public:
     inline PTR_MethodTableWriteableData GetWriteableDataForWrite()
     {
         LIMITED_METHOD_DAC_CONTRACT;
-        g_IBCLogger.LogMethodTableWriteableDataWriteAccess(this);
         return GetWriteableDataForWrite_NoLogging();
     }
 
@@ -3504,7 +3462,7 @@ private:
 
         enum_flag_IsIntrinsicType           = 0x0100,
 
-        enum_flag_RequiresDispatchTokenFat  = 0x0200,
+        // unused                           = 0x0200,
 
         enum_flag_HasCctor                  = 0x0400,
         enum_flag_HasVirtualStaticMethods   = 0x0800,

@@ -38,7 +38,7 @@ namespace System.Security.Cryptography.Pkcs
         {
             get
             {
-                return _lazyDocumentDescription ?? (_lazyDocumentDescription = Decode(RawData));
+                return _lazyDocumentDescription ??= Decode(RawData);
             }
         }
 
@@ -64,8 +64,10 @@ namespace System.Security.Cryptography.Pkcs
 
         private static byte[] Encode(string documentDescription)
         {
-            if (documentDescription == null)
+            if (documentDescription is null)
+            {
                 throw new ArgumentNullException(nameof(documentDescription));
+            }
 
             byte[] octets = documentDescription.UnicodeToOctetString();
             return PkcsHelpers.EncodeOctetString(octets);

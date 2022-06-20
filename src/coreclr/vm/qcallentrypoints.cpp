@@ -27,7 +27,6 @@
 #include "comdatetime.h"
 #include "compatibilityswitch.h"
 #include "debugdebugger.h"
-#include "assemblyname.hpp"
 #include "assemblynative.hpp"
 #include "comthreadpool.h"
 #include "comwaithandle.h"
@@ -74,7 +73,7 @@
 
 #include "tailcallhelp.h"
 
-#include <common/entrypoints.h>
+#include <minipal/entrypoints.h>
 
 static const Entry s_QCall[] =
 {
@@ -87,6 +86,7 @@ static const Entry s_QCall[] =
     DllImportEntry(RuntimeTypeHandle_CreateInstanceForAnotherGenericParameter)
     DllImportEntry(QCall_GetGCHandleForTypeHandle)
     DllImportEntry(QCall_FreeGCHandleForTypeHandle)
+    DllImportEntry(MethodTable_AreTypesEquivalent)
     DllImportEntry(RuntimeTypeHandle_MakePointer)
     DllImportEntry(RuntimeTypeHandle_MakeByRef)
     DllImportEntry(RuntimeTypeHandle_MakeSZArray)
@@ -159,6 +159,7 @@ static const Entry s_QCall[] =
     DllImportEntry(TypeName_GetTypeArguments)
     DllImportEntry(TypeName_GetModifiers)
     DllImportEntry(TypeName_GetAssemblyName)
+    DllImportEntry(AssemblyName_InitializeAssemblySpec)
     DllImportEntry(AssemblyNative_GetFullName)
     DllImportEntry(AssemblyNative_GetLocation)
     DllImportEntry(AssemblyNative_GetResource)
@@ -274,11 +275,13 @@ static const Entry s_QCall[] =
     DllImportEntry(LogThreadPoolWorkerThreadStart)
     DllImportEntry(LogThreadPoolWorkerThreadStop)
     DllImportEntry(LogThreadPoolWorkerThreadWait)
+    DllImportEntry(LogThreadPoolMinMaxThreads)
     DllImportEntry(LogThreadPoolWorkerThreadAdjustmentSample)
     DllImportEntry(LogThreadPoolWorkerThreadAdjustmentAdjustment)
     DllImportEntry(LogThreadPoolWorkerThreadAdjustmentStats)
     DllImportEntry(LogThreadPoolIOEnqueue)
     DllImportEntry(LogThreadPoolIODequeue)
+    DllImportEntry(LogThreadPoolIOPack)
     DllImportEntry(LogThreadPoolWorkingThreadCount)
     DllImportEntry(EventPipeInternal_Enable)
     DllImportEntry(EventPipeInternal_Disable)
@@ -290,7 +293,8 @@ static const Entry s_QCall[] =
     DllImportEntry(EventPipeInternal_GetProvider)
     DllImportEntry(EventPipeInternal_WriteEventData)
     DllImportEntry(EventPipeInternal_GetNextEvent)
-    DllImportEntry(EventPipeInternal_GetWaitHandle)
+    DllImportEntry(EventPipeInternal_SignalSession)
+    DllImportEntry(EventPipeInternal_WaitForSessionSignal)
 #endif
 #if defined(TARGET_UNIX)
     DllImportEntry(CloseHandle)
@@ -321,5 +325,5 @@ static const Entry s_QCall[] =
 
 const void* QCallResolveDllImport(const char* name)
 {
-    return minipal_resolve_dllimport(s_QCall, lengthof(s_QCall), name);
+    return minipal_resolve_dllimport(s_QCall, ARRAY_SIZE(s_QCall), name);
 }

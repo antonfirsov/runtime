@@ -7,15 +7,11 @@
   .publickeytoken = (B0 3F 5F 7F 11 D5 0A 3A )
   .ver 4:0:0:0
 }
-.assembly '20param3a'{}
-.assembly extern xunit.core
+.assembly '25param1c'{}
+.assembly extern xunit.core {}
+.namespace Test_25param1c_il
 {
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.class private auto ansi beforefieldinit test
+.class public auto ansi beforefieldinit test
        extends [mscorlib]System.Object
 {
   .method private hidebysig static int32 
@@ -110,7 +106,7 @@
 
     IL_005b:  ldloc.1
     IL_005c:  ret
-  } // end of method test::f1
+  } // end of method Test_25param1c_il.test::f1
 
   .method private hidebysig static int32 
           f(int32 a1,
@@ -218,7 +214,7 @@
     IL_00d3:  ldarg.s    a23
     IL_00d5:  ldarg.s    a24
     IL_00d7:  ldarg.s    a25
-    IL_00d9:  tail. call       int32 test::f1(int32,
+    IL_00d9:  tail. call       int32 Test_25param1c_il.test::f1(int32,
                                         int32,
                                         int32,
                                         int32,
@@ -244,9 +240,9 @@
                                         int32,
                                         int32)
     IL_00e4:  ret
-  } // end of method test::f
+  } // end of method Test_25param1c_il.test::f
 
-  .method private hidebysig static int32 
+  .method public hidebysig static int32 
           Main() cil managed
   {
     .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
@@ -284,7 +280,7 @@ call void [System.Console]System.Console::WriteLine(string)
     IL_0024:  ldc.i4.s   23
     IL_0026:  ldc.i4.s   24
     IL_0028:  ldc.i4.s   25
-    IL_002a:  call       int32 test::f(int32,
+    IL_002a:  call       int32 Test_25param1c_il.test::f(int32,
                                        int32,
                                        int32,
                                        int32,
@@ -324,7 +320,7 @@ call void [System.Console]System.Console::WriteLine(string)
 
     IL_0041:  ldloc.1
     IL_0042:  ret
-  } // end of method test::Main
+  } // end of method Test_25param1c_il.test::Main
 
   .method public hidebysig specialname rtspecialname 
           instance void  .ctor() cil managed
@@ -334,6 +330,7 @@ call void [System.Console]System.Console::WriteLine(string)
     IL_0000:  ldarg.0
     IL_0001:  call       instance void [mscorlib]System.Object::.ctor()
     IL_0006:  ret
-  } // end of method test::.ctor
+  } // end of method Test_25param1c_il.test::.ctor
 
+}
 }

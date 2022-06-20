@@ -28,7 +28,8 @@ namespace System.Xml.Linq
 
         internal XContainer(XContainer other)
         {
-            if (other == null) throw new ArgumentNullException(nameof(other));
+            ArgumentNullException.ThrowIfNull(other);
+
             if (other.content is string)
             {
                 this.content = other.content;
@@ -54,8 +55,7 @@ namespace System.Xml.Linq
         {
             get
             {
-                XNode? last = LastNode;
-                return last != null ? last.next : null;
+                return LastNode?.next;
             }
         }
 
@@ -1127,7 +1127,6 @@ namespace System.Xml.Linq
                     }
 
                     _currentContainer.AddNodeSkipNotify(newNode);
-                    newNode = null;
                 }
 
                 return true;
@@ -1247,7 +1246,6 @@ namespace System.Xml.Linq
                     }
 
                     _currentContainer.AddNodeSkipNotify(newNode);
-                    newNode = null;
                 }
 
                 return true;

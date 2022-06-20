@@ -21,21 +21,14 @@
   
   
 }
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module 'selfref.exe'
+.assembly extern xunit.core {}
 // MVID: {57800D71-6F51-4ACF-BC86-8F3D2FBAC8E1}
-.namespace GCTest
+.namespace GCTest_selfref_il
 {
-  .class private auto ansi Test
+  .class public auto ansi Test
          extends [mscorlib]System.Object
   {
-    .method private hidebysig static int32
+    .method public hidebysig static int32
             Main() il managed
     {
       .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
@@ -148,6 +141,6 @@
 
   } // end of class 'Test'
 
-} // end of namespace 'GCTest'
+} // end of namespace 'GCTest_selfref_il'
 
 //*********** DISASSEMBLY COMPLETE ***********************

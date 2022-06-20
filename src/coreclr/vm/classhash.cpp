@@ -267,7 +267,7 @@ VOID EEClassHashTable::ConstructKeyFromData(PTR_EEClassHashEntry pEntry, // IN  
             mdToken mdtUncompressed = UncompressModuleAndClassDef(Data);
             if (TypeFromToken(mdtUncompressed) == mdtExportedType)
             {
-                IfFailThrow(GetModule()->GetClassLoader()->GetAssembly()->GetManifestImport()->GetExportedTypeProps(
+                IfFailThrow(GetModule()->GetClassLoader()->GetAssembly()->GetMDImport()->GetExportedTypeProps(
                     mdtUncompressed,
                     (LPCSTR *)&pszNameSpace,
                     (LPCSTR *)&pszName,
@@ -348,7 +348,7 @@ EEClassHashEntry_t *EEClassHashTable::InsertValue(LPCUTF8 pszNamespace, LPCUTF8 
 class ConstructKeyCallbackValidate : public EEClassHashTable::ConstructKeyCallback
 {
 public:
-    virtual void UseKeys(__in_ecount(2) LPUTF8 *Key)
+    virtual void UseKeys(_In_reads_(2) LPUTF8 *Key)
     {
         LIMITED_METHOD_CONTRACT;
         STATIC_CONTRACT_DEBUG_ONLY;
@@ -363,7 +363,7 @@ public:
 #endif // _DEBUG
 
 // This entrypoint lets the caller separate the allocation of the entrypoint from the actual insertion into the hashtable. (This lets us
-// do multiple insertions without having to worry about an OOM occuring inbetween.)
+// do multiple insertions without having to worry about an OOM occurring inbetween.)
 //
 // The newEntry must have been allocated using AllocEntry. It must not be referenced by any other entity (other than a holder or tracker)
 // If this function throws, the caller is responsible for freeing the entry.
@@ -478,11 +478,6 @@ EEClassHashEntry_t *EEClassHashTable::FindItem(LPCUTF8 pszNamespace, LPCUTF8 psz
             // If (pSearch->pEncloser), we've found a nested class
             if ((IsNested != FALSE) == (pSearch->GetEncloser() != NULL))
             {
-                if (m_bCaseInsensitive)
-                    g_IBCLogger.LogClassHashTableAccess(dac_cast<PTR_EEClassHashEntry>(pSearch->GetData()));
-                else
-                    g_IBCLogger.LogClassHashTableAccess(pSearch);
-
                 return pSearch;
             }
         }
@@ -693,7 +688,7 @@ EEClassHashEntry_t * EEClassHashTable::GetValue(const NameHandle* pName, PTR_VOI
 class ConstructKeyCallbackCompare : public EEClassHashTable::ConstructKeyCallback
 {
 public:
-    virtual void UseKeys(__in_ecount(2) LPUTF8 *pKey1)
+    virtual void UseKeys(_In_reads_(2) LPUTF8 *pKey1)
     {
         LIMITED_METHOD_CONTRACT;
         SUPPORTS_DAC;
@@ -757,7 +752,7 @@ BOOL EEClassHashTable::CompareKeys(PTR_EEClassHashEntry pEntry, LPCUTF8 * pKey2)
 class ConstructKeyCallbackCaseInsensitive : public EEClassHashTable::ConstructKeyCallback
 {
 public:
-    virtual void UseKeys(__in_ecount(2) LPUTF8 *key)
+    virtual void UseKeys(_In_reads_(2) LPUTF8 *key)
     {
         WRAPPER_NO_CONTRACT;
 

@@ -28,10 +28,7 @@ namespace System.Net.Http
             set
             {
 #if !PHONE
-                if (value == null)
-                {
-                    throw new ArgumentNullException(nameof(value));
-                }
+                ArgumentNullException.ThrowIfNull(value);
 #endif
                 CheckDisposed();
 
@@ -95,7 +92,7 @@ namespace System.Net.Http
             }
             set
             {
-                if ((value != null) && ContainsNewLineCharacter(value))
+                if ((value != null) && HttpRuleParser.ContainsNewLine(value))
                 {
                     throw new FormatException(SR.net_http_reasonphrase_format_error);
                 }
@@ -208,18 +205,6 @@ namespace System.Net.Http
             }
 
             return sb.ToString();
-        }
-
-        private bool ContainsNewLineCharacter(string value)
-        {
-            foreach (char character in value)
-            {
-                if ((character == HttpRuleParser.CR) || (character == HttpRuleParser.LF))
-                {
-                    return true;
-                }
-            }
-            return false;
         }
 
         #region IDisposable Members

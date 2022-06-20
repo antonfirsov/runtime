@@ -1,17 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-.assembly ILGEN_0x537f7b0 {}
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
+.assembly 'volatileLocal2' {}
+.assembly extern xunit.core {}
 .assembly extern mscorlib{auto}
 
-.class ILGEN_0x537f7b0 {
+.class public ILGEN_0x537f7b0 {
 
 //BEGIN STATIC FIELDS
 .field static	unsigned int16[] field_0x0
@@ -1230,7 +1224,7 @@ End_Orphan_b_54:
 conv.r.un
  ret
 }
-.method static int32 Main() {
+.method public static int32 Main() {
 .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
     01 00 00 00
 )

@@ -54,7 +54,7 @@ namespace System.Dynamic.Tests
             yield return new[] {new object()};
         }
 
-        [ActiveIssue("https://github.com/dotnet/runtime/issues/55070", typeof(PlatformDetection), nameof(PlatformDetection.IsLinqExpressionsBuiltWithIsInterpretingOnly))]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/55070", TestPlatforms.iOS | TestPlatforms.tvOS | TestPlatforms.MacCatalyst)]
         [Theory, MemberData(nameof(ObjectArguments))]
         public void InvokeVirtualMethod(object value)
         {
@@ -86,6 +86,7 @@ namespace System.Dynamic.Tests
         }
 
         [Fact]
+        [ActiveIssue("https://github.com/dotnet/runtime/issues/69944", typeof(PlatformDetection), nameof(PlatformDetection.IsNativeAot))]
         public void GenericMethod()
         {
             dynamic d = new TestDerivedClass();
@@ -186,8 +187,6 @@ namespace System.Dynamic.Tests
             Assert.Same(info, new MinimumOverrideInvokeMemberBinding("name", false, info).CallInfo);
         }
 
-#if FEATURE_COMPILE // We're not testing compilation, but we do need Reflection.Emit for the test
-
         private static dynamic GetObjectWithNonIndexerParameterProperty(bool hasGetter, bool hasSetter)
         {
             TypeBuilder typeBuild = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("TestAssembly"), AssemblyBuilderAccess.RunAndCollect)
@@ -233,7 +232,7 @@ namespace System.Dynamic.Tests
             return Activator.CreateInstance(typeBuild.CreateType());
         }
 
-        [Fact]
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsReflectionEmitSupported))]
         public void NonIndexerParameterizedDirectAccess()
         {
             // If a parameterized property isn't the type's indexer, we should be allowed to use the
@@ -244,7 +243,7 @@ namespace System.Dynamic.Tests
             Assert.Equal(19, value);
         }
 
-        [Fact]
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsReflectionEmitSupported))]
         public void NonIndexerParameterizedGetterAndSetterIndexAccess()
         {
             dynamic d = GetObjectWithNonIndexerParameterProperty(true, true);
@@ -254,7 +253,7 @@ namespace System.Dynamic.Tests
             Assert.Contains("set_ItemProp", ex.Message);
         }
 
-        [Fact]
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsReflectionEmitSupported))]
         public void NonIndexerParameterizedGetterOnlyIndexAccess()
         {
             dynamic d = GetObjectWithNonIndexerParameterProperty(true, false);
@@ -264,7 +263,7 @@ namespace System.Dynamic.Tests
             Assert.Contains("get_ItemProp", ex.Message);
         }
 
-        [Fact]
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsReflectionEmitSupported))]
         public void NonIndexerParameterizedSetterOnlyIndexAccess()
         {
             dynamic d = GetObjectWithNonIndexerParameterProperty(false, true);
@@ -377,7 +376,8 @@ namespace System.Dynamic.Tests
             return testObjects.SelectMany(i => testObjects.Select(j => new[] { i, j }));
         }
 
-        [Theory, MemberData(nameof(SameNameObjectPairs))]
+        [ConditionalTheory(typeof(PlatformDetection), nameof(PlatformDetection.IsReflectionEmitSupported))]
+        [MemberData(nameof(SameNameObjectPairs))]
         public void OperationOnTwoObjectsDifferentTypesOfSameName(object x, object y)
         {
             dynamic dX = x;
@@ -385,8 +385,6 @@ namespace System.Dynamic.Tests
             bool equal = dX.Equals(dY);
             Assert.Equal(x == y, equal);
         }
-
-#endif
 
         public class FuncWrapper<TResult>
         {

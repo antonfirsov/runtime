@@ -778,7 +778,7 @@ namespace System.Xml
                                 firstChildTextLikeNode = null;
                             }
 
-                            sb.Remove(0, sb.Length);
+                            sb.Clear();
                             break;
                         }
                 }
@@ -790,7 +790,7 @@ namespace System.Xml
             StringBuilderCache.Release(sb);
         }
 
-        private XmlNode? NormalizeWinner(XmlNode? firstNode, XmlNode secondNode)
+        private static XmlNode? NormalizeWinner(XmlNode? firstNode, XmlNode secondNode)
         {
             //first node has the priority
             if (firstNode == null)
@@ -1051,7 +1051,7 @@ namespace System.Xml
         public virtual void RemoveAll()
         {
             XmlNode? child = FirstChild;
-            XmlNode? sibling = null;
+            XmlNode? sibling;
 
             while (child != null)
             {
@@ -1166,8 +1166,7 @@ namespace System.Xml
         // the prefix defined in that declaration.
         public virtual string GetPrefixOfNamespace(string namespaceURI)
         {
-            string? prefix = GetPrefixOfNamespaceStrict(namespaceURI);
-            return prefix != null ? prefix : string.Empty;
+            return GetPrefixOfNamespaceStrict(namespaceURI) ?? string.Empty;
         }
 
         internal string? GetPrefixOfNamespaceStrict(string namespaceURI)
@@ -1351,7 +1350,7 @@ namespace System.Xml
             get
             {
                 XmlNode? node = this;
-                XmlElement? elem = null;
+                XmlElement? elem;
                 do
                 {
                     elem = node as XmlElement;
@@ -1381,7 +1380,7 @@ namespace System.Xml
             get
             {
                 XmlNode? node = this;
-                XmlElement? elem = null;
+                XmlElement? elem;
                 do
                 {
                     elem = node as XmlElement;

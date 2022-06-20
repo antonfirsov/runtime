@@ -2,30 +2,26 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <Packable>false</Packable>
-    <Nullable>enable</Nullable>
     <RootNamespace>Microsoft.Interop</RootNamespace>
-    <RunAnalyzers>true</RunAnalyzers>
+    <DefineConstants>$(DefineConstants);MICROSOFT_INTEROP_SOURCEGENERATION</DefineConstants>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
+  <!-- Code included from System.Runtime.InteropServices -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.CodeAnalysis" Version="$(MicrosoftCodeAnalysisVersion)" PrivateAssets="all" />
+    <Compile Include="$(CoreLibSharedDir)\System\Runtime\InteropServices\Marshalling\CustomTypeMarshallerKind.cs"
+             Link="Production\CustomTypeMarshallerKind.cs" />
+    <Compile Include="$(CoreLibSharedDir)\System\Runtime\InteropServices\Marshalling\CustomTypeMarshallerDirection.cs"
+             Link="Production\CustomTypeMarshallerDirection.cs" />
+    <Compile Include="$(CoreLibSharedDir)\System\Runtime\InteropServices\Marshalling\CustomTypeMarshallerFeatures.cs"
+             Link="Production\CustomTypeMarshallerFeatures.cs" />
+    <Compile Include="$(CoreLibSharedDir)System\Runtime\InteropServices\StringMarshalling.cs"
+             Link="Production\StringMarshalling.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis" Version="$(MicrosoftCodeAnalysisVersion_4_X)" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="$(MicrosoftCodeAnalysisAnalyzersVersion)" PrivateAssets="all" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Update="Resources.Designer.cs">
-      <DependentUpon>Resources.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-    </Compile>
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Update="Resources.resx">
-      <SubType>Designer</SubType>
-      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
-      <Generator>ResXFileCodeGenerator</Generator>
-    </EmbeddedResource>
-  </ItemGroup>
 </Project>

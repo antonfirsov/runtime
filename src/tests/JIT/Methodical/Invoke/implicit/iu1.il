@@ -17,23 +17,16 @@
   .publickeytoken = (B0 3F 5F 7F 11 D5 0A 3A )
   .ver 4:0:0:0
 }
-.assembly 'test'
+.assembly 'iu1'
 {
 
   
   
 }
-.assembly extern xunit.core
+.assembly extern xunit.core {}
+.namespace TestCase_iu1_il
 {
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module 'test.exe'
-.namespace TestCase
-{
-  .class private auto ansi Test
+  .class public auto ansi Test
          extends ['mscorlib']System.Object
   {
     .method private hidebysig int32 
@@ -82,7 +75,7 @@
       IL_0019:  ret
     } // end of method 'Test::compare'
 
-    .method private hidebysig static int32
+    .method public hidebysig static int32
             Main() il managed
     {
       .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
@@ -91,12 +84,12 @@
       .entrypoint
       .maxstack  3
       .locals (int32 V_0)
-      			newobj		instance void TestCase.Test::.ctor()
+      			newobj		instance void TestCase_iu1_il.Test::.ctor()
       IL_0000:  ldc.i4 0xfffff2
       			conv.i
       IL_0001:  ldc.i4 0xfff2
       			conv.i
-      IL_0002:  call       instance int32 TestCase.Test::compare(unsigned int8,
+      IL_0002:  call       instance int32 TestCase_iu1_il.Test::compare(unsigned int8,
                                                         unsigned int8)
       IL_0007:  brfalse.s  IL_0017
 
@@ -127,5 +120,5 @@
 
   } // end of class 'Test'
 
-} // end of namespace 'TestCase'
+} // end of namespace 'TestCase_iu1_il'
 

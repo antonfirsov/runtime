@@ -10,16 +10,11 @@
 .assembly extern mscorlib
 {
 }
-.assembly conv {}
-.assembly extern xunit.core
+.assembly 'r8NaNconv' {}
+.assembly extern xunit.core {}
+.namespace Test_r8NaNconv
 {
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module conv.exe
-.class private auto ansi beforefieldinit ConvTest
+.class public auto ansi beforefieldinit ConvTest
        extends [mscorlib]System.Object
 {
 	.method public hidebysig static int8 test1() cil managed 
@@ -438,31 +433,31 @@
     ldc.i4.1
     stloc.0
     
-	call       int8 ConvTest::test1()
+	call       int8 Test_r8NaNconv.ConvTest::test1()
 	pop
-	call       int16 ConvTest::test2()
+	call       int16 Test_r8NaNconv.ConvTest::test2()
 	pop
-	call       int32 ConvTest::test3()
+	call       int32 Test_r8NaNconv.ConvTest::test3()
 	pop
-	call       int64 ConvTest::test4()
+	call       int64 Test_r8NaNconv.ConvTest::test4()
 	pop
-	call       float32 ConvTest::test5()
+	call       float32 Test_r8NaNconv.ConvTest::test5()
 	pop
-	call       float64 ConvTest::test6()
+	call       float64 Test_r8NaNconv.ConvTest::test6()
 	pop
-	call       unsigned int8 ConvTest::test7()
+	call       unsigned int8 Test_r8NaNconv.ConvTest::test7()
 	pop
-	call       unsigned int16 ConvTest::test8()
+	call       unsigned int16 Test_r8NaNconv.ConvTest::test8()
 	pop
-	call       unsigned int32 ConvTest::test9()
+	call       unsigned int32 Test_r8NaNconv.ConvTest::test9()
 	pop
-	call       unsigned int64 ConvTest::test10()
+	call       unsigned int64 Test_r8NaNconv.ConvTest::test10()
 	pop
-	call       int32 ConvTest::test11()
+	call       int32 Test_r8NaNconv.ConvTest::test11()
 	pop
-	call       unsigned int32 ConvTest::test12()
+	call       unsigned int32 Test_r8NaNconv.ConvTest::test12()
 	pop
-	call       float32 ConvTest::test13()
+	call       float32 Test_r8NaNconv.ConvTest::test13()
 	pop
 
 
@@ -470,7 +465,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int8 ConvTest::test14()
+	    call       int8 Test_r8NaNconv.ConvTest::test14()
 	    leave.s    Test_15
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -487,7 +482,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int16 ConvTest::test15()
+	    call       int16 Test_r8NaNconv.ConvTest::test15()
 	    leave.s    Test_16
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -504,7 +499,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int32 ConvTest::test16()
+	    call       int32 Test_r8NaNconv.ConvTest::test16()
 	    leave.s    Test_17
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -521,7 +516,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int64 ConvTest::test17()
+	    call       int64 Test_r8NaNconv.ConvTest::test17()
 	    leave.s    Test_18
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -538,7 +533,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int8 ConvTest::test18()
+	    call       unsigned int8 Test_r8NaNconv.ConvTest::test18()
 	    leave.s    Test_19
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -555,7 +550,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int16 ConvTest::test19()
+	    call       unsigned int16 Test_r8NaNconv.ConvTest::test19()
 	    leave.s    Test_20
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -572,7 +567,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int32 ConvTest::test20()
+	    call       unsigned int32 Test_r8NaNconv.ConvTest::test20()
 	    leave.s    Test_21
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -589,7 +584,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int64 ConvTest::test21()
+	    call       unsigned int64 Test_r8NaNconv.ConvTest::test21()
 	    leave.s    Test_22
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -606,7 +601,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int32 ConvTest::test22()
+	    call       int32 Test_r8NaNconv.ConvTest::test22()
 	    leave.s    Test_23
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -623,7 +618,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int32 ConvTest::test23()
+	    call       unsigned int32 Test_r8NaNconv.ConvTest::test23()
 	    leave.s    Test_24
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -640,7 +635,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int8 ConvTest::test24()
+	    call       int8 Test_r8NaNconv.ConvTest::test24()
 	    leave.s    Test_25
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -657,7 +652,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int16 ConvTest::test25()
+	    call       int16 Test_r8NaNconv.ConvTest::test25()
 	    leave.s    Test_26
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -674,7 +669,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int32 ConvTest::test26()
+	    call       int32 Test_r8NaNconv.ConvTest::test26()
 	    leave.s    Test_27
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -691,7 +686,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int64 ConvTest::test27()
+	    call       int64 Test_r8NaNconv.ConvTest::test27()
 	    leave.s    Test_28
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -708,7 +703,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int8 ConvTest::test28()
+	    call       unsigned int8 Test_r8NaNconv.ConvTest::test28()
 	    leave.s    Test_29
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -725,7 +720,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int16 ConvTest::test29()
+	    call       unsigned int16 Test_r8NaNconv.ConvTest::test29()
 	    leave.s    Test_30
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -742,7 +737,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int32 ConvTest::test30()
+	    call       unsigned int32 Test_r8NaNconv.ConvTest::test30()
 	    leave.s    Test_31
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -759,7 +754,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int64 ConvTest::test31()
+	    call       unsigned int64 Test_r8NaNconv.ConvTest::test31()
 	    leave.s    Test_32
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -776,7 +771,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       int32 ConvTest::test32()
+	    call       int32 Test_r8NaNconv.ConvTest::test32()
 	    leave.s    Test_33
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -793,7 +788,7 @@
 	  {
 	    ldc.i4.0
 	    stloc.0
-	    call       unsigned int32 ConvTest::test33()
+	    call       unsigned int32 Test_r8NaNconv.ConvTest::test33()
 	    leave.s    Test_34
 	  }  
 	  catch [mscorlib]System.OverflowException 
@@ -835,3 +830,4 @@
   } 
 
 } 
+}

@@ -530,7 +530,7 @@ Dictionary* Dictionary::GetMethodDictionaryWithSizeCheck(MethodDesc* pMD, ULONG 
             *pNewDictionary->GetBackPointerSlot(numGenericArgs) = pDictionary;
 
             // Publish the new dictionary slots to the type.
-            FastInterlockExchangePointer(&pIMD->m_pPerInstInfo, pNewDictionary);
+            InterlockedExchangeT(&pIMD->m_pPerInstInfo, pNewDictionary);
 
             pDictionary = pNewDictionary;
         }
@@ -590,7 +590,7 @@ Dictionary* Dictionary::GetTypeDictionaryWithSizeCheck(MethodTable* pMT, ULONG s
             // Publish the new dictionary slots to the type.
             ULONG dictionaryIndex = pMT->GetNumDicts() - 1;
             Dictionary** pPerInstInfo = pMT->GetPerInstInfo();
-            FastInterlockExchangePointer(pPerInstInfo + dictionaryIndex, pNewDictionary);
+            InterlockedExchangeT(pPerInstInfo + dictionaryIndex, pNewDictionary);
 
             pDictionary = pNewDictionary;
         }
@@ -1081,10 +1081,11 @@ Dictionary::PopulateEntry(
 #if FEATURE_DEFAULT_INTERFACES
                 // If we resolved the constrained call on a value type into a method on a reference type, this is a
                 // default interface method implementation.
+                // If the method is a static method, this is ok, but for instance methods there are boxing issues.
                 // In such case we would need to box the value type before we can dispatch to the implementation.
                 // This would require us to make a "boxing stub". For now we leave the boxing stubs unimplemented.
                 // It's not clear if anyone would need them and the implementation complexity is not worth it at this time.
-                if (!pResolvedMD->GetMethodTable()->IsValueType() && constraintType.GetMethodTable()->IsValueType())
+                if (!pResolvedMD->IsStatic() && !pResolvedMD->GetMethodTable()->IsValueType() && constraintType.GetMethodTable()->IsValueType())
                 {
                     SString assemblyName;
 

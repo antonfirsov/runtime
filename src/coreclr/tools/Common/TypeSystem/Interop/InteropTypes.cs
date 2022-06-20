@@ -44,14 +44,14 @@ namespace Internal.TypeSystem.Interop
             return context.SystemModule.GetKnownType("System.Runtime.InteropServices", "MemoryMarshal");
         }
 
-        public static MetadataType GetStubHelpers(TypeSystemContext context)
-        {
-            return context.SystemModule.GetKnownType("System.StubHelpers", "StubHelpers");
-        }
-
         public static MetadataType GetNativeFunctionPointerWrapper(TypeSystemContext context)
         {
             return context.SystemModule.GetKnownType("System.Runtime.InteropServices", "NativeFunctionPointerWrapper");
+        }
+
+        public static MetadataType GetMarshalDirectiveException(TypeSystemContext context)
+        {
+            return context.SystemModule.GetKnownType("System.Runtime.InteropServices", "MarshalDirectiveException");
         }
 
         public static MetadataType GetVariant(TypeSystemContext context)
@@ -95,6 +95,16 @@ namespace Internal.TypeSystem.Interop
         public static bool IsSystemDecimal(TypeSystemContext context, TypeDesc type)
         {
             return IsCoreNamedType(context, type, "System", "Decimal");
+        }
+
+        public static bool IsSystemDelegate(TypeSystemContext context, TypeDesc type)
+        {
+            return IsCoreNamedType(context, type, "System", "Delegate");
+        }
+
+        public static bool IsSystemMulticastDelegate(TypeSystemContext context, TypeDesc type)
+        {
+            return IsCoreNamedType(context, type, "System", "MulticastDelegate");
         }
 
         public static bool IsSystemGuid(TypeSystemContext context, TypeDesc type)

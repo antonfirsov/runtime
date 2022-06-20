@@ -11,13 +11,6 @@
 
 #include "stdafx.h"
 #include "threadsuspend.h"
-#ifndef TARGET_UNIX
-
-#include "securitywrapper.h"
-#endif
-#include <aclapi.h>
-
-#include "eemessagebox.h"
 
 #ifndef SM_REMOTESESSION
 #define SM_REMOTESESSION 0x1000
@@ -107,28 +100,6 @@ void DebuggerRCThread::CloseIPCHandles()
         m_pDCB->m_rightSideProcessHandle.Close();
     }
 }
-
-//-----------------------------------------------------------------------------
-// Helper to get the proper decorated name
-// Caller ensures that pBufSize is large enough. We'll assert just to check,
-// but no runtime failure.
-// pBuf - the output buffer to write the decorated name in
-// cBufSizeInChars - the size of the buffer in characters, including the null.
-// pPrefx - The undecorated name of the event.
-//-----------------------------------------------------------------------------
-void GetPidDecoratedName(__out_ecount(cBufSizeInChars) WCHAR * pBuf,
-                         int cBufSizeInChars,
-                         const WCHAR * pPrefix)
-{
-    LIMITED_METHOD_CONTRACT;
-
-    DWORD pid = GetCurrentProcessId();
-
-    GetPidDecoratedName(pBuf, cBufSizeInChars, pPrefix, pid);
-}
-
-
-
 
 //-----------------------------------------------------------------------------
 // Simple wrapper to create win32 events.
@@ -513,19 +484,6 @@ HRESULT DebuggerRCThread::SetupRuntimeOffsets(DebuggerIPCControlBlock * pDebugge
     pDebuggerRuntimeOffsets->m_excepNotForRuntimeBPAddr = (void*) ExceptionNotForRuntimeFlare;
     pDebuggerRuntimeOffsets->m_notifyRSOfSyncCompleteBPAddr = (void*) NotifyRightSideOfSyncCompleteFlare;
     pDebuggerRuntimeOffsets->m_debuggerWordTLSIndex = g_debuggerWordTLSIndex;
-
-#if !defined(FEATURE_CORESYSTEM)
-    // Grab the address of RaiseException in kernel32 because we have to play some games with exceptions
-    // that are generated there (just another reason why mixed mode debugging is shady). See bug 476768.
-    HMODULE hModule = WszGetModuleHandle(W("kernel32.dll"));
-    _ASSERTE(hModule != NULL);
-    PREFAST_ASSUME(hModule != NULL);
-    pDebuggerRuntimeOffsets->m_raiseExceptionAddr = GetProcAddress(hModule, "RaiseException");
-    _ASSERTE(pDebuggerRuntimeOffsets->m_raiseExceptionAddr != NULL);
-    hModule = NULL;
-#else
-    pDebuggerRuntimeOffsets->m_raiseExceptionAddr = NULL;
-#endif
 #endif // FEATURE_INTEROP_DEBUGGING
 
     pDebuggerRuntimeOffsets->m_pPatches = DebuggerController::GetPatchTable();
@@ -575,14 +533,14 @@ static LONG _debugFilter(LPEXCEPTION_POINTERS ep, PVOID pv)
 
     SUPPRESS_ALLOCATION_ASSERTS_IN_THIS_SCOPE;
 
-#if defined(_DEBUG) || !defined(FEATURE_CORESYSTEM)
+#if defined(_DEBUG)
     DebuggerIPCEvent *event = ((DebugFilterParam *)pv)->event;
 
     DWORD pid = GetCurrentProcessId();
     DWORD tid = GetCurrentThreadId();
 
     DebuggerIPCEventType type = (DebuggerIPCEventType) (event->type & DB_IPCE_TYPE_MASK);
-#endif // _DEBUG || !FEATURE_CORESYSTEM
+#endif // _DEBUG
 
     // We should never AV here. In a debug build, throw up an assert w/ lots of useful (private) info.
 #ifdef _DEBUG
@@ -605,24 +563,12 @@ static LONG _debugFilter(LPEXCEPTION_POINTERS ep, PVOID pv)
         EX_END_CATCH(RethrowTerminalExceptions);
 
         CONSISTENCY_CHECK_MSGF(false,
-            ("Unhandled exception on the helper thread.\nEvent=%s(0x%x)\nCode=0x%0x, Ip=0x%p, .cxr=%p, .exr=%p.\n pid=0x%x (%d), tid=0x%x (%d).\n-----\nStack of exception:\n%s\n----\n",
+            ("Unhandled exception on the helper thread.\nEvent=%s(0x%p)\nCode=0x%0x, Ip=0x%p, .cxr=%p, .exr=%p.\n pid=0x%x (%d), tid=0x%x (%d).\n-----\nStack of exception:\n%s\n----\n",
             IPCENames::GetName(type), type,
             ep->ExceptionRecord->ExceptionCode, GetIP(ep->ContextRecord), ep->ContextRecord, ep->ExceptionRecord,
             pid, pid, tid, tid,
             string));
     }
-#endif
-
-// this message box doesn't work well on coresystem... we actually get in a recursive exception handling loop
-#ifndef FEATURE_CORESYSTEM
-    // We took an AV on the helper thread. This is a catastrophic situation so we can
-    // simply call the EE's catastrophic message box to display the error.
-    EEMessageBoxCatastrophic(
-        IDS_DEBUG_UNHANDLEDEXCEPTION_IPC, IDS_DEBUG_SERVICE_CAPTION,
-        type,
-        ep->ExceptionRecord->ExceptionCode,
-        GetIP(ep->ContextRecord),
-        pid, pid, tid, tid);
 #endif
 
     // For debugging, we can change the behavior by manually setting eax.
@@ -848,7 +794,7 @@ bool DebuggerRCThread::HandleRSEA()
     memcpy(e, GetIPCEventReceiveBuffer(), CorDBIPC_BUFFER_SIZE);
 #else
     // Be sure to fetch the event into the official receive buffer since some event handlers assume it's there
-    // regardless of the the event buffer pointer passed to them.
+    // regardless of the event buffer pointer passed to them.
     e = GetIPCEventReceiveBuffer();
     g_pDbgTransport->GetNextEvent(e, CorDBIPC_BUFFER_SIZE);
 #endif // !FEATURE_DBGIPC_TRANSPOPRT
@@ -1598,7 +1544,7 @@ HRESULT DebuggerRCThread::SendIPCEvent()
 
     DebuggerIPCEvent* pManagedEvent = GetIPCEventSendBuffer();
 
-    STRESS_LOG2(LF_CORDB, LL_INFO1000, "D::SendIPCEvent %s to outofproc appD 0x%x,\n",
+    STRESS_LOG2(LF_CORDB, LL_INFO1000, "D::SendIPCEvent %s to outofproc appD 0x%p,\n",
             IPCENames::GetName(pManagedEvent->type),
             VmPtrToCookie(pManagedEvent->vmAppDomain));
 
@@ -1636,7 +1582,7 @@ bool DebuggerRCThread::IsRCThreadReady()
     // leaving the threadid still non-0. So check the actual thread object
     // and make sure it's still around.
     int ret = WaitForSingleObject(m_thread, 0);
-    LOG((LF_CORDB, LL_EVERYTHING, "DRCT::IsReady - wait(0x%x)=%d, GetLastError() = %d\n", m_thread, ret, GetLastError()));
+    LOG((LF_CORDB, LL_EVERYTHING, "DRCT::IsReady - wait(0x%p)=%d, GetLastError() = %d\n", m_thread, ret, GetLastError()));
 
     if (ret != WAIT_TIMEOUT)
     {
@@ -1756,7 +1702,7 @@ void DebuggerRCThread::DoFavor(FAVORCALLBACK fp, void * pData)
         GCX_PREEMP();
 
         DWORD ret = WaitForMultipleObjectsEx(
-            NumItems(waitset),
+            ARRAY_SIZE(waitset),
             waitset,
             FALSE,
             INFINITE,

@@ -16,21 +16,14 @@
 .assembly 'box'// as "box"
 {
 }
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module 'box.exe'
+.assembly extern xunit.core {}
 // MVID: {8CBD3D83-F5B6-41AC-9D7A-099A59884AC4}
-.namespace JitTest
+.namespace JitTest_box_misc_il
 {
-  .class private auto ansi Test
+  .class public auto ansi Test
          extends ['mscorlib']System.Object
   {
-    .method private hidebysig static int32
+    .method public hidebysig static int32
             Main() il managed
     {
       .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
@@ -127,6 +120,6 @@
 
   } // end of class 'Test'
 
-} // end of namespace 'JitTest'
+} // end of namespace 'JitTest_box_misc_il'
 
 //*********** DISASSEMBLY COMPLETE ***********************

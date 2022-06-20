@@ -32,7 +32,7 @@
 #include "posterror.h"
 #include <corerror.h>
 #include <mscoree.h>
-#include "mtx.h"
+#include <mtx.h>
 #include "cgencpu.h"
 #include "interopconverter.h"
 #include "cominterfacemarshaler.h"
@@ -1152,7 +1152,7 @@ Dispatch_GetTypeInfo(IDispatch* pDisp, unsigned int itinfo, LCID lcid, ITypeInfo
 }
 
 HRESULT __stdcall
-Dispatch_GetIDsOfNames(IDispatch* pDisp, REFIID riid, __in_ecount(cNames) OLECHAR **rgszNames, unsigned int cNames, LCID lcid, DISPID *rgdispid)
+Dispatch_GetIDsOfNames(IDispatch* pDisp, REFIID riid, _In_reads_(cNames) OLECHAR **rgszNames, unsigned int cNames, LCID lcid, DISPID *rgdispid)
 {
     CONTRACTL
 {
@@ -1231,7 +1231,7 @@ OleAutDispatchImpl_GetIDsOfNames
 (
     IDispatch* pDisp,
     REFIID riid,
-    __in_ecount(cNames) OLECHAR **rgszNames,
+    _In_reads_(cNames) OLECHAR **rgszNames,
     unsigned int cNames,
     LCID lcid,
     DISPID *rgdispid
@@ -1334,7 +1334,7 @@ HRESULT __stdcall
 InternalDispatchImpl_GetIDsOfNames (
     IDispatch* pDisp,
     REFIID riid,
-    __in_ecount(cNames) OLECHAR **rgszNames,
+    _In_reads_(cNames) OLECHAR **rgszNames,
     unsigned int cNames,
     LCID lcid,
     DISPID *rgdispid)
@@ -1560,7 +1560,7 @@ HRESULT __stdcall   DispatchEx_GetTypeInfo (
 HRESULT __stdcall   DispatchEx_GetIDsOfNames (
                                     IDispatchEx* pDisp,
                                     REFIID riid,
-                                    __in_ecount(cNames) OLECHAR **rgszNames,
+                                    _In_reads_(cNames) OLECHAR **rgszNames,
                                     unsigned int cNames,
                                     LCID lcid,
                                     DISPID *rgdispid
@@ -2171,7 +2171,7 @@ HRESULT __stdcall Marshal_GetUnmarshalClass (
     {
         if(!pSimpleWrap->GetComCallWrapperTemplate()->IsSafeTypeForMarshalling())
         {
-            LogInterop(W("Unmarshal class blocked for reflection types."));
+            LogInterop("Unmarshal class blocked for reflection types.");
             hr = E_NOINTERFACE;
             return hr;
         }
@@ -2241,7 +2241,7 @@ HRESULT __stdcall Marshal_MarshalInterface (
     {
         if(!pSimpleWrap->GetComCallWrapperTemplate()->IsSafeTypeForMarshalling())
         {
-            LogInterop(W("Marshal interface blocked for reflection types."));
+            LogInterop("Marshal interface blocked for reflection types.");
             hr = E_NOINTERFACE;
             return hr;
         }

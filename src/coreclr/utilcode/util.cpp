@@ -19,66 +19,12 @@
 #include "corinfo.h"
 #include "volatile.h"
 #include "mdfileformat.h"
+#include <configuration.h>
 
 #ifndef DACCESS_COMPILE
 UINT32 g_nClrInstanceId = 0;
 #endif //!DACCESS_COMPILE
 
-//********** Code. ************************************************************
-
-#if defined(FEATURE_COMINTEROP) && !defined(FEATURE_CORESYSTEM)
-extern WinRTStatusEnum gWinRTStatus = WINRT_STATUS_UNINITED;
-#endif // FEATURE_COMINTEROP && !FEATURE_CORESYSTEM
-
-#if defined(FEATURE_COMINTEROP) && !defined(FEATURE_CORESYSTEM)
-//------------------------------------------------------------------------------
-//
-// Attempt to detect the presense of Windows Runtime support on the current OS.
-// Our algorithm to do this is to ensure that:
-//      1. combase.dll exists
-//      2. combase.dll contains a RoInitialize export
-//
-
-void InitWinRTStatus()
-{
-    STATIC_CONTRACT_NOTHROW;
-    STATIC_CONTRACT_GC_NOTRIGGER;
-    STATIC_CONTRACT_CANNOT_TAKE_LOCK;
-
-    WinRTStatusEnum winRTStatus = WINRT_STATUS_UNSUPPORTED;
-
-    const WCHAR wszComBaseDll[] = W("\\combase.dll");
-    const SIZE_T cchComBaseDll = _countof(wszComBaseDll);
-
-    WCHAR wszComBasePath[MAX_LONGPATH + 1];
-    const SIZE_T cchComBasePath = _countof(wszComBasePath);
-
-    ZeroMemory(wszComBasePath, cchComBasePath * sizeof(wszComBasePath[0]));
-
-    UINT cchSystemDirectory = WszGetSystemDirectory(wszComBasePath, MAX_LONGPATH);
-
-    // Make sure that we're only probing in the system directory.  If we can't find the system directory, or
-    // we find it but combase.dll doesn't fit into it, we'll fall back to a safe default of saying that WinRT
-    // is simply not present.
-    if (cchSystemDirectory > 0 && cchComBasePath - cchSystemDirectory >= cchComBaseDll)
-    {
-        if (wcscat_s(wszComBasePath, wszComBaseDll) == 0)
-        {
-            HModuleHolder hComBase(WszLoadLibrary(wszComBasePath));
-            if (hComBase != NULL)
-            {
-                FARPROC activateInstace = GetProcAddress(hComBase, "RoInitialize");
-                if (activateInstace != NULL)
-                {
-                    winRTStatus = WINRT_STATUS_SUPPORTED;
-                }
-            }
-        }
-    }
-
-    gWinRTStatus = winRTStatus;
-}
-#endif // FEATURE_COMINTEROP && !FEATURE_CORESYSTEM
 //*****************************************************************************
 // Convert a string of hex digits into a hex value of the specified # of bytes.
 //*****************************************************************************
@@ -459,7 +405,7 @@ BYTE * ClrVirtualAllocWithinRange(const BYTE *pMinAddr,
     }
 
 #ifdef HOST_UNIX
-    pResult = (BYTE *)PAL_VirtualReserveFromExecutableMemoryAllocatorWithinRange(pMinAddr, pMaxAddr, dwSize);
+    pResult = (BYTE *)PAL_VirtualReserveFromExecutableMemoryAllocatorWithinRange(pMinAddr, pMaxAddr, dwSize, TRUE /* fStoreAllocationInfo */);
     if (pResult != nullptr)
     {
         return pResult;
@@ -563,7 +509,7 @@ BYTE * ClrVirtualAllocWithinRange(const BYTE *pMinAddr,
 //******************************************************************************
 // NumaNodeInfo
 //******************************************************************************
-#if !defined(FEATURE_REDHAWK)
+#if !defined(FEATURE_NATIVEAOT)
 
 /*static*/ LPVOID NumaNodeInfo::VirtualAllocExNuma(HANDLE hProc, LPVOID lpAddr, SIZE_T dwSize,
                          DWORD allocType, DWORD prot, DWORD node)
@@ -581,7 +527,7 @@ BYTE * ClrVirtualAllocWithinRange(const BYTE *pMinAddr,
     if (m_enableGCNumaAware)
     {
         DWORD currentProcsOnNode = 0;
-        for (int i = 0; i < m_nNodes; i++)
+        for (uint16_t i = 0; i < m_nNodes; i++)
         {
             GROUP_AFFINITY processorMask;
             if (GetNumaNodeProcessorMaskEx(i, &processorMask))
@@ -617,7 +563,7 @@ BYTE * ClrVirtualAllocWithinRange(const BYTE *pMinAddr,
 /*static*/ uint16_t NumaNodeInfo::m_nNodes = 0;
 /*static*/ BOOL NumaNodeInfo::InitNumaNodeInfoAPI()
 {
-#if !defined(FEATURE_REDHAWK)
+#if !defined(FEATURE_NATIVEAOT)
     //check for numa support if multiple heaps are used
     ULONG highest = 0;
 
@@ -651,7 +597,7 @@ BYTE * ClrVirtualAllocWithinRange(const BYTE *pMinAddr,
 //******************************************************************************
 // CPUGroupInfo
 //******************************************************************************
-#if !defined(FEATURE_REDHAWK)
+#if !defined(FEATURE_NATIVEAOT)
 /*static*/ //CPUGroupInfo::PNTQSIEx CPUGroupInfo::m_pNtQuerySystemInformationEx = NULL;
 
 /*static*/ BOOL CPUGroupInfo::GetLogicalProcessorInformationEx(LOGICAL_PROCESSOR_RELATIONSHIP relationship,
@@ -695,7 +641,7 @@ BYTE * ClrVirtualAllocWithinRange(const BYTE *pMinAddr,
 /*static*/ CPU_Group_Info *CPUGroupInfo::m_CPUGroupInfoArray = NULL;
 /*static*/ LONG CPUGroupInfo::m_initialization = 0;
 
-#if !defined(FEATURE_REDHAWK) && (defined(TARGET_AMD64) || defined(TARGET_ARM64))
+#if !defined(FEATURE_NATIVEAOT) && (defined(TARGET_AMD64) || defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64))
 // Calculate greatest common divisor
 DWORD GCD(DWORD u, DWORD v)
 {
@@ -725,7 +671,7 @@ DWORD LCM(DWORD u, DWORD v)
     }
     CONTRACTL_END;
 
-#if !defined(FEATURE_REDHAWK) && (defined(TARGET_AMD64) || defined(TARGET_ARM64))
+#if !defined(FEATURE_NATIVEAOT) && (defined(TARGET_AMD64) || defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64))
     BYTE *bBuffer = NULL;
     SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *pSLPIEx = NULL;
     SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *pRecord = NULL;
@@ -734,8 +680,8 @@ DWORD LCM(DWORD u, DWORD v)
     DWORD dwNumElements = 0;
     DWORD dwWeight = 1;
 
-    if (CPUGroupInfo::GetLogicalProcessorInformationEx(RelationGroup, pSLPIEx, &cbSLPIEx) &&
-                      GetLastError() != ERROR_INSUFFICIENT_BUFFER)
+    if (CPUGroupInfo::GetLogicalProcessorInformationEx(RelationGroup, pSLPIEx, &cbSLPIEx) ||
+        GetLastError() != ERROR_INSUFFICIENT_BUFFER)
         return FALSE;
 
     _ASSERTE(cbSLPIEx);
@@ -775,6 +721,7 @@ DWORD LCM(DWORD u, DWORD v)
     {
         m_CPUGroupInfoArray[i].nr_active   = (WORD)pRecord->Group.GroupInfo[i].ActiveProcessorCount;
         m_CPUGroupInfoArray[i].active_mask = pRecord->Group.GroupInfo[i].ActiveProcessorMask;
+        m_CPUGroupInfoArray[i].begin       = m_nProcessors;
         m_nProcessors += m_CPUGroupInfoArray[i].nr_active;
         dwWeight = LCM(dwWeight, (DWORD)m_CPUGroupInfoArray[i].nr_active);
     }
@@ -796,27 +743,6 @@ DWORD LCM(DWORD u, DWORD v)
 #endif
 }
 
-/*static*/ BOOL CPUGroupInfo::InitCPUGroupInfoRange()
-{
-    LIMITED_METHOD_CONTRACT;
-
-#if !defined(FEATURE_REDHAWK) && (defined(TARGET_AMD64) || defined(TARGET_ARM64))
-    WORD begin   = 0;
-    WORD nr_proc = 0;
-
-    for (WORD i = 0; i < m_nGroups; i++)
-    {
-        nr_proc += m_CPUGroupInfoArray[i].nr_active;
-        m_CPUGroupInfoArray[i].begin = begin;
-        m_CPUGroupInfoArray[i].end   = nr_proc - 1;
-        begin = nr_proc;
-    }
-    return TRUE;
-#else
-    return FALSE;
-#endif
-}
-
 /*static*/ void CPUGroupInfo::InitCPUGroupInfo()
 {
     CONTRACTL
@@ -826,8 +752,8 @@ DWORD LCM(DWORD u, DWORD v)
     }
     CONTRACTL_END;
 
-#if !defined(FEATURE_REDHAWK) && (defined(TARGET_AMD64) || defined(TARGET_ARM64))
-    BOOL enableGCCPUGroups = CLRConfig::GetConfigValue(CLRConfig::EXTERNAL_GCCpuGroup) != 0;
+#if !defined(FEATURE_NATIVEAOT) && (defined(TARGET_AMD64) || defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64))
+    BOOL enableGCCPUGroups = Configuration::GetKnobBooleanValue(W("System.GC.CpuGroup"), CLRConfig::EXTERNAL_GCCpuGroup);
 
     if (!enableGCCPUGroups)
         return;
@@ -835,20 +761,17 @@ DWORD LCM(DWORD u, DWORD v)
     if (!InitCPUGroupInfoArray())
         return;
 
-    if (!InitCPUGroupInfoRange())
-        return;
-
-    // initalGroup is whatever the CPU group that the main thread is running on
-    GROUP_AFFINITY groupAffinity;
-    CPUGroupInfo::GetThreadGroupAffinity(GetCurrentThread(), &groupAffinity);
-    m_initialGroup = groupAffinity.Group;
-
-    // only enable CPU groups if more than one group exists
+    // Enable processor groups only if more than one group exists
     if (m_nGroups > 1)
     {
         m_enableGCCPUGroups = TRUE;
         m_threadUseAllCpuGroups = CLRConfig::GetConfigValue(CLRConfig::EXTERNAL_Thread_UseAllCpuGroups) != 0;
         m_threadAssignCpuGroups = CLRConfig::GetConfigValue(CLRConfig::EXTERNAL_Thread_AssignCpuGroups) != 0;
+
+        // Save the processor group affinity of the initial thread
+        GROUP_AFFINITY groupAffinity;
+        CPUGroupInfo::GetThreadGroupAffinity(GetCurrentThread(), &groupAffinity);
+        m_initialGroup = groupAffinity.Group;
     }
 #endif
 }
@@ -906,7 +829,7 @@ DWORD LCM(DWORD u, DWORD v)
 {
     LIMITED_METHOD_CONTRACT;
 
-#if !defined(FEATURE_REDHAWK) && (defined(TARGET_AMD64) || defined(TARGET_ARM64))
+#if !defined(FEATURE_NATIVEAOT) && (defined(TARGET_AMD64) || defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64))
     WORD bTemp = 0;
     WORD bDiff = processor_number - bTemp;
 
@@ -937,7 +860,7 @@ DWORD LCM(DWORD u, DWORD v)
     }
     CONTRACTL_END;
 
-#if !defined(FEATURE_REDHAWK) && (defined(TARGET_AMD64) || defined(TARGET_ARM64))
+#if !defined(FEATURE_NATIVEAOT) && (defined(TARGET_AMD64) || defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64))
     _ASSERTE(m_enableGCCPUGroups && m_threadUseAllCpuGroups);
 
     PROCESSOR_NUMBER proc_no;
@@ -975,7 +898,7 @@ DWORD LCM(DWORD u, DWORD v)
     return false;
 }
 
-#if !defined(FEATURE_REDHAWK)
+#if !defined(FEATURE_NATIVEAOT)
 //Lock ThreadStore before calling this function, so that updates of weights/counts are consistent
 /*static*/ void CPUGroupInfo::ChooseCPUGroupAffinity(GROUP_AFFINITY *gf)
 {
@@ -986,7 +909,7 @@ DWORD LCM(DWORD u, DWORD v)
     }
     CONTRACTL_END;
 
-#if (defined(TARGET_AMD64) || defined(TARGET_ARM64))
+#if (defined(TARGET_AMD64) || defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64))
     WORD i, minGroup = 0;
     DWORD minWeight = 0;
 
@@ -1028,7 +951,7 @@ found:
 /*static*/ void CPUGroupInfo::ClearCPUGroupAffinity(GROUP_AFFINITY *gf)
 {
     LIMITED_METHOD_CONTRACT;
-#if (defined(TARGET_AMD64) || defined(TARGET_ARM64))
+#if (defined(TARGET_AMD64) || defined(TARGET_ARM64) || defined(TARGET_LOONGARCH64))
     _ASSERTE(m_enableGCCPUGroups && m_threadUseAllCpuGroups && m_threadAssignCpuGroups);
 
     WORD group = gf->Group;
@@ -1338,7 +1261,7 @@ void ConfigString::init(const CLRConfig::ConfigStringInfo & info)
 // MyAssembly;mscorlib;System
 // MyAssembly;mscorlib System
 
-AssemblyNamesList::AssemblyNamesList(__in LPWSTR list)
+AssemblyNamesList::AssemblyNamesList(_In_ LPWSTR list)
 {
     CONTRACTL {
         THROWS;
@@ -1430,7 +1353,7 @@ bool AssemblyNamesList::IsInList(LPCUTF8 assemblyName)
 // "MyClass:foo2 MyClass:*" will match under _DEBUG
 //
 
-void MethodNamesListBase::Insert(__in_z LPWSTR str)
+void MethodNamesListBase::Insert(_In_z_ LPWSTR str)
 {
     CONTRACTL {
         THROWS;
@@ -1805,9 +1728,7 @@ HRESULT validateOneArg(
                 // Validate the referenced type.
                 if(FAILED(hr = validateOneArg(tk, pSig, pulNSentinels, pImport, FALSE))) IfFailGo(hr);
                 break;
-            case ELEMENT_TYPE_BYREF:  //fallthru
-                if(TypeFromToken(tk)==mdtFieldDef) IfFailGo(VLDTR_E_SIG_BYREFINFIELD);
-                FALLTHROUGH;
+            case ELEMENT_TYPE_BYREF:
             case ELEMENT_TYPE_PINNED:
             case ELEMENT_TYPE_SZARRAY:
                 // Validate the referenced type.
@@ -3083,7 +3004,7 @@ namespace Reg
         }
     }
 
-    HRESULT ReadStringValue(HKEY hKey, LPCWSTR wszSubKey, LPCWSTR wszName, __deref_out __deref_out_z LPWSTR* pwszValue)
+    HRESULT ReadStringValue(HKEY hKey, LPCWSTR wszSubKey, LPCWSTR wszName, _Outptr_ _Outptr_result_z_ LPWSTR* pwszValue)
     {
         CONTRACTL {
             NOTHROW;
@@ -3116,7 +3037,7 @@ namespace Com
             STANDARD_VM_CONTRACT;
 
             WCHAR wszClsid[39];
-            if (GuidToLPWSTR(rclsid, wszClsid, NumItems(wszClsid)) == 0)
+            if (GuidToLPWSTR(rclsid, wszClsid, ARRAY_SIZE(wszClsid)) == 0)
                 return E_UNEXPECTED;
 
             StackSString ssKeyName;

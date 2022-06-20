@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="ApplicationNameSetFromAgrument\ApplicationNameSetFromAgrument.csproj" />
+    <ProjectReference Include="ApplicationNameSetFromArgument\ApplicationNameSetFromArgument.csproj" />
     <ProjectReference Include="BuildWebHostInvalidSignature\BuildWebHostInvalidSignature.csproj" />
     <ProjectReference Include="BuildWebHostPatternTestSite\BuildWebHostPatternTestSite.csproj" />
     <ProjectReference Include="CreateHostBuilderInvalidSignature\CreateHostBuilderInvalidSignature.csproj" />
@@ -28,6 +28,7 @@
     <ProjectReference Include="NoSpecialEntryPointPatternHangs\NoSpecialEntryPointPatternHangs.csproj" />
     <ProjectReference Include="NoSpecialEntryPointPatternMainNoArgs\NoSpecialEntryPointPatternMainNoArgs.csproj" />
     <ProjectReference Include="TopLevelStatements\TopLevelStatements.csproj" />
+    <ProjectReference Include="TopLevelStatementsTestsTimeout\TopLevelStatementsTestsTimeout.csproj" />
   </ItemGroup>
 
   <ItemGroup>

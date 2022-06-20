@@ -22,7 +22,7 @@
 // string.
 //
 // If you need a direct non-unicode representation, you will have to provide a fresh SString which can
-// recieve a conversion operation if necessary.
+// receive a conversion operation if necessary.
 //
 // The alternate encodings available are:
 // 1. ASCII - string consisting entirely of ASCII (7 bit) characters.  This is the only 1 byte encoding
@@ -192,7 +192,7 @@ private:
     // Set this string to the UTF8 character
     void SetUTF8(CHAR character);
 
-    // This this string to the given literal. We share the mem and don't make a copy.
+    // Set this string to the given literal. We share the mem and don't make a copy.
     void SetLiteral(const CHAR *literal);
     void SetLiteral(const WCHAR *literal);
 
@@ -632,7 +632,7 @@ private:
 
     // Copy the string from the target into the provided buffer, converting to unicode if necessary
     bool DacGetUnicode(COUNT_T                                  bufChars,
-                       __out_z __inout_ecount(bufChars) WCHAR * buffer,
+                       _Inout_updates_z_(bufChars) WCHAR * buffer,
                        COUNT_T *                                needChars) const;
 
     void EnumMemoryRegions(CLRDataEnumMemoryFlags flags) const
@@ -651,19 +651,12 @@ private:
     // preferred in this case.
     void Printf(const CHAR *format, ...);
     void VPrintf(const CHAR *format, va_list args);
-
-    void Printf(const WCHAR *format, ...);
-    void PPrintf(const WCHAR *format, ...);
-    void VPrintf(const WCHAR *format, va_list args);
-
-    void PVPrintf(const WCHAR *format, va_list args);
-
     void AppendPrintf(const CHAR *format, ...);
     void AppendVPrintf(const CHAR *format, va_list args);
 
-    void AppendPrintf(const WCHAR *format, ...);
-    void AppendVPrintf(const WCHAR *format, va_list args);
+    void Printf(const WCHAR *format, ...);
 
+public:
     BOOL LoadResource(CCompRC::ResourceCategory eCategory, int resourceID);
     HRESULT LoadResourceAndReturnHR(CCompRC::ResourceCategory eCategory, int resourceID);
     HRESULT LoadResourceAndReturnHR(CCompRC* pResourceDLL, CCompRC::ResourceCategory eCategory, int resourceID);

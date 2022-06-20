@@ -16,21 +16,14 @@
 .assembly 'binop'// as "binop"
 {
 }
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module 'binop.exe'
+.assembly extern xunit.core {}
 // MVID: {E24B38CB-1AB3-45BA-AA54-5C10DD72CDBA}
-.namespace JitTest
+.namespace JitTest_binop_misc_il
 {
-  .class private auto ansi Test
+  .class public auto ansi Test
          extends ['mscorlib']System.Object
   {
-    .method private hidebysig static int32
+    .method public hidebysig static int32
             Main() il managed
     {
       .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
@@ -133,6 +126,6 @@
 
   } // end of class 'Test'
 
-} // end of namespace 'JitTest'
+} // end of namespace 'JitTest_binop_misc_il'
 
 //*********** DISASSEMBLY COMPLETE ***********************

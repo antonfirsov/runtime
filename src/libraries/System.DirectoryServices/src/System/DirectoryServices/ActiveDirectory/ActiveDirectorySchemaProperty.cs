@@ -102,10 +102,7 @@ namespace System.DirectoryServices.ActiveDirectory
         #region constructors
         public ActiveDirectorySchemaProperty(DirectoryContext context, string ldapDisplayName)
         {
-            if (context == null)
-            {
-                throw new ArgumentNullException(nameof(context));
-            }
+            ArgumentNullException.ThrowIfNull(context);
 
             if ((context.Name == null) && (!context.isRootDomain()))
             {
@@ -121,10 +118,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
             }
 
-            if (ldapDisplayName == null)
-            {
-                throw new ArgumentNullException(nameof(ldapDisplayName));
-            }
+            ArgumentNullException.ThrowIfNull(ldapDisplayName);
 
             if (ldapDisplayName.Length == 0)
             {
@@ -280,13 +274,9 @@ namespace System.DirectoryServices.ActiveDirectory
         #region public methods
         public static ActiveDirectorySchemaProperty FindByName(DirectoryContext context, string ldapDisplayName)
         {
+            ArgumentNullException.ThrowIfNull(context);
+
             ActiveDirectorySchemaProperty? schemaProperty = null;
-
-            if (context == null)
-            {
-                throw new ArgumentNullException(nameof(context));
-            }
-
             if ((context.Name == null) && (!context.isRootDomain()))
             {
                 throw new ArgumentException(SR.ContextNotAssociatedWithDomain, nameof(context));
@@ -301,10 +291,7 @@ namespace System.DirectoryServices.ActiveDirectory
                 }
             }
 
-            if (ldapDisplayName == null)
-            {
-                throw new ArgumentNullException(nameof(ldapDisplayName));
-            }
+            ArgumentNullException.ThrowIfNull(ldapDisplayName);
 
             if (ldapDisplayName.Length == 0)
             {

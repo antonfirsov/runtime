@@ -361,13 +361,20 @@ namespace Internal.JitInterface
         private MethodWithGCInfo _methodCodeNode;
         private OffsetMapping[] _debugLocInfos;
         private NativeVarInfo[] _debugVarInfos;
-        private ArrayBuilder<MethodDesc> _inlinedMethods;
+        private HashSet<MethodDesc> _inlinedMethods;
         private UnboxingMethodDescFactory _unboxingThunkFactory = new UnboxingMethodDescFactory();
+        private List<ISymbolNode> _precodeFixups;
 
         public CorInfoImpl(ReadyToRunCodegenCompilation compilation)
             : this()
         {
             _compilation = compilation;
+        }
+
+        private void AddPrecodeFixup(ISymbolNode node)
+        {
+            _precodeFixups = _precodeFixups ?? new List<ISymbolNode>();
+            _precodeFixups.Add(node);
         }
 
         private static mdToken FindGenericMethodArgTypeSpec(EcmaModule module)
@@ -590,7 +597,7 @@ namespace Internal.JitInterface
             return true;
         }
 
-        private void getReadyToRunDelegateCtorHelper(ref CORINFO_RESOLVED_TOKEN pTargetMethod, CORINFO_CLASS_STRUCT_* delegateType, ref CORINFO_LOOKUP pLookup)
+        private void getReadyToRunDelegateCtorHelper(ref CORINFO_RESOLVED_TOKEN pTargetMethod, mdToken targetConstraint, CORINFO_CLASS_STRUCT_* delegateType, ref CORINFO_LOOKUP pLookup)
         {
 #if DEBUG
             // In debug, write some bogus data to the struct to ensure we have filled everything
@@ -703,9 +710,6 @@ namespace Internal.JitInterface
                     break;
                 case CorInfoHelpFunc.CORINFO_HELP_NEW_MDARR:
                     id = ReadyToRunHelper.NewMultiDimArr;
-                    break;
-                case CorInfoHelpFunc.CORINFO_HELP_NEW_MDARR_NONVARARG:
-                    id = ReadyToRunHelper.NewMultiDimArr_NonVarArg;
                     break;
                 case CorInfoHelpFunc.CORINFO_HELP_NEWFAST:
                     id = ReadyToRunHelper.NewObject;
@@ -970,8 +974,8 @@ namespace Internal.JitInterface
 
         private ModuleToken HandleToModuleToken(ref CORINFO_RESOLVED_TOKEN pResolvedToken, MethodDesc methodDesc, out object context, ref TypeDesc constrainedType)
         {
-            if (methodDesc != null && (_compilation.NodeFactory.CompilationModuleGroup.VersionsWithMethodBody(methodDesc) 
-                || (pResolvedToken.tokenType == CorInfoTokenKind.CORINFO_TOKENKIND_DevirtualizedMethod) 
+            if (methodDesc != null && (_compilation.NodeFactory.CompilationModuleGroup.VersionsWithMethodBody(methodDesc)
+                || (pResolvedToken.tokenType == CorInfoTokenKind.CORINFO_TOKENKIND_DevirtualizedMethod)
                 || methodDesc.IsPInvoke))
             {
                 if ((CorTokenType)(unchecked((uint)pResolvedToken.token) & 0xFF000000u) == CorTokenType.mdtMethodDef &&
@@ -1129,7 +1133,7 @@ namespace Internal.JitInterface
             {
                 _debugVarInfos[i] = vars[i];
             }
-            
+
             // JIT gave the ownership of this to us, so need to free this.
             freeArray(vars);
         }
@@ -1146,7 +1150,7 @@ namespace Internal.JitInterface
             {
                 _debugLocInfos[i] = pMap[i];
             }
-            
+
             // JIT gave the ownership of this to us, so need to free this.
             freeArray(pMap);
         }
@@ -1330,7 +1334,7 @@ namespace Internal.JitInterface
                     if (_compilation.SymbolNodeFactory.VerifyTypeAndFieldLayout && (fieldOffset <= FieldFixupSignature.MaxCheckableOffset))
                     {
                         // ENCODE_CHECK_FIELD_OFFSET
-                        _methodCodeNode.Fixups.Add(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
+                        AddPrecodeFixup(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
                     }
                 }
                 else
@@ -1384,7 +1388,7 @@ namespace Internal.JitInterface
                         if (_compilation.SymbolNodeFactory.VerifyTypeAndFieldLayout && (fieldOffset <= FieldFixupSignature.MaxCheckableOffset))
                         {
                             // ENCODE_CHECK_FIELD_OFFSET
-                            _methodCodeNode.Fixups.Add(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
+                            AddPrecodeFixup(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
                         }
 
                         pResult->fieldLookup = CreateConstLookupToSymbol(
@@ -1531,7 +1535,7 @@ namespace Internal.JitInterface
                     // Either
                     //    1. no constraint resolution at compile time (!directMethod)
                     // OR 2. no code sharing lookup in call
-                    // OR 3. we have have resolved to an instantiating stub
+                    // OR 3. we have resolved to an instantiating stub
 
                     // This check for introducing an instantiation stub comes from the logic in
                     // MethodTable::TryResolveConstraintMethodApprox at
@@ -1599,6 +1603,7 @@ namespace Internal.JitInterface
 
             if ((flags & CORINFO_CALLINFO_FLAGS.CORINFO_CALLINFO_LDFTN) != 0)
             {
+                PrepareForUseAsAFunctionPointer(targetMethod);
                 directCall = true;
             }
             else
@@ -1644,7 +1649,7 @@ namespace Internal.JitInterface
                     //  3) JIT intrinsics - since they have pre-defined behavior
                     devirt = targetMethod.OwningType.IsValueType ||
                         (targetMethod.OwningType.IsDelegate && targetMethod.Name == "Invoke") ||
-                        (targetMethod.IsIntrinsic && getIntrinsicID(targetMethod, null) != CorInfoIntrinsics.CORINFO_INTRINSIC_Illegal);
+                        (targetMethod.OwningType.IsObject && targetMethod.Name == "GetType");
 
                     callVirtCrossingVersionBubble = true;
                 }
@@ -1813,7 +1818,7 @@ namespace Internal.JitInterface
 
             pResult->wrapperDelegateInvoke = false;
 
-            Get_CORINFO_SIG_INFO(methodToCall, &pResult->sig, useInstantiatingStub);
+            Get_CORINFO_SIG_INFO(methodToCall, &pResult->sig, scope: null, useInstantiatingStub);
         }
 
         private uint getMethodAttribs(CORINFO_METHOD_STRUCT_* ftn)
@@ -1821,6 +1826,17 @@ namespace Internal.JitInterface
             MethodDesc method = HandleToObject(ftn);
             return getMethodAttribsInternal(method);
             // OK, if the EE said we're not doing a stub dispatch then just return the kind to
+        }
+
+        private void PrepareForUseAsAFunctionPointer(MethodDesc method)
+        {
+            foreach (TypeDesc type in method.Signature)
+            {
+                if (type.IsValueType)
+                {
+                    classMustBeLoadedBeforeCodeIsRun(type);
+                }
+            }
         }
 
         private void classMustBeLoadedBeforeCodeIsRun(CORINFO_CLASS_STRUCT_* cls)
@@ -1834,7 +1850,7 @@ namespace Internal.JitInterface
             if (!type.IsPrimitive)
             {
                 ISymbolNode node = _compilation.SymbolNodeFactory.CreateReadyToRunHelper(ReadyToRunHelperId.TypeHandle, type);
-                _methodCodeNode.Fixups.Add(node);
+                AddPrecodeFixup(node);
             }
         }
 
@@ -2326,17 +2342,6 @@ namespace Internal.JitInterface
             return !_compilation.IsLayoutFixedInCurrentVersionBubble(type) || (_compilation.SymbolNodeFactory.VerifyTypeAndFieldLayout && !((MetadataType)type).IsNonVersionable());
         }
 
-        private bool HasLayoutMetadata(TypeDesc type)
-        {
-            if (type.IsValueType && (MarshalUtils.IsBlittableType(type) || ReadyToRunMetadataFieldLayoutAlgorithm.IsManagedSequentialType(type)))
-            {
-                // Sequential layout
-                return true;
-            }
-
-            return false;
-        }
-
         /// <summary>
         /// Throws if the JIT inlines a method outside the current version bubble and that inlinee accesses
         /// fields also outside the version bubble. ReadyToRun currently cannot encode such references.
@@ -2367,7 +2372,7 @@ namespace Internal.JitInterface
                     if (pResult->offset > FieldFixupSignature.MaxCheckableOffset)
                         throw new RequiresRuntimeJitException(callerMethod.ToString() + " -> " + field.ToString());
 
-                    _methodCodeNode.Fixups.Add(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
+                    AddPrecodeFixup(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
                     // No-op other than generating the check field offset fixup
                 }
                 else
@@ -2385,7 +2390,7 @@ namespace Internal.JitInterface
                 if (_compilation.SymbolNodeFactory.VerifyTypeAndFieldLayout && !callerMethod.IsNonVersionable() && (pResult->offset <= FieldFixupSignature.MaxCheckableOffset))
                 {
                     // ENCODE_CHECK_FIELD_OFFSET
-                    _methodCodeNode.Fixups.Add(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
+                    AddPrecodeFixup(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
                 }
                 // ENCODE_NONE
             }
@@ -2394,20 +2399,9 @@ namespace Internal.JitInterface
                 if (_compilation.SymbolNodeFactory.VerifyTypeAndFieldLayout && !callerMethod.IsNonVersionable() && (pResult->offset <= FieldFixupSignature.MaxCheckableOffset))
                 {
                     // ENCODE_CHECK_FIELD_OFFSET
-                    _methodCodeNode.Fixups.Add(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
+                    AddPrecodeFixup(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
                 }
                 // ENCODE_NONE
-            }
-            else if (HasLayoutMetadata(pMT))
-            {
-                PreventRecursiveFieldInlinesOutsideVersionBubble(field, callerMethod);
-
-                // We won't try to be smart for classes with layout.
-                // They are complex to get right, and very rare anyway.
-                // ENCODE_FIELD_OFFSET
-                pResult->offset = 0;
-                pResult->fieldAccessor = CORINFO_FIELD_ACCESSOR.CORINFO_FIELD_INSTANCE_WITH_BASE;
-                pResult->fieldLookup = CreateConstLookupToSymbol(_compilation.SymbolNodeFactory.FieldOffset(field));
             }
             else
             {
@@ -2416,7 +2410,7 @@ namespace Internal.JitInterface
                 if (_compilation.SymbolNodeFactory.VerifyTypeAndFieldLayout && !callerMethod.IsNonVersionable() && (pResult->offset <= FieldFixupSignature.MaxCheckableOffset))
                 {
                     // ENCODE_CHECK_FIELD_OFFSET
-                    _methodCodeNode.Fixups.Add(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
+                    AddPrecodeFixup(_compilation.SymbolNodeFactory.CheckFieldOffset(field));
                 }
 
                 // ENCODE_FIELD_BASE_OFFSET
@@ -2452,16 +2446,6 @@ namespace Internal.JitInterface
         }
 
         private byte[] _bbCounts;
-        private ProfileDataNode _profileDataNode;
-
-        partial void PublishProfileData()
-        {
-            if (_profileDataNode != null)
-            {
-                MethodIL methodIL = _compilation.GetMethodIL(MethodBeingCompiled);
-                _profileDataNode.SetProfileData(methodIL.GetILBytes().Length, _bbCounts.Length / sizeof(BlockCounts), _bbCounts);
-            }
-        }
 
         partial void findKnownBBCountBlock(ref BlockType blockType, void* location, ref int offset)
         {
@@ -2529,10 +2513,6 @@ namespace Internal.JitInterface
                 blockCounts[iSchema].ILOffset = (uint)pSchema[iSchema].ILOffset;
             }
 
-            if (_profileDataNode == null)
-            {
-                _profileDataNode = _compilation.NodeFactory.ProfileData(_methodCodeNode);
-            }
             return 0;
         }
 
@@ -2592,7 +2572,7 @@ namespace Internal.JitInterface
             else
             {
                 var sig = HandleToObject(callSiteSig->methodSignature);
-                return Marshaller.IsMarshallingRequired(sig, Array.Empty<ParameterMetadata>());
+                return Marshaller.IsMarshallingRequired(sig, Array.Empty<ParameterMetadata>(), ((MetadataType)HandleToObject(callSiteSig->scope).OwningMethod.OwningType).Module);
             }
         }
 
@@ -2608,8 +2588,17 @@ namespace Internal.JitInterface
             throw new RequiresRuntimeJitException($"{MethodBeingCompiled} -> {nameof(canGetCookieForPInvokeCalliSig)}");
         }
 
-        private int SizeOfPInvokeTransitionFrame => ReadyToRunRuntimeConstants.READYTORUN_PInvokeTransitionFrameSizeInPointerUnits * _compilation.NodeFactory.Target.PointerSize;
-        private int SizeOfReversePInvokeTransitionFrame => ReadyToRunRuntimeConstants.READYTORUN_ReversePInvokeTransitionFrameSizeInPointerUnits(_compilation.NodeFactory.Target.Architecture) * _compilation.NodeFactory.Target.PointerSize;
+        private int SizeOfPInvokeTransitionFrame => ReadyToRunRuntimeConstants.READYTORUN_PInvokeTransitionFrameSizeInPointerUnits * PointerSize;
+        private int SizeOfReversePInvokeTransitionFrame
+        {
+            get
+            {
+                if (_compilation.NodeFactory.Target.Architecture == TargetArchitecture.X86)
+                    return ReadyToRunRuntimeConstants.READYTORUN_ReversePInvokeTransitionFrameSizeInPointerUnits_X86 * PointerSize;
+                else
+                    return ReadyToRunRuntimeConstants.READYTORUN_ReversePInvokeTransitionFrameSizeInPointerUnits_Universal * PointerSize;
+            }
+        }
 
         private void setEHcount(uint cEH)
         {
@@ -2654,13 +2643,55 @@ namespace Internal.JitInterface
             _ehClauses[EHnumber] = clause;
         }
 
+        private readonly Stack<List<ISymbolNode>> _stashedPrecodeFixups = new Stack<List<ISymbolNode>>();
+        private readonly Stack<HashSet<MethodDesc>> _stashedInlinedMethods = new Stack<HashSet<MethodDesc>>();
+
+        private void beginInlining(CORINFO_METHOD_STRUCT_* inlinerHnd, CORINFO_METHOD_STRUCT_* inlineeHnd)
+        {
+            _stashedPrecodeFixups.Push(_precodeFixups);
+            _precodeFixups = null;
+            _stashedInlinedMethods.Push(_inlinedMethods);
+            _inlinedMethods = null;
+        }
+
         private void reportInliningDecision(CORINFO_METHOD_STRUCT_* inlinerHnd, CORINFO_METHOD_STRUCT_* inlineeHnd, CorInfoInline inlineResult, byte* reason)
         {
             if (inlineResult == CorInfoInline.INLINE_PASS)
             {
                 // We deliberately ignore inlinerHnd because we have no interest to track intermediate links now.
                 MethodDesc inlinee = HandleToObject(inlineeHnd);
+
+                // If during inlining we found Precode fixups, then only if the inline was successful, add them to the set of
+                // fixups that will be used for the entire method
+                List<ISymbolNode> previouslyStashedFixups = _stashedPrecodeFixups.Pop();
+
+                if (_precodeFixups != null)
+                {
+                    previouslyStashedFixups = previouslyStashedFixups ?? new List<ISymbolNode>();
+                    previouslyStashedFixups.AddRange(_precodeFixups);
+                }
+                _precodeFixups = previouslyStashedFixups;
+
+                // If during inlining we found new inlinees, then if the inline was successful, add them to the set of fixups
+                // for the entire method.
+                HashSet<MethodDesc> previouslyStashedInlinees = _stashedInlinedMethods.Pop();
+                if (_inlinedMethods != null)
+                {
+                    previouslyStashedInlinees = previouslyStashedInlinees ?? new HashSet<MethodDesc>();
+                    foreach (var inlineeInHashSet in _inlinedMethods)
+                        previouslyStashedInlinees.Add(inlineeInHashSet);
+                }
+                _inlinedMethods = previouslyStashedInlinees;
+
+                // Then add the fact we inlined this method.
+                _inlinedMethods = _inlinedMethods ?? new HashSet<MethodDesc>();
                 _inlinedMethods.Add(inlinee);
+            }
+            else
+            {
+                // If we didn't succeed on the inline, just pop back to the state before inlining
+                _precodeFixups = _stashedPrecodeFixups.Pop();
+                _inlinedMethods = _stashedInlinedMethods.Pop();
             }
         }
 

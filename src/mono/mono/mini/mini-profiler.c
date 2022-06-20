@@ -149,7 +149,7 @@ mini_profiler_emit_tail_call (MonoCompile *cfg, MonoMethod *target)
 	EMIT_NEW_PCONST (cfg, iargs [1], NULL);
 
 	if (target)
-		EMIT_NEW_METHODCONST (cfg, iargs [2], target); 
+		EMIT_NEW_METHODCONST (cfg, iargs [2], target);
 	else
 		EMIT_NEW_PCONST (cfg, iargs [2], NULL);
 
@@ -188,7 +188,7 @@ mini_profiler_emit_call_finally (MonoCompile *cfg, MonoMethodHeader *header, uns
 	// Are we leaving a catch clause?
 	for (guint32 i = 0; i < header->num_clauses; i++) {
 		MonoExceptionClause *hclause = &header->clauses [i];
-		guint32 offset = ip - header->code;
+		guint32 offset = GPTRDIFF_TO_UINT32 (ip - header->code);
 
 		if (hclause->flags != MONO_EXCEPTION_CLAUSE_NONE && hclause->flags != MONO_EXCEPTION_CLAUSE_FILTER)
 			continue;

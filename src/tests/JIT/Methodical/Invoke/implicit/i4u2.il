@@ -11,7 +11,7 @@
   .publickeytoken = (B0 3F 5F 7F 11 D5 0A 3A )
   .ver 4:0:0:0
 }
-.assembly 'test'
+.assembly 'i4u2'
 {
 
   //  .custom instance void ['mscorlib']System.Diagnostics.DebuggableAttribute::.ctor(bool,
@@ -19,18 +19,11 @@
   
   
 }
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.module 'test.exe'
+.assembly extern xunit.core {}
 // MVID: {37F05BF1-E8CC-42FA-A268-D866F07CFFF8}
-.namespace TestCase
+.namespace TestCase_i4u2_il
 {
-  .class private auto ansi Test
+  .class public auto ansi Test
          extends ['mscorlib']System.Object
   {
     .method private hidebysig static int32 
@@ -64,7 +57,7 @@
       IL_0019:  ret
     } // end of method 'Test::compare'
 
-    .method private hidebysig static int32
+    .method public hidebysig static int32
             Main() il managed
     {
       .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (
@@ -76,7 +69,7 @@
       .locals (int32 V_0)
       IL_0000:  ldc.i4 0x00002
       IL_0001:  ldc.i4 0x20002
-      IL_0002:  call       int32 TestCase.Test::compare(unsigned int16,
+      IL_0002:  call       int32 TestCase_i4u2_il.Test::compare(unsigned int16,
                                                         unsigned int16)
       IL_0007:  brfalse.s  IL_0017
 
@@ -108,6 +101,6 @@
 
   } // end of class 'Test'
 
-} // end of namespace 'TestCase'
+} // end of namespace 'TestCase_i4u2_il'
 
 //*********** DISASSEMBLY COMPLETE ***********************

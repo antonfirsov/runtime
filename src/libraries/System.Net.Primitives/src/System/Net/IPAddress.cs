@@ -24,11 +24,11 @@ namespace System.Net
 
         internal const uint LoopbackMaskHostOrder = 0xFF000000;
 
-        public static readonly IPAddress IPv6Any = new IPAddress((ReadOnlySpan<byte>) new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0);
-        public static readonly IPAddress IPv6Loopback = new IPAddress((ReadOnlySpan<byte>) new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, 0);
+        public static readonly IPAddress IPv6Any = new IPAddress((ReadOnlySpan<byte>)new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0);
+        public static readonly IPAddress IPv6Loopback = new IPAddress((ReadOnlySpan<byte>)new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 }, 0);
         public static readonly IPAddress IPv6None = IPv6Any;
 
-        private static readonly IPAddress s_loopbackMappedToIPv6 = new IPAddress((ReadOnlySpan<byte>) new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 127, 0, 0, 1 }, 0);
+        private static readonly IPAddress s_loopbackMappedToIPv6 = new IPAddress((ReadOnlySpan<byte>)new byte[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255, 255, 127, 0, 0, 1 }, 0);
 
         /// <summary>
         /// For IPv4 addresses, this field stores the Address.
@@ -233,10 +233,7 @@ namespace System.Net
 
         public static IPAddress Parse(string ipString)
         {
-            if (ipString == null)
-            {
-                throw new ArgumentNullException(nameof(ipString));
-            }
+            ArgumentNullException.ThrowIfNull(ipString);
 
             return IPAddressParser.Parse(ipString.AsSpan(), tryParse: false)!;
         }
@@ -416,10 +413,7 @@ namespace System.Net
 
         public static bool IsLoopback(IPAddress address)
         {
-            if (address == null)
-            {
-                ThrowAddressNullException();
-            }
+            ArgumentNullException.ThrowIfNull(address);
 
             if (address.IsIPv6)
             {

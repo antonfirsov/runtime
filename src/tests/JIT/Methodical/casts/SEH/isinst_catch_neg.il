@@ -9,19 +9,13 @@
   .ver 4:0:0:0
 }
 .assembly isinst_catch_neg { }
-.assembly extern xunit.core
+.assembly extern xunit.core {}
+.namespace JitTest_isinst_catch_neg_SEH_il
 {
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.namespace JitTest
-{
-  .class private auto ansi beforefieldinit Test
+  .class public auto ansi beforefieldinit Test
          extends [mscorlib]System.Object
   {
-    .method private hidebysig static int32
+    .method public hidebysig static int32
             Main() cil managed
     {
       .custom instance void [xunit.core]Xunit.FactAttribute::.ctor() = (

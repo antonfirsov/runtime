@@ -9,14 +9,8 @@
   .ver 4:0:0:0
 }
 .assembly ldobj_R8 { }
-.assembly extern xunit.core
-{
-    .publickeytoken = (
-        8d 05 b1 bb 7a 6f db 6c
-     )
-     .ver 2:4:2:0
-}
-.namespace JitTest
+.assembly extern xunit.core {}
+.namespace JitTest_ldobj_R8_ldobj_il
 {
   .class public auto ansi beforefieldinit Test
          extends [mscorlib]System.Object
@@ -65,7 +59,7 @@ stloc.s V
 
 ldloca.s V
 ldobj [mscorlib]System.Double
-stsfld float64 JitTest.Test::m_v
+stsfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldloc.s V
 ret
 }
@@ -78,7 +72,7 @@ stloc.s V
 
 ldloca.s V
 ldobj [mscorlib]System.Double
-call void JitTest.Test::Func(float64)
+call void JitTest_ldobj_R8_ldobj_il.Test::Func(float64)
 ldloc.s V
 ret
 }
@@ -128,10 +122,10 @@ ret
 .locals (float64 V)
 ldc.r8 0
 stloc.s V
-newobj instance void JitTest.Test::.ctor()
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
 ldloca.s V
 ldobj [mscorlib]System.Double
-stfld float64 JitTest.Test::m_vv
+stfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldloc.s V
 ret
 }
@@ -186,7 +180,7 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
 pop
 ldloc.s V
@@ -199,7 +193,7 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
 stloc.s V
 ldloc.s V
@@ -212,9 +206,9 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
-stsfld float64 JitTest.Test::m_v
+stsfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldloc.s V
 ret
 }
@@ -225,9 +219,9 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
-call void JitTest.Test::Func(float64)
+call void JitTest_ldobj_R8_ldobj_il.Test::Func(float64)
 ldloc.s V
 ret
 }
@@ -238,7 +232,7 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
 box [mscorlib]System.Double
 pop
@@ -252,7 +246,7 @@ ret
 ldc.r8 0
 stloc.s V
 ldloca.s V
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
 stobj [mscorlib]System.Double
 ldloc.s V
@@ -265,7 +259,7 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
 starg.s ARG
 ldloc.s V
@@ -277,10 +271,10 @@ ret
 .locals (float64 V)
 ldc.r8 0
 stloc.s V
-newobj instance void JitTest.Test::.ctor()
-ldsflda float64 JitTest.Test::m_v
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
-stfld float64 JitTest.Test::m_vv
+stfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldloc.s V
 ret
 }
@@ -291,7 +285,7 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
 ret
 }
@@ -302,7 +296,7 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
 ret
 }
@@ -313,7 +307,7 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
 ret
 }
@@ -324,7 +318,7 @@ ret
 ldc.r8 0
 stloc.s V
 
-ldsflda float64 JitTest.Test::m_v
+ldsflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldobj [mscorlib]System.Double
 ret
 }
@@ -363,7 +357,7 @@ stloc.s V
 
 ldarga.s ARG
 ldobj [mscorlib]System.Double
-stsfld float64 JitTest.Test::m_v
+stsfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldloc.s V
 ret
 }
@@ -376,7 +370,7 @@ stloc.s V
 
 ldarga.s ARG
 ldobj [mscorlib]System.Double
-call void JitTest.Test::Func(float64)
+call void JitTest_ldobj_R8_ldobj_il.Test::Func(float64)
 ldloc.s V
 ret
 }
@@ -426,10 +420,10 @@ ret
 .locals (float64 V)
 ldc.r8 0
 stloc.s V
-newobj instance void JitTest.Test::.ctor()
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
 ldarga.s ARG
 ldobj [mscorlib]System.Double
-stfld float64 JitTest.Test::m_vv
+stfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldloc.s V
 ret
 }
@@ -484,8 +478,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 pop
 ldloc.s V
@@ -498,8 +492,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 stloc.s V
 ldloc.s V
@@ -512,10 +506,10 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
-stsfld float64 JitTest.Test::m_v
+stsfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldloc.s V
 ret
 }
@@ -526,10 +520,10 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
-call void JitTest.Test::Func(float64)
+call void JitTest_ldobj_R8_ldobj_il.Test::Func(float64)
 ldloc.s V
 ret
 }
@@ -540,8 +534,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 box [mscorlib]System.Double
 pop
@@ -555,8 +549,8 @@ ret
 ldc.r8 0
 stloc.s V
 ldloca.s V
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 stobj [mscorlib]System.Double
 ldloc.s V
@@ -569,8 +563,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 starg.s ARG
 ldloc.s V
@@ -582,11 +576,11 @@ ret
 .locals (float64 V)
 ldc.r8 0
 stloc.s V
-newobj instance void JitTest.Test::.ctor()
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
-stfld float64 JitTest.Test::m_vv
+stfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldloc.s V
 ret
 }
@@ -597,8 +591,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 ret
 }
@@ -609,8 +603,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 ret
 }
@@ -621,8 +615,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 ret
 }
@@ -633,8 +627,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 ret
 }
@@ -682,7 +676,7 @@ newarr [mscorlib]System.Double
 ldc.i4.1
 ldelema [mscorlib]System.Double
 ldobj [mscorlib]System.Double
-stsfld float64 JitTest.Test::m_v
+stsfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldloc.s V
 ret
 }
@@ -698,7 +692,7 @@ newarr [mscorlib]System.Double
 ldc.i4.1
 ldelema [mscorlib]System.Double
 ldobj [mscorlib]System.Double
-call void JitTest.Test::Func(float64)
+call void JitTest_ldobj_R8_ldobj_il.Test::Func(float64)
 ldloc.s V
 ret
 }
@@ -757,13 +751,13 @@ ret
 .locals (float64 V)
 ldc.r8 0
 stloc.s V
-newobj instance void JitTest.Test::.ctor()
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
 ldc.i4.2
 newarr [mscorlib]System.Double
 ldc.i4.1
 ldelema [mscorlib]System.Double
 ldobj [mscorlib]System.Double
-stfld float64 JitTest.Test::m_vv
+stfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldloc.s V
 ret
 }
@@ -830,8 +824,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 pop
 ldloc.s V
@@ -844,8 +838,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 stloc.s V
 ldloc.s V
@@ -858,10 +852,10 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
-stsfld float64 JitTest.Test::m_v
+stsfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldloc.s V
 ret
 }
@@ -872,10 +866,10 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
-call void JitTest.Test::Func(float64)
+call void JitTest_ldobj_R8_ldobj_il.Test::Func(float64)
 ldloc.s V
 ret
 }
@@ -886,8 +880,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 box [mscorlib]System.Double
 pop
@@ -901,8 +895,8 @@ ret
 ldc.r8 0
 stloc.s V
 ldloca.s V
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 stobj [mscorlib]System.Double
 ldloc.s V
@@ -915,8 +909,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 starg.s ARG
 ldloc.s V
@@ -928,11 +922,11 @@ ret
 .locals (float64 V)
 ldc.r8 0
 stloc.s V
-newobj instance void JitTest.Test::.ctor()
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
-stfld float64 JitTest.Test::m_vv
+stfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldloc.s V
 ret
 }
@@ -943,8 +937,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 ret
 }
@@ -955,8 +949,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 ret
 }
@@ -967,8 +961,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 ret
 }
@@ -979,8 +973,8 @@ ret
 ldc.r8 0
 stloc.s V
 
-newobj instance void JitTest.Test::.ctor()
-ldflda float64 JitTest.Test::m_vv
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
+ldflda float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldobj [mscorlib]System.Double
 ret
 }
@@ -1025,7 +1019,7 @@ ldloca.s V
 mkrefany [mscorlib]System.Double
 refanyval [mscorlib]System.Double
 ldobj [mscorlib]System.Double
-stsfld float64 JitTest.Test::m_v
+stsfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_v
 ldloc.s V
 ret
 }
@@ -1040,7 +1034,7 @@ ldloca.s V
 mkrefany [mscorlib]System.Double
 refanyval [mscorlib]System.Double
 ldobj [mscorlib]System.Double
-call void JitTest.Test::Func(float64)
+call void JitTest_ldobj_R8_ldobj_il.Test::Func(float64)
 ldloc.s V
 ret
 }
@@ -1096,12 +1090,12 @@ ret
 .locals (float64 V)
 ldc.r8 0
 stloc.s V
-newobj instance void JitTest.Test::.ctor()
+newobj instance void JitTest_ldobj_R8_ldobj_il.Test::.ctor()
 ldloca.s V
 mkrefany [mscorlib]System.Double
 refanyval [mscorlib]System.Double
 ldobj [mscorlib]System.Double
-stfld float64 JitTest.Test::m_vv
+stfld float64 JitTest_ldobj_R8_ldobj_il.Test::m_vv
 ldloc.s V
 ret
 }
@@ -1171,90 +1165,90 @@ ret
 ldc.r8 0
 stloc.s V
 ldloc.s V
-call float64 JitTest.Test::method_0_0(float64)
-call float64 JitTest.Test::method_0_1(float64)
-call float64 JitTest.Test::method_0_2(float64)
-call float64 JitTest.Test::method_0_3(float64)
-call float64 JitTest.Test::method_0_4(float64)
-call float64 JitTest.Test::method_0_5(float64)
-call float64 JitTest.Test::method_0_6(float64)
-call float64 JitTest.Test::method_0_7(float64)
-call float64 JitTest.Test::method_0_8(float64)
-call float64 JitTest.Test::method_0_9(float64)
-call float64 JitTest.Test::method_0_10(float64)
-call float64 JitTest.Test::method_0_11(float64)
-call float64 JitTest.Test::method_1_0(float64)
-call float64 JitTest.Test::method_1_1(float64)
-call float64 JitTest.Test::method_1_2(float64)
-call float64 JitTest.Test::method_1_3(float64)
-call float64 JitTest.Test::method_1_4(float64)
-call float64 JitTest.Test::method_1_5(float64)
-call float64 JitTest.Test::method_1_6(float64)
-call float64 JitTest.Test::method_1_7(float64)
-call float64 JitTest.Test::method_1_8(float64)
-call float64 JitTest.Test::method_1_9(float64)
-call float64 JitTest.Test::method_1_10(float64)
-call float64 JitTest.Test::method_1_11(float64)
-call float64 JitTest.Test::method_2_0(float64)
-call float64 JitTest.Test::method_2_1(float64)
-call float64 JitTest.Test::method_2_2(float64)
-call float64 JitTest.Test::method_2_3(float64)
-call float64 JitTest.Test::method_2_4(float64)
-call float64 JitTest.Test::method_2_5(float64)
-call float64 JitTest.Test::method_2_6(float64)
-call float64 JitTest.Test::method_2_7(float64)
-call float64 JitTest.Test::method_2_8(float64)
-call float64 JitTest.Test::method_2_9(float64)
-call float64 JitTest.Test::method_2_10(float64)
-call float64 JitTest.Test::method_2_11(float64)
-call float64 JitTest.Test::method_3_0(float64)
-call float64 JitTest.Test::method_3_1(float64)
-call float64 JitTest.Test::method_3_2(float64)
-call float64 JitTest.Test::method_3_3(float64)
-call float64 JitTest.Test::method_3_4(float64)
-call float64 JitTest.Test::method_3_5(float64)
-call float64 JitTest.Test::method_3_6(float64)
-call float64 JitTest.Test::method_3_7(float64)
-call float64 JitTest.Test::method_3_8(float64)
-call float64 JitTest.Test::method_3_9(float64)
-call float64 JitTest.Test::method_3_10(float64)
-call float64 JitTest.Test::method_3_11(float64)
-call float64 JitTest.Test::method_4_0(float64)
-call float64 JitTest.Test::method_4_1(float64)
-call float64 JitTest.Test::method_4_2(float64)
-call float64 JitTest.Test::method_4_3(float64)
-call float64 JitTest.Test::method_4_4(float64)
-call float64 JitTest.Test::method_4_5(float64)
-call float64 JitTest.Test::method_4_6(float64)
-call float64 JitTest.Test::method_4_7(float64)
-call float64 JitTest.Test::method_4_8(float64)
-call float64 JitTest.Test::method_4_9(float64)
-call float64 JitTest.Test::method_4_10(float64)
-call float64 JitTest.Test::method_4_11(float64)
-call float64 JitTest.Test::method_5_0(float64)
-call float64 JitTest.Test::method_5_1(float64)
-call float64 JitTest.Test::method_5_2(float64)
-call float64 JitTest.Test::method_5_3(float64)
-call float64 JitTest.Test::method_5_4(float64)
-call float64 JitTest.Test::method_5_5(float64)
-call float64 JitTest.Test::method_5_6(float64)
-call float64 JitTest.Test::method_5_7(float64)
-call float64 JitTest.Test::method_5_8(float64)
-call float64 JitTest.Test::method_5_9(float64)
-call float64 JitTest.Test::method_5_10(float64)
-call float64 JitTest.Test::method_5_11(float64)
-call float64 JitTest.Test::method_6_0(float64)
-call float64 JitTest.Test::method_6_1(float64)
-call float64 JitTest.Test::method_6_2(float64)
-call float64 JitTest.Test::method_6_3(float64)
-call float64 JitTest.Test::method_6_4(float64)
-call float64 JitTest.Test::method_6_5(float64)
-call float64 JitTest.Test::method_6_6(float64)
-call float64 JitTest.Test::method_6_7(float64)
-call float64 JitTest.Test::method_6_8(float64)
-call float64 JitTest.Test::method_6_9(float64)
-call float64 JitTest.Test::method_6_10(float64)
-call float64 JitTest.Test::method_6_11(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_0(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_1(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_2(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_3(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_4(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_5(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_6(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_7(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_8(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_9(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_10(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_0_11(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_0(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_1(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_2(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_3(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_4(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_5(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_6(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_7(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_8(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_9(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_10(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_1_11(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_0(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_1(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_2(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_3(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_4(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_5(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_6(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_7(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_8(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_9(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_10(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_2_11(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_0(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_1(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_2(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_3(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_4(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_5(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_6(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_7(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_8(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_9(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_10(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_3_11(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_0(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_1(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_2(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_3(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_4(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_5(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_6(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_7(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_8(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_9(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_10(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_4_11(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_0(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_1(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_2(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_3(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_4(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_5(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_6(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_7(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_8(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_9(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_10(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_5_11(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_0(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_1(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_2(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_3(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_4(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_5(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_6(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_7(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_8(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_9(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_10(float64)
+call float64 JitTest_ldobj_R8_ldobj_il.Test::method_6_11(float64)
 pop
 
       ldstr      "Passed"

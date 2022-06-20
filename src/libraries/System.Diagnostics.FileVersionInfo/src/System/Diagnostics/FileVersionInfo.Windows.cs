@@ -68,14 +68,11 @@ namespace System.Diagnostics
             return value.ToString("X8");
         }
 
-        private static Interop.Version.VS_FIXEDFILEINFO GetFixedFileInfo(IntPtr memPtr)
+        private static unsafe Interop.Version.VS_FIXEDFILEINFO GetFixedFileInfo(IntPtr memPtr)
         {
-            IntPtr memRef = IntPtr.Zero;
-            uint memLen;
-
-            if (Interop.Version.VerQueryValue(memPtr, "\\", out memRef, out memLen))
+            if (Interop.Version.VerQueryValue(memPtr, "\\", out IntPtr memRef, out _))
             {
-                return (Interop.Version.VS_FIXEDFILEINFO)Marshal.PtrToStructure<Interop.Version.VS_FIXEDFILEINFO>(memRef);
+                return *(Interop.Version.VS_FIXEDFILEINFO*)memRef;
             }
 
             return default;
@@ -93,10 +90,7 @@ namespace System.Diagnostics
 
         private static string GetFileVersionString(IntPtr memPtr, string name)
         {
-            IntPtr memRef = IntPtr.Zero;
-            uint memLen;
-
-            if (Interop.Version.VerQueryValue(memPtr, name, out memRef, out memLen))
+            if (Interop.Version.VerQueryValue(memPtr, name, out IntPtr memRef, out _))
             {
                 if (memRef != IntPtr.Zero)
                 {
@@ -109,10 +103,7 @@ namespace System.Diagnostics
 
         private static uint GetVarEntry(IntPtr memPtr)
         {
-            IntPtr memRef = IntPtr.Zero;
-            uint memLen;
-
-            if (Interop.Version.VerQueryValue(memPtr, "\\VarFileInfo\\Translation", out memRef, out memLen))
+            if (Interop.Version.VerQueryValue(memPtr, "\\VarFileInfo\\Translation", out IntPtr memRef, out _))
             {
                 return (uint)((Marshal.ReadInt16(memRef) << 16) + Marshal.ReadInt16((IntPtr)((long)memRef + 2)));
             }
