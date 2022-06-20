@@ -147,8 +147,8 @@ namespace System.Net.Http
         // 2. Some servers allow receiving only a limited amount of PINGs within a given timeframe.
         // To deal with this, we send an initial burst of 'InitialBurstCount' PINGs, to get a relatively good estimation fast. Afterwards,
         // we send PINGs each 'PingIntervalInSeconds' second, to maintain our estimation without triggering these servers.
-        // 3. Certain backend proxy servers reset their unsolicited ping counter when they *receive* DATA, HEADERS, or WINDOW_UPDATE,
-        // allowing up to 2 unsolicited PINGs. To deal with these servers, we maitain a counter '_sendPolicyCounter'.
+        // 3. Some servers in google's backends reset their unsolicited ping counter when they *receive* DATA, HEADERS, or WINDOW_UPDATE,
+        // allowing up to 4 unsolicited PINGs. To deal with these servers, we maitain a counter '_sendPolicyCounter'.
         //
         // Threading and synchronization:
         // - OnInitialSettingsSent() is called during initialization
@@ -164,11 +164,11 @@ namespace System.Net.Http
                 Disabled,
                 Init,     // Waiting for SETTINGS ACK before starting to send PING-s
                 Waiting,  // Waiting to receive DATA or HEADERS so we can send a PING
-                PingSent, // We do not send RTT PING-s while there is an unacknowledged RTT PING in-flight
+                PingSent, // Do not send RTT PING while there is another, unacknowledged RTT PING in-flight
                 TerminatingMayReceivePingAck
             }
 
-            private const int MaxPingsWithoutSending = 2; // Number of PING-s allowed to send without also sending DATA, HEADERS or WINDOW_UPDATE
+            private const int MaxPingsWithoutSending = 4; // Number of PING-s allowed to send without also sending DATA, HEADERS or WINDOW_UPDATE
             private const int InitialBurstCount = 4;
             private const double PingIntervalInSeconds = 2;
             private static readonly long PingIntervalInTicks = (long)(PingIntervalInSeconds * Stopwatch.Frequency);
