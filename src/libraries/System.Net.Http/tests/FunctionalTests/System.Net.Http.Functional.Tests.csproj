@@ -47,6 +47,9 @@
   </ItemGroup>
 
   <ItemGroup>
+
+    <Compile Include="LogHttpEventListener.cs" />
+    
     <Compile Include="$(CommonPath)DisableRuntimeMarshalling.cs"
              Link="Common\DisableRuntimeMarshalling.cs" />
     <Compile Include="$(CommonPath)Interop\Unix\Interop.Libraries.cs" Condition="'$(TargetPlatformIdentifier)' != 'windows'"

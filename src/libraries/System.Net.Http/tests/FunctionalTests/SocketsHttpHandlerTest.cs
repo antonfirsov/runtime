@@ -28,6 +28,56 @@ namespace System.Net.Http.Functional.Tests
         public SocketsHttpHandler_HttpClientHandler_Asynchrony_Test(ITestOutputHelper output) : base(output) { }
 
         [Fact]
+        public async Task PartyPlease()
+        {
+            using LogHttpEventListener logPlz = new LogHttpEventListener();
+            _output.WriteLine($"Logging to: {logPlz.Prefix}");
+
+            using SocketsHttpHandler handler = new SocketsHttpHandler()
+            {
+                ConnectCallback = ConnectPlz,
+                ConnectTimeout = TimeSpan.FromSeconds(2)
+            };
+            using HttpClient client = new HttpClient(handler);
+            
+
+            List<Task<HttpResponseMessage>> requestTasks = new();
+
+            Uri uri = new Uri("http://motherfuckingwebsite.com/");
+
+            IssueRequest();
+            IssueRequest();
+            IssueRequest();
+            await Task.Delay(60);
+            IssueRequest();
+            IssueRequest();
+
+            await Task.WhenAll(requestTasks);
+            _output.WriteLine("yay");
+
+            void IssueRequest()
+            {
+                HttpRequestMessage request = new HttpRequestMessage()
+                {
+                    Method = HttpMethod.Get,
+                    RequestUri = uri,
+                    Version = HttpVersion.Version11,
+                    VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                };
+
+                Task<HttpResponseMessage> task = client.SendAsync(request);
+                requestTasks.Add(task);
+            }
+
+            static async ValueTask<Stream> ConnectPlz(SocketsHttpConnectionContext ctx, CancellationToken cancellationToken)
+            {
+                var s = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                await s.ConnectAsync(ctx.DnsEndPoint);
+                return new NetworkStream(s, ownsSocket: true);
+            }
+        }
+
+        [Fact]
         public async Task ExecutionContext_Suppressed_Success()
         {
             await LoopbackServerFactory.CreateClientAndServerAsync(
