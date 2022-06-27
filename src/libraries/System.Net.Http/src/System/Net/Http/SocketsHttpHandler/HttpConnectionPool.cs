@@ -480,19 +480,21 @@ namespace System.Net.Http
 
             _http11RequestQueue.PruneCompletedRequestsFromHeadOfQueue(this);
 
+            bool willInject = _availableHttp11Connections.Count == 0 &&             // No available connections
+                _http11RequestQueue.Count > _pendingHttp11ConnectionCount &&        // More requests queued than pending connections
+                _associatedHttp11ConnectionCount < _maxHttp11Connections &&         // Under the connection limit
+                _http11RequestQueue.RequestsWithoutAConnectionAttempt > 0;          // There are requests we haven't issued a connection attempt for
+
             if (NetEventSource.Log.IsEnabled())
             {
                 Trace($"Available HTTP/1.1 connections: {_availableHttp11Connections.Count}, Requests in the queue: {_http11RequestQueue.Count}, " +
                     $"Requests without a connection attempt: {_http11RequestQueue.RequestsWithoutAConnectionAttempt}, " +
                     $"Pending HTTP/1.1 connections: {_pendingHttp11ConnectionCount}, Total associated HTTP/1.1 connections: {_associatedHttp11ConnectionCount}, " +
-                    $"Max HTTP/1.1 connection limit: {_maxHttp11Connections}.");
+                    $"Max HTTP/1.1 connection limit: {_maxHttp11Connections}. " +
+                    $"Will inject new connection: {willInject}");
             }
 
-            // Determine if we can and should add a new connection to the pool.
-            if (_availableHttp11Connections.Count == 0 &&                           // No available connections
-                _http11RequestQueue.Count > _pendingHttp11ConnectionCount &&        // More requests queued than pending connections
-                _associatedHttp11ConnectionCount < _maxHttp11Connections &&         // Under the connection limit
-                _http11RequestQueue.RequestsWithoutAConnectionAttempt > 0)          // There are requests we haven't issued a connection attempt for
+            if (willInject)
             {
                 _associatedHttp11ConnectionCount++;
                 _pendingHttp11ConnectionCount++;

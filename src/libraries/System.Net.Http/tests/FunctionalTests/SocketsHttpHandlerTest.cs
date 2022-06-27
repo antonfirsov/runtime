@@ -28,6 +28,222 @@ namespace System.Net.Http.Functional.Tests
         public SocketsHttpHandler_HttpClientHandler_Asynchrony_Test(ITestOutputHelper output) : base(output) { }
 
         [Fact]
+        public async Task Terror()
+        {
+            int requestCounter = 0;
+            int currentConnectionDelay = 0;
+            Uri uri = new Uri("http://motherfuckingwebsite.com/");
+            using LogHttpEventListener logPlz = new LogHttpEventListener();
+            _output.WriteLine($"Logging to: {logPlz.Prefix}");
+
+            List<Task<HttpResponseMessage>> requestTasks = new();
+
+            using SocketsHttpHandler handler = new SocketsHttpHandler()
+            {
+                ConnectCallback = ConnectPlz,
+            };
+
+            using HttpClient client = new HttpClient(handler);
+
+            currentConnectionDelay = 1000;
+
+            await IssueRequest(100);
+            currentConnectionDelay = 0;
+            await IssueRequest(2000);
+
+            async Task IssueRequest(int timeoutMs = 1000)
+            {
+                HttpRequestMessage request = new HttpRequestMessage()
+                {
+                    Method = HttpMethod.Get,
+                    RequestUri = uri,
+                    Version = HttpVersion.Version11,
+                    VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                };
+
+                int currentRequest = requestCounter++;
+                logPlz.WriteLine($"sending request {currentRequest}");
+                var cts = new CancellationTokenSource(timeoutMs);
+
+                try
+                {
+                    await client.SendAsync(request, cts.Token);
+                    await logPlz.WriteLineAsync($"Request {currentRequest} succeeded");
+                }
+                catch (Exception ex)
+                {
+                    await logPlz.WriteLineAsync($"Request {currentRequest} failed: {ex.Message}");
+                }
+            }
+
+            async ValueTask<Stream> ConnectPlz(SocketsHttpConnectionContext ctx, CancellationToken cancellationToken)
+            {
+                logPlz.WriteLine($"Attempting new connection with delay {currentConnectionDelay} ms");
+                var s = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                if (currentConnectionDelay != 0)
+                {
+                    await Task.Delay(currentConnectionDelay);
+                }
+
+                await s.ConnectAsync(ctx.DnsEndPoint);
+
+                return new NetworkStream(s, ownsSocket: true);
+            }
+        }
+
+        [Fact]
+        public async Task Terror2()
+        {
+            int requestCounter = 0;
+            int currentConnectionDelay = 0;
+            Uri uri = new Uri("http://motherfuckingwebsite.com/");
+            using LogHttpEventListener logPlz = new LogHttpEventListener();
+            _output.WriteLine($"Logging to: {logPlz.Prefix}");
+
+            List<Task<HttpResponseMessage>> requestTasks = new();
+
+            using SocketsHttpHandler handler = new SocketsHttpHandler()
+            {
+                ConnectCallback = ConnectPlz,
+            };
+
+            using HttpClient client = new HttpClient(handler);
+
+            currentConnectionDelay = 3000;
+
+            await IssueRequest(100);
+            currentConnectionDelay = 0;
+            await IssueRequest(100);
+            await IssueRequest(100);
+            await IssueRequest(100);
+            await IssueRequest(100);
+            await IssueRequest(100);
+
+            async Task IssueRequest(int timeoutMs = 1000)
+            {
+                HttpRequestMessage request = new HttpRequestMessage()
+                {
+                    Method = HttpMethod.Get,
+                    RequestUri = uri,
+                    Version = HttpVersion.Version11,
+                    VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                };
+
+                int currentRequest = requestCounter++;
+                logPlz.WriteLine($"sending request {currentRequest}");
+                var cts = new CancellationTokenSource(timeoutMs);
+
+                try
+                {
+                    await client.SendAsync(request, cts.Token);
+                    await logPlz.WriteLineAsync($"Request {currentRequest} succeeded");
+                }
+                catch (Exception ex)
+                {
+                    await logPlz.WriteLineAsync($"Request {currentRequest} failed: {ex.Message}");
+                }
+            }
+
+            async ValueTask<Stream> ConnectPlz(SocketsHttpConnectionContext ctx, CancellationToken cancellationToken)
+            {
+                logPlz.WriteLine($"Attempting new connection with delay {currentConnectionDelay} ms");
+                var s = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                if (currentConnectionDelay != 0)
+                {
+                    await Task.Delay(currentConnectionDelay);
+                }
+
+                await s.ConnectAsync(ctx.DnsEndPoint);
+
+                return new NetworkStream(s, ownsSocket: true);
+            }
+        }
+
+        [Fact]
+        public async Task DoesItRetry()
+        {
+            int socketCounter = 0;
+            int requestCounter = 0;
+            Uri uri = new Uri("http://motherfuckingwebsite.com/");
+
+            using LogHttpEventListener logPlz = new LogHttpEventListener();
+            _output.WriteLine($"Logging to: {logPlz.Prefix}");
+
+            using SocketsHttpHandler handler = new SocketsHttpHandler()
+            {
+                ConnectCallback = ConnectPlz,
+                //ConnectTimeout = TimeSpan.FromSeconds(2)
+            };
+            using HttpClient client = new HttpClient(handler);
+
+            List<Task<HttpResponseMessage>> requestTasks = new();
+
+            try
+            {
+                await logPlz.WriteLineAsync("Sending R0");
+                await IssueRequest();
+            }
+            catch (Exception ex)
+            {
+                logPlz.WriteLine($"R0 EXCEPTION: {ex.GetType().Name} / {ex.Message}");
+            }
+
+            try
+            {
+                await logPlz.WriteLineAsync("Sending R1");
+                await IssueRequest(5000);
+            }
+            catch (Exception ex)
+            {
+                logPlz.WriteLine($"R1 EXCEPTION: {ex.GetType().Name} / {ex.Message}");
+            }
+
+            _output.WriteLine("yay");
+            logPlz.WriteLine("GOODBYE");
+
+            Task<HttpResponseMessage> IssueRequest(int timeoutMs = 1000)
+            {
+                HttpRequestMessage request = new HttpRequestMessage()
+                {
+                    Method = HttpMethod.Get,
+                    RequestUri = uri,
+                    Version = HttpVersion.Version11,
+                    VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                };
+
+                logPlz.WriteLine($"sending request {requestCounter}");
+                var cts = new CancellationTokenSource(timeoutMs);
+                Task<HttpResponseMessage> task = client.SendAsync(request, cts.Token);
+                task.ContinueWith((t, s) =>
+                {
+                    logPlz.WriteLine($"Request {s} returned. Task status: {t.Status}");
+                }, requestCounter);
+                requestTasks.Add(task);
+                requestCounter++;
+                return task;
+            }
+
+            async ValueTask<Stream> ConnectPlz(SocketsHttpConnectionContext ctx, CancellationToken cancellationToken)
+            {
+                var s = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                if (socketCounter++ == 0)
+                {
+                    await logPlz.WriteLineAsync($"Attempting connection 0 with delay 2000 ms");
+                    await Task.Delay(2000);
+                    await logPlz.WriteLineAsync($"Connection 0 is about to fail AF");
+                    throw new SocketException(666);
+                }
+                else
+                {
+                    await logPlz.WriteLineAsync($"Attempting new connection without delay woo.");
+                    await s.ConnectAsync(ctx.DnsEndPoint);
+                }
+
+                return new NetworkStream(s, ownsSocket: true);
+            }
+        }
+
+        [Fact]
         public async Task PartyPlease()
         {
             using LogHttpEventListener logPlz = new LogHttpEventListener();
@@ -35,11 +251,10 @@ namespace System.Net.Http.Functional.Tests
 
             using SocketsHttpHandler handler = new SocketsHttpHandler()
             {
-                ConnectCallback = ConnectPlz,
                 ConnectTimeout = TimeSpan.FromSeconds(2)
             };
             using HttpClient client = new HttpClient(handler);
-            
+            int requestCounter = 0;
 
             List<Task<HttpResponseMessage>> requestTasks = new();
 
@@ -48,11 +263,12 @@ namespace System.Net.Http.Functional.Tests
             IssueRequest();
             IssueRequest();
             IssueRequest();
-            await Task.Delay(60);
+            await Task.Delay(500);
             IssueRequest();
             IssueRequest();
 
             await Task.WhenAll(requestTasks);
+            logPlz.WriteLine("GOODBYE");
             _output.WriteLine("yay");
 
             void IssueRequest()
@@ -65,14 +281,88 @@ namespace System.Net.Http.Functional.Tests
                     VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
                 };
 
+                logPlz.WriteLine($"sending request {requestCounter}");
                 Task<HttpResponseMessage> task = client.SendAsync(request);
+
+                task.ContinueWith((t, s) =>
+                {
+                    logPlz.WriteLine($"Request {s} returned. Task status: {t.Status}");
+                }, requestCounter);
+
                 requestTasks.Add(task);
+                requestCounter++;
+            }
+        }
+
+        [Fact]
+        public async Task SufferPlease()
+        {
+            int socketCounter = 0;
+            int requestCounter = 0;
+            Uri uri = new Uri("http://motherfuckingwebsite.com/");
+
+            using LogHttpEventListener logPlz = new LogHttpEventListener();
+            _output.WriteLine($"Logging to: {logPlz.Prefix}");
+
+            using SocketsHttpHandler handler = new SocketsHttpHandler()
+            {
+                ConnectCallback = ConnectPlz,
+                //ConnectTimeout = TimeSpan.FromSeconds(2)
+            };
+            using HttpClient client = new HttpClient(handler);
+
+            List<Task<HttpResponseMessage>> requestTasks = new();
+
+            IssueRequest();
+            await Task.Delay(1000);
+            IssueRequest(5000);
+
+            try
+            {
+                await Task.WhenAll(requestTasks);
+            }
+            catch (Exception ex)
+            {
+                logPlz.WriteLine($"FINAL EXCEPTION: {ex.GetType().Name} / {ex.Message}");
+            }
+            
+            _output.WriteLine("yay");
+            logPlz.WriteLine("GOODBYE");
+
+            void IssueRequest(int timeoutMs = 600)
+            {
+                HttpRequestMessage request = new HttpRequestMessage()
+                {
+                    Method = HttpMethod.Get,
+                    RequestUri = uri,
+                    Version = HttpVersion.Version11,
+                    VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                };
+
+                logPlz.WriteLine($"sending request {requestCounter}");
+                var cts = new CancellationTokenSource(timeoutMs);
+                Task<HttpResponseMessage> task = client.SendAsync(request, cts.Token);
+                task.ContinueWith((t, s) =>
+                {
+                    logPlz.WriteLine($"Request {s} returned. Task status: {t.Status}");
+                }, requestCounter);
+                requestTasks.Add(task);
+                requestCounter++;
             }
 
-            static async ValueTask<Stream> ConnectPlz(SocketsHttpConnectionContext ctx, CancellationToken cancellationToken)
+            async ValueTask<Stream> ConnectPlz(SocketsHttpConnectionContext ctx, CancellationToken cancellationToken)
             {
                 var s = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
-                await s.ConnectAsync(ctx.DnsEndPoint);
+                if (socketCounter++ == 0)
+                {
+                    await Task.Delay(3000);
+                    throw new SocketException(666);
+                }
+                else
+                {
+                    await s.ConnectAsync(ctx.DnsEndPoint);
+                }
+                
                 return new NetworkStream(s, ownsSocket: true);
             }
         }
@@ -640,7 +930,7 @@ namespace System.Net.Http.Functional.Tests
     {
         public SocketsHttpHandler_TrailingHeaders_Test(ITestOutputHelper output) : base(output) { }
 
-        protected static byte[] DataBytes = "data"u8.ToArray();
+        protected static byte[] DataBytes = Encoding.UTF8.GetBytes("data");
 
         protected static readonly IList<HttpHeaderData> TrailingHeaders = new HttpHeaderData[] {
             new HttpHeaderData("MyCoolTrailerHeader", "amazingtrailer"),

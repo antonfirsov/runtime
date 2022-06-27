@@ -46,14 +46,14 @@ namespace System.Net.Http.Functional.Tests
                 Directory.CreateDirectory(LogDirectory);
             }
 
-            foreach (string filename in Directory.GetFiles(LogDirectory, "client*.log"))
-            {
-                try
-                {
-                    File.Delete(filename);
-                }
-                catch { }
-            }
+            //foreach (string filename in Directory.GetFiles(LogDirectory, "client*.log"))
+            //{
+            //    try
+            //    {
+            //        File.Delete(filename);
+            //    }
+            //    catch { }
+            //}
             _log = CreateNextLogFileStream();
             _messagesChannel = Channel.CreateUnbounded<string>();
             _processMessages = ProcessMessagesAsync();
@@ -117,6 +117,16 @@ namespace System.Net.Http.Functional.Tests
             await _messagesChannel.Writer.WriteAsync(sb.ToString());
             sb.Clear();
             Interlocked.Exchange(ref _cachedStringBuilder, sb);
+        }
+
+        public async ValueTask WriteLineAsync(string msg)
+        {
+            await _messagesChannel.Writer.WriteAsync($"!{DateTime.Now:HH:mm:ss.fffffff} {msg}{Environment.NewLine}");
+        }
+
+        public void WriteLine(string msg)
+        {
+            _messagesChannel.Writer.TryWrite($"!{DateTime.Now:HH:mm:ss.fffffff} {msg}{Environment.NewLine}");
         }
 
         public override void Dispose()
