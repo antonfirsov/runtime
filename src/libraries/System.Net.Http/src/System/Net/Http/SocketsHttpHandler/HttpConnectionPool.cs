@@ -507,6 +507,57 @@ namespace System.Net.Http
             }
         }
 
+        private bool TryGetPooledHttp11Connection(HttpRequestMessage request, bool async, out HttpConnection? connection, out HttpConnectionWaiter<HttpConnection>? waiter)
+        {
+            waiter = null;
+            connection = null;
+            while (true)
+            {
+                lock (SyncObj)
+                {
+                    _usedSinceLastCleanup = true;
+
+                    int availableConnectionCount = _availableHttp11Connections.Count;
+                    if (availableConnectionCount > 0)
+                    {
+                        // We have a connection that we can attempt to use.
+                        // Validate it below outside the lock, to avoid doing expensive operations while holding the lock.
+                        connection = _availableHttp11Connections[availableConnectionCount - 1];
+                        _availableHttp11Connections.RemoveAt(availableConnectionCount - 1);
+                    }
+                    else
+                    {
+                        // No available connections. Add to the request queue.
+                        waiter = _http11RequestQueue.EnqueueRequest(request);
+
+                        CheckForHttp11ConnectionInjection();
+
+                        // There were no available idle connections. This request has been added to the request queue.
+                        if (NetEventSource.Log.IsEnabled()) Trace($"No available HTTP/1.1 connections; request queued.");
+
+                        return false;
+                    }
+                }
+
+                if (CheckExpirationOnGet(connection))
+                {
+                    if (NetEventSource.Log.IsEnabled()) connection.Trace("Found expired HTTP/1.1 connection in pool.");
+                    connection.Dispose();
+                    continue;
+                }
+
+                if (!connection.PrepareForReuse(async))
+                {
+                    if (NetEventSource.Log.IsEnabled()) connection.Trace("Found invalid HTTP/1.1 connection in pool.");
+                    connection.Dispose();
+                    continue;
+                }
+
+                if (NetEventSource.Log.IsEnabled()) connection.Trace("Found usable HTTP/1.1 connection in pool.");
+                return true;
+            }
+        }
+
         private async ValueTask<HttpConnection> GetHttp11ConnectionAsync(HttpRequestMessage request, bool async, CancellationToken cancellationToken)
         {
             // Look for a usable idle connection.
@@ -2256,7 +2307,7 @@ namespace System.Net.Http
             public struct QueueItem
             {
                 public HttpRequestMessage Request;
-                public TaskCompletionSourceWithCancellation<T> Waiter;
+                public HttpConnectionWaiter<T> Waiter;
             }
 
             // This implementation mimics that of Queue<T>, but without version checks and with an extra head pointer
@@ -2355,9 +2406,9 @@ namespace System.Net.Http
             }
 
 
-            public TaskCompletionSourceWithCancellation<T> EnqueueRequest(HttpRequestMessage request)
+            public HttpConnectionWaiter<T> EnqueueRequest(HttpRequestMessage request)
             {
-                var waiter = new TaskCompletionSourceWithCancellation<T>();
+                var waiter = new HttpConnectionWaiter<T>();
                 Enqueue(new QueueItem { Request = request, Waiter = waiter });
                 return waiter;
             }
@@ -2418,6 +2469,30 @@ namespace System.Net.Http
             public int Count => _size;
 
             public int RequestsWithoutAConnectionAttempt => _size - _attemptedConnectionsOffset;
+        }
+
+        private sealed class HttpConnectionWaiter<T> : TaskCompletionSourceWithCancellation<T>
+        {
+            public CancellationTokenSource? ConnectionCancellationTokenSource { get; set; }
+
+            public async ValueTask<T> WaitForConnectionAsync(bool async, CancellationToken requestCancellationToken)
+            {
+                long startingTimestamp = Stopwatch.GetTimestamp();
+                try
+                {
+                    return await WaitWithCancellationAsync(async, requestCancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    if (HttpTelemetry.Log.IsEnabled())
+                    {
+                        if (typeof(T) == typeof(HttpConnection))
+                            HttpTelemetry.Log.Http11RequestLeftQueue(Stopwatch.GetElapsedTime(startingTimestamp).TotalMilliseconds);
+                        else if (typeof(T) == typeof(Http2Connection))
+                            HttpTelemetry.Log.Http20RequestLeftQueue(Stopwatch.GetElapsedTime(startingTimestamp).TotalMilliseconds);
+                    }
+                }
+            }
         }
     }
 }
