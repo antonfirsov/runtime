@@ -1248,14 +1248,27 @@ namespace System.Net.Http
                 finally
                 {
                     Debug.Assert(http11ConnectionWaiter == null || http2ConnectionWaiter == null);
-                    try
-                    {
-                        if (http11ConnectionWaiter != null)
-                            http11ConnectionWaiter.ConnectionCancellationTokenSource?.Cancel();
-                        else if (http2ConnectionWaiter != null)
-                            http2ConnectionWaiter.ConnectionCancellationTokenSource?.Cancel();
-                    }
-                    catch (ObjectDisposedException) { }
+                    CancelWithGlobalTimeout(this, http11ConnectionWaiter?.ConnectionCancellationTokenSource);
+                    CancelWithGlobalTimeout(this, http2ConnectionWaiter?.ConnectionCancellationTokenSource);
+                }
+            }
+
+            static void CancelWithGlobalTimeout(HttpConnectionPool pool, CancellationTokenSource? cts)
+            {
+                if (cts == null) return;
+                if (NetEventSource.Log.IsEnabled())
+                    pool.Trace($"Cancelling pending connection with timeout of {GlobalHttpSettings.SocketsHttpHandler.PendingConnectionTimeoutOnRequestCompletion} ms");
+
+                try
+                {
+                    if (GlobalHttpSettings.SocketsHttpHandler.PendingConnectionTimeoutOnRequestCompletion > 0)
+                        cts.CancelAfter(GlobalHttpSettings.SocketsHttpHandler.PendingConnectionTimeoutOnRequestCompletion);
+                    else
+                        cts.Cancel(); // Cancel immediately by default
+                }
+                catch (ObjectDisposedException)
+                {
+                    // There is a low-probability race for the CTS being disposed at the time of the cancellation call, ignore this ODE.
                 }
             }
         }

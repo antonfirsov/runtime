@@ -295,32 +295,6 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
-        //[Fact]
-        //public async Task WhatIfCancelled()
-        //{
-        //    CancellationTokenSource cts = new CancellationTokenSource();
-        //    await LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
-        //    {
-        //        using var client = CreateHttpClient();
-        //        var ex = await Assert.ThrowsAnyAsync<Exception>(async () =>
-        //        {
-        //            var resp = await client.GetAsync(uri, cts.Token);
-        //            _output.WriteLine(resp.StatusCode.ToString());
-        //        });
-        //        _output.WriteLine(ex.GetType().Name);
-        //    }, async server =>
-        //    {
-        //        await Task.Delay(100);
-        //        await server.AcceptConnectionAsync(async c =>
-        //        {
-        //            await c.ReadRequestDataAsync();
-        //            await Task.Delay(100);
-        //            cts.Cancel();
-        //            await Task.Delay(200);
-        //        });
-        //    });
-        //}
-
         [Fact]
         public async Task CancelPendingRequest_DropsStalledConnectionAttempt()
         {
