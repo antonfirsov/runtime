@@ -295,6 +295,141 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
+        [Fact]
+        public async Task CancelPendingRequest_DropsStalledConnectionAttempt()
+        {
+            const int AttemptCount = 3;
+            const int FirstConnectionDelayMs = 5000;
+            const int RequestTimeoutMs = 100;
+            bool firstConnection = true;
+
+            using LogHttpEventListener logPlz = new LogHttpEventListener();
+            _output.WriteLine($"Logging to: {logPlz.Prefix}");
+
+            await LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using var handler = CreateHttpClientHandler();
+                GetUnderlyingSocketsHttpHandler(handler).ConnectCallback = DoConnect;
+                using var client = CreateHttpClient(handler);
+
+                using (var cts0 = new CancellationTokenSource(RequestTimeoutMs))
+                {
+                    
+                    await Assert.ThrowsAnyAsync<TaskCanceledException>(async () =>
+                    {
+                        logPlz.WriteLine($"sending request -1");
+                        await client.GetAsync(uri, cts0.Token);
+                    });
+                }
+                _output.WriteLine("attempt -1 failed succesfully");
+
+                for (int i = 0; i < AttemptCount; i++)
+                {
+                    using var cts1 = new CancellationTokenSource(RequestTimeoutMs);
+                    logPlz.WriteLine($"sending request {i}");
+                    using var response = await client.GetAsync(uri, cts1.Token);
+                    logPlz.WriteLine($"request {i} made it");
+                    _output.WriteLine($"attempt {i} made it");
+                    Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                }
+            }, async server =>
+            {
+                await server.AcceptConnectionAsync(async connection =>
+                {
+                    for (int i = 0; i < AttemptCount; i++)
+                    {
+                        await connection.ReadRequestDataAsync();
+                        await connection.SendResponseAsync();
+                        connection.CompleteRequestProcessing();
+                    }
+                });
+            });
+
+            async ValueTask<Stream> DoConnect(SocketsHttpConnectionContext ctx, CancellationToken cancellationToken)
+            {
+                var s = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                logPlz.WriteLine($"DoConnect firstConnection={firstConnection}");
+                if (firstConnection)
+                {
+                    firstConnection = false;
+                    await Task.Delay(FirstConnectionDelayMs, cancellationToken); // Simulate stalled connection
+                }
+
+                await s.ConnectAsync(ctx.DnsEndPoint, cancellationToken);
+
+                return new NetworkStream(s, ownsSocket: true);
+            }
+        }
+
+
+        [Fact]
+        public async Task FinishPendingRequest_DropsStalledConnectionAttempt()
+        {
+            const int AttemptCount = 3;
+            const int BadConnectionDelayMs = 5000;
+            const int RequestTimeoutMs = 100;
+            int connectionCounter = 0;
+
+            using LogHttpEventListener logPlz = new LogHttpEventListener();
+            _output.WriteLine($"Logging to: {logPlz.Prefix}");
+
+            await LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using var handler = CreateHttpClientHandler();
+                GetUnderlyingSocketsHttpHandler(handler).ConnectCallback = DoConnect;
+                using var client = CreateHttpClient(handler);
+
+                using (var cts0 = new CancellationTokenSource(RequestTimeoutMs))
+                {
+                    await Assert.ThrowsAnyAsync<TaskCanceledException>(async () =>
+                    {
+                        logPlz.WriteLine($"sending request -1");
+                        await client.GetAsync(uri, cts0.Token);
+                    });
+                }
+                _output.WriteLine("attempt -1 failed succesfully");
+
+                for (int i = 0; i < AttemptCount; i++)
+                {
+                    using var cts1 = new CancellationTokenSource(RequestTimeoutMs);
+                    logPlz.WriteLine($"sending request {i}");
+                    using var response = await client.GetAsync(uri, cts1.Token);
+                    logPlz.WriteLine($"request {i} made it");
+                    _output.WriteLine($"attempt {i} made it");
+                    Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+                }
+            }, async server =>
+            {
+                //await server.AcceptConnectionAsync(_ => Task.CompletedTask);
+                //_output.WriteLine("S: done accepting failed connection lol?");
+
+                for (int i = 0; i < AttemptCount; i++)
+                {
+                    await server.AcceptConnectionAsync(async connection =>
+                    {
+                        await connection.HandleRequestAsync();
+
+                        _output.WriteLine($"S: handled request {i}");
+                    });
+                    
+                }
+            });
+
+            async ValueTask<Stream> DoConnect(SocketsHttpConnectionContext ctx, CancellationToken cancellationToken)
+            {
+                var s = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+                logPlz.WriteLine($"DoConnect connectionCounter={connectionCounter}");
+                if (connectionCounter++ == 1)
+                {
+                    await Task.Delay(BadConnectionDelayMs, cancellationToken); // Simulate stalled connection
+                }
+
+                await s.ConnectAsync(ctx.DnsEndPoint, cancellationToken);
+
+                return new NetworkStream(s, ownsSocket: true);
+            }
+        }
+
         private sealed class SetTcsContent : StreamContent
         {
             private readonly TaskCompletionSource<bool> _tcs;
