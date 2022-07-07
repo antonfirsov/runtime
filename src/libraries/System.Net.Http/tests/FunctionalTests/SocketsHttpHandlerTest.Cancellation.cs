@@ -295,16 +295,41 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
+        //[Fact]
+        //public async Task WhatIfCancelled()
+        //{
+        //    CancellationTokenSource cts = new CancellationTokenSource();
+        //    await LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+        //    {
+        //        using var client = CreateHttpClient();
+        //        var ex = await Assert.ThrowsAnyAsync<Exception>(async () =>
+        //        {
+        //            var resp = await client.GetAsync(uri, cts.Token);
+        //            _output.WriteLine(resp.StatusCode.ToString());
+        //        });
+        //        _output.WriteLine(ex.GetType().Name);
+        //    }, async server =>
+        //    {
+        //        await Task.Delay(100);
+        //        await server.AcceptConnectionAsync(async c =>
+        //        {
+        //            await c.ReadRequestDataAsync();
+        //            await Task.Delay(100);
+        //            cts.Cancel();
+        //            await Task.Delay(200);
+        //        });
+        //    });
+        //}
+
         [Fact]
         public async Task CancelPendingRequest_DropsStalledConnectionAttempt()
         {
             const int AttemptCount = 3;
-            const int FirstConnectionDelayMs = 5000;
-            const int RequestTimeoutMs = 100;
+            const int FirstConnectionDelayMs = 10_000;
+            const int RequestTimeoutMs = 1000;
             bool firstConnection = true;
 
-            using LogHttpEventListener logPlz = new LogHttpEventListener();
-            _output.WriteLine($"Logging to: {logPlz.Prefix}");
+            using CancellationTokenSource cts0 = new CancellationTokenSource(RequestTimeoutMs);
 
             await LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
@@ -312,24 +337,15 @@ namespace System.Net.Http.Functional.Tests
                 GetUnderlyingSocketsHttpHandler(handler).ConnectCallback = DoConnect;
                 using var client = CreateHttpClient(handler);
 
-                using (var cts0 = new CancellationTokenSource(RequestTimeoutMs))
+                await Assert.ThrowsAnyAsync<TaskCanceledException>(async () =>
                 {
-                    
-                    await Assert.ThrowsAnyAsync<TaskCanceledException>(async () =>
-                    {
-                        logPlz.WriteLine($"sending request -1");
-                        await client.GetAsync(uri, cts0.Token);
-                    });
-                }
-                _output.WriteLine("attempt -1 failed succesfully");
+                    await client.GetAsync(uri, cts0.Token);
+                });
 
                 for (int i = 0; i < AttemptCount; i++)
                 {
                     using var cts1 = new CancellationTokenSource(RequestTimeoutMs);
-                    logPlz.WriteLine($"sending request {i}");
                     using var response = await client.GetAsync(uri, cts1.Token);
-                    logPlz.WriteLine($"request {i} made it");
-                    _output.WriteLine($"attempt {i} made it");
                     Assert.Equal(HttpStatusCode.OK, response.StatusCode);
                 }
             }, async server =>
@@ -347,14 +363,14 @@ namespace System.Net.Http.Functional.Tests
 
             async ValueTask<Stream> DoConnect(SocketsHttpConnectionContext ctx, CancellationToken cancellationToken)
             {
-                var s = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
-                logPlz.WriteLine($"DoConnect firstConnection={firstConnection}");
                 if (firstConnection)
                 {
                     firstConnection = false;
+                    await Task.Delay(100, cancellationToken); // Wait for the request to be pushed to the queue
+                    cts0.Cancel(); // cancel the first request faster than RequestTimeoutMs
                     await Task.Delay(FirstConnectionDelayMs, cancellationToken); // Simulate stalled connection
                 }
-
+                var s = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
                 await s.ConnectAsync(ctx.DnsEndPoint, cancellationToken);
 
                 return new NetworkStream(s, ownsSocket: true);
