@@ -487,5 +487,80 @@ namespace System.Net.Sockets.Tests
     public sealed class AcceptEap : Accept<SocketHelperEap>
     {
         public AcceptEap(ITestOutputHelper output) : base(output) {}
+
+
+        [Fact]
+        public async Task TrollEmpire_Sync()
+        {
+            using Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            listener.BindToAnonymousPort(IPAddress.Loopback);
+            listener.Listen();
+            var acceptTask = listener.AcceptAsync();
+            IPEndPoint remoteEp = (IPEndPoint)listener.LocalEndPoint;
+
+            using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            client.BindToAnonymousPort(IPAddress.Loopback);
+
+            client.Connect(remoteEp);
+            client.Send(new byte[42]);
+
+            await acceptTask;
+        }
+
+        [Fact]
+        public async Task TrollEmpire_Nonblocking()
+        {
+            using Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            listener.BindToAnonymousPort(IPAddress.Loopback);
+            listener.Listen();
+            
+            IPEndPoint remoteEp = (IPEndPoint)listener.LocalEndPoint;
+
+            using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            client.BindToAnonymousPort(IPAddress.Loopback);
+
+            var connectTask = client.ConnectAsync(remoteEp);
+            using Socket handler = listener.Accept();
+            handler.Blocking = false;
+            await connectTask;
+
+            var sendTask = Task.Run(async () =>
+            {
+                await Task.Delay(10_000);
+                await client.SendAsync(new byte[42]);
+            });
+
+            handler.Receive(new byte[42]);
+
+            await sendTask;
+        }
+
+        [Fact]
+        public async Task TrollEmpire_Async()
+        {
+            using Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            listener.BindToAnonymousPort(IPAddress.Loopback);
+            listener.Listen();
+
+            IPEndPoint remoteEp = (IPEndPoint)listener.LocalEndPoint;
+
+            using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            client.BindToAnonymousPort(IPAddress.Loopback);
+
+            var connectTask = client.ConnectAsync(remoteEp);
+            using Socket handler = listener.Accept();
+            await handler.SendAsync(new byte[66]);
+            await connectTask;
+
+            var sendTask = Task.Run(async () =>
+            {
+                await Task.Delay(10_000);
+                await client.SendAsync(new byte[42]);
+            });
+
+            handler.Receive(new byte[42]);
+
+            await sendTask;
+        }
     }
 }
