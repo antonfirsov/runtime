@@ -535,7 +535,6 @@ namespace System.Net.Sockets.Tests
             await sendTask;
         }
 
-
         [Fact]
         public async Task TrollEmpire_Async()
         {
