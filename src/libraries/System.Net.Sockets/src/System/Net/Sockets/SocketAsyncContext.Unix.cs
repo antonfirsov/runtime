@@ -1561,6 +1561,11 @@ namespace System.Net.Sockets
             return operation.ErrorCode;
         }
 
+        private ref struct SyncOperationState
+        {
+            public Span<byte> Buffer;
+        }
+
         public unsafe SocketError ReceiveFrom(Span<byte> buffer, ref SocketFlags flags, byte[]? socketAddress, ref int socketAddressLen, int timeout, out int bytesReceived)
         {
             SocketFlags receivedFlags;
