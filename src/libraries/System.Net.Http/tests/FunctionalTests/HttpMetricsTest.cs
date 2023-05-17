@@ -5,14 +5,233 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
 using System.Linq;
+using System.Net.Test.Common;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Xunit;
+using Xunit.Abstractions;
 
 namespace System.Net.Http.Functional.Tests
 {
-    public class HttpMetricsTest
+    public class HttpClientHandlerMetricsTest : HttpClientHandlerTestBase
+    {
+        public HttpClientHandlerMetricsTest(ITestOutputHelper output) : base(output)
+        {
+        }
+
+        private static void AssertCurrentRequest(Measurement<long> measurement, long expectedValue, string scheme, string host, int? port = null)
+        {
+            Assert.Equal(expectedValue, measurement.Value);
+            Assert.Equal(scheme, measurement.Tags.ToArray().Single(t => t.Key == "scheme").Value);
+            Assert.Equal(host, measurement.Tags.ToArray().Single(t => t.Key == "host").Value);
+            AssertOptionalTag(measurement.Tags, "port", port);
+        }
+
+        private static void AssertRequestDuration(Measurement<double> measurement, string scheme, string host, string? protocol, int? statusCode, int? port = null)
+        {
+            Assert.True(measurement.Value > 0);
+            Assert.Equal(scheme, measurement.Tags.ToArray().Single(t => t.Key == "scheme").Value);
+            Assert.Equal(host, measurement.Tags.ToArray().Single(t => t.Key == "host").Value);
+            AssertOptionalTag(measurement.Tags, "port", port);
+            AssertOptionalTag(measurement.Tags, "protocol", protocol);
+            AssertOptionalTag(measurement.Tags, "status-code", statusCode);
+        }
+
+        private static void AssertOptionalTag<T>(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name, T value)
+        {
+            if (value is null)
+            {
+                Assert.DoesNotContain(tags.ToArray(), t => t.Key == "name");
+            }
+            else
+            {
+                Assert.Equal(value, (T)tags.ToArray().Single(t => t.Key == name).Value);
+            }
+        }
+
+        private sealed class EnrichmentHandler : DelegatingHandler
+        {
+            public EnrichmentHandler(HttpMessageHandler innerHandler) : base(innerHandler)
+            {
+            }
+
+            protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                try
+                {
+                    request.MetricsTags.Add(new KeyValuePair<string, object?>("before", "before!"));
+                    var response = base.Send(request, cancellationToken);
+                    request.MetricsTags.Add(new KeyValuePair<string, object?>("after", "after!"));
+                    return response;
+                }
+                catch
+                {
+                    request.MetricsTags.Add(new KeyValuePair<string, object?>("error", "error!"));
+                    throw;
+                }
+            }
+
+            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                try
+                {
+                    request.MetricsTags.Add(new KeyValuePair<string, object?>("before", "before!"));
+                    var response = await base.SendAsync(request, cancellationToken);
+                    request.MetricsTags.Add(new KeyValuePair<string, object?>("after", "after!"));
+                    return response;
+                }
+                catch
+                {
+                    request.MetricsTags.Add(new KeyValuePair<string, object?>("error", "error!"));
+                    throw;
+                }
+            }
+        }
+
+        [Fact]
+        public Task SendAsync_CurrentRequests_Success()
+        {
+            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using HttpClient client = CreateHttpClient();
+
+                using var recorder = new InstrumentRecorder<long>(client.Meter, "current-requests");
+
+                using HttpRequestMessage request = new(HttpMethod.Get, uri);
+
+                using var response = await client.SendAsync(request);
+
+                Assert.Collection(recorder.GetMeasurements(),
+                    m => AssertCurrentRequest(m, 1, uri.Scheme, uri.IdnHost),
+                    m => AssertCurrentRequest(m, -1, uri.Scheme, uri.IdnHost));
+
+            }, async server =>
+            {
+                await server.AcceptConnectionSendResponseAndCloseAsync();
+            });
+        }
+
+        [Fact]
+        public Task SendAsync_RequestDuration_Success()
+        {
+            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using HttpClient client = CreateHttpClient();
+
+                using var recorder = new InstrumentRecorder<double>(client.Meter, "request-duration");
+
+                using HttpRequestMessage request = new(HttpMethod.Get, uri);
+
+                using var response = await client.SendAsync(request);
+
+                Assert.Collection(recorder.GetMeasurements(),
+                    m => AssertRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200));
+
+            }, async server =>
+            {
+                await server.AcceptConnectionSendResponseAndCloseAsync();
+            });
+        }
+
+        [Fact]
+        public Task SendAsync_RequestDuration_CustomTags()
+        {
+            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using HttpClient client = CreateHttpClient();
+
+                using var recorder = new InstrumentRecorder<double>(client.Meter, "request-duration");
+
+                using HttpRequestMessage request = new(HttpMethod.Get, uri);
+                request.MetricsTags.Add(new KeyValuePair<string, object>("route", "/test"));
+
+                using var response = await client.SendAsync(request);
+
+                Assert.Collection(recorder.GetMeasurements(),
+                    m =>
+                    {
+                        AssertRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200);
+                        Assert.Equal("/test", m.Tags.ToArray().Single(t => t.Key == "route").Value);
+                    });
+
+            }, async server =>
+            {
+                await server.AcceptConnectionSendResponseAndCloseAsync();
+            });
+        }
+
+        [Fact]
+        public Task SendAsync_RequestDuration_EnrichmentHandler_Success()
+        {
+            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using EnrichmentHandler handler = new EnrichmentHandler(CreateHttpClientHandler());
+                using HttpClient client = CreateHttpClient();
+
+                using var recorder = new InstrumentRecorder<double>(client.Meter, "request-duration");
+
+                using HttpRequestMessage request = new(HttpMethod.Get, uri);
+                request.MetricsTags.Add(new KeyValuePair<string, object>("route", "/test"));
+
+                using var response = await client.SendAsync(request);
+
+                Assert.Collection(recorder.GetMeasurements(),
+                m =>
+                {
+                    AssertRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200); ;
+                    Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
+                    Assert.Equal("after!", m.Tags.ToArray().Single(t => t.Key == "after").Value);
+                });
+
+            }, async server =>
+            {
+                await server.AcceptConnectionSendResponseAndCloseAsync();
+            });
+        }
+
+        [Fact]
+        public Task SendAsync_RequestDuration_EnrichmentHandler_Error()
+        {
+            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using EnrichmentHandler handler = new EnrichmentHandler(CreateHttpClientHandler());
+                using HttpClient client = CreateHttpClient();
+
+                using var recorder = new InstrumentRecorder<double>(client.Meter, "request-duration");
+
+                using HttpRequestMessage request = new(HttpMethod.Get, uri);
+                request.MetricsTags.Add(new KeyValuePair<string, object>("route", "/test"));
+
+                using var response = await client.SendAsync(request);
+
+                Assert.Collection(recorder.GetMeasurements(),
+                    m =>
+                    {
+                        AssertRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200); ;
+                        Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
+                        Assert.Equal("after!", m.Tags.ToArray().Single(t => t.Key == "after").Value);
+                    });
+
+            }, async server =>
+            {
+                await server.AcceptConnectionAsync(async connection =>
+                {
+                    await connection.ReadRequestDataAsync();
+
+                    // Contnet-Lenghth mistmatch error:
+                    await connection.SendResponseHeadersAsync(HttpStatusCode.OK, new HttpHeaderData[]
+                    {
+                        new HttpHeaderData("Content-Length", "42")
+                    });
+
+                    await connection.SendResponseBodyAsync(new byte[43], true);
+                });
+            });
+        }
+    }
+
+    public class HttpMetricsTest_Orig
     {
         [Fact]
         public async Task SendAsync_CurrentRequests_Success()
