@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.Metrics;
 using System.Threading;
 
 namespace System.Net.Http
@@ -27,5 +28,6 @@ namespace System.Net.Http
         public static readonly TimeSpan DefaultPooledConnectionIdleTimeout = TimeSpan.FromMinutes(1);
         public static readonly TimeSpan DefaultExpect100ContinueTimeout = TimeSpan.FromSeconds(1);
         public static readonly TimeSpan DefaultConnectTimeout = Timeout.InfiniteTimeSpan;
+        public static readonly Meter DefaultMeter = new Meter("System.Net.Http");
     }
 }

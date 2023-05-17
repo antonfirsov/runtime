@@ -34,13 +34,9 @@ namespace System.Net.Http
             }
         }
 
-        public void RequestStartCore(HttpRequestMessage request)
+        private void RequestStartCore(HttpRequestMessage request)
         {
-#pragma warning disable SA1129 // Do not use default value type constructor
-            var tags = new TagList();
-#pragma warning restore SA1129 // Do not use default value type constructor
-            InitializeCommonTags(ref tags, request);
-
+            TagList tags = InitializeCommonTags(request);
             _currentRequests.Add(1, tags);
         }
 
@@ -54,10 +50,7 @@ namespace System.Net.Http
 
         private void RequestStopCore(HttpRequestMessage request, HttpResponseMessage? response, Exception? unhandledException, long startTimestamp, long currentTimestamp)
         {
-#pragma warning disable SA1129 // Do not use default value type constructor
-            var tags = new TagList();
-#pragma warning restore SA1129 // Do not use default value type constructor
-            InitializeCommonTags(ref tags, request);
+            TagList tags = InitializeCommonTags(request);
 
             _currentRequests.Add(-1, tags);
 
@@ -81,8 +74,10 @@ namespace System.Net.Http
             _requestsDuration.Record(duration.TotalSeconds, tags);
         }
 
-        private static void InitializeCommonTags(ref TagList tags, HttpRequestMessage request)
+        private static TagList InitializeCommonTags(HttpRequestMessage request)
         {
+            TagList tags = default;
+
             if (request.RequestUri is { } requestUri && requestUri.IsAbsoluteUri)
             {
                 if (requestUri.Scheme is not null)
@@ -100,6 +95,8 @@ namespace System.Net.Http
                 }
             }
             tags.Add("method", request.Method.Method);
+
+            return tags;
         }
 
         internal bool RequestCountersEnabled() => _currentRequests.Enabled || _requestsDuration.Enabled;

@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace System.Net.Http
 {
@@ -450,12 +451,28 @@ namespace System.Net.Http
             }
         }
 
+        [CLSCompliant(false)]
+        public Meter Meter
+        {
+            get => _settings._meter;
+            set
+            {
+                ArgumentNullException.ThrowIfNull(value);
+                CheckDisposedOrStarted();
+                _settings._meter = value;
+            }
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing && !_disposed)
             {
                 _disposed = true;
                 _handler?.Dispose();
+                if (_settings._meter != HttpHandlerDefaults.DefaultMeter)
+                {
+                    _settings._meter.Dispose();
+                }
             }
 
             base.Dispose(disposing);
@@ -485,6 +502,8 @@ namespace System.Net.Http
             {
                 handler = new DiagnosticsHandler(handler, propagator, settings._allowAutoRedirect);
             }
+
+            handler = new MetricsHandler(handler, _settings._meter);
 
             if (settings._allowAutoRedirect)
             {
