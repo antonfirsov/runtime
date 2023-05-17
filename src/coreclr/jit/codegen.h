@@ -964,6 +964,7 @@ protected:
     void genHWIntrinsic_R_R_RM_R(GenTreeHWIntrinsic* node, instruction ins, emitAttr attr);
     void genHWIntrinsic_R_R_R_RM(
         instruction ins, emitAttr attr, regNumber targetReg, regNumber op1Reg, regNumber op2Reg, GenTree* op3);
+    void genHWIntrinsic_R_R_R_RM_I(GenTreeHWIntrinsic* node, instruction ins, emitAttr attr, int8_t ival);
     void genBaseIntrinsic(GenTreeHWIntrinsic* node);
     void genX86BaseIntrinsic(GenTreeHWIntrinsic* node);
     void genSSEIntrinsic(GenTreeHWIntrinsic* node);
@@ -974,6 +975,7 @@ protected:
     void genAESIntrinsic(GenTreeHWIntrinsic* node);
     void genBMI1OrBMI2Intrinsic(GenTreeHWIntrinsic* node);
     void genFMAIntrinsic(GenTreeHWIntrinsic* node);
+    void genPermuteVar2x(GenTreeHWIntrinsic* node);
     void genLZCNTIntrinsic(GenTreeHWIntrinsic* node);
     void genPCLMULQDQIntrinsic(GenTreeHWIntrinsic* node);
     void genPOPCNTIntrinsic(GenTreeHWIntrinsic* node);
@@ -1229,8 +1231,6 @@ protected:
     void genCodeForInitBlkUnroll(GenTreeBlk* initBlkNode);
     void genJumpTable(GenTree* tree);
     void genTableBasedSwitch(GenTree* tree);
-    void genCodeForArrIndex(GenTreeArrIndex* treeNode);
-    void genCodeForArrOffset(GenTreeArrOffs* treeNode);
 #if defined(TARGET_LOONGARCH64) || defined(TARGET_RISCV64)
     instruction genGetInsForOper(GenTree* treeNode);
 #else
