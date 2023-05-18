@@ -60,7 +60,6 @@ namespace System.Net.Http
         public HttpConnectionPoolManager(HttpConnectionSettings settings)
         {
             _settings = settings;
-            Metrics = new HttpMetrics(_settings._meter);
             _pools = new ConcurrentDictionary<HttpConnectionKey, HttpConnectionPool>();
 
             // As an optimization, we can sometimes avoid the overheads associated with
@@ -201,7 +200,7 @@ namespace System.Net.Http
             }
         }
 #endif
-        public HttpMetrics Metrics { get; }
+
         public HttpConnectionSettings Settings => _settings;
         public ICredentials? ProxyCredentials => _proxyCredentials;
 
@@ -354,12 +353,6 @@ namespace System.Net.Http
 
         public ValueTask<HttpResponseMessage> SendAsync(HttpRequestMessage request, bool async, bool doRequestAuth, CancellationToken cancellationToken)
         {
-            request._requestStartTimestamp = Stopwatch.GetTimestamp();
-            if (Metrics.RequestCountersEnabled())
-            {
-                Metrics.RequestStart(request);
-            }
-
             if (_proxy == null)
             {
                 return SendAsyncCore(request, null, async, doRequestAuth, isProxyConnect: false, cancellationToken);

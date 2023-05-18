@@ -22,14 +22,6 @@ namespace System.Net.Http
         private HttpContent? _content;
         private bool _disposed;
 
-#if !TARGET_BROWSER
-        // 0: Initial
-        // 1: Request left HttpMessageInvoker -OR- Response stream completed
-        // 2: Request left HttpMessageInvoker -AND- Response stream completed
-        internal int _metricsStatus;
-        internal HttpMetrics? _metrics;
-#endif
-
         public Version Version
         {
             get { return _version; }

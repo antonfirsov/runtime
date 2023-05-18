@@ -503,7 +503,7 @@ namespace System.Net.Http
                 handler = new DiagnosticsHandler(handler, propagator, settings._allowAutoRedirect);
             }
 
-            //handler = new MetricsHandler(handler, _settings._meter);
+            handler = new MetricsHandler(handler, _settings._meter);
 
             if (settings._allowAutoRedirect)
             {

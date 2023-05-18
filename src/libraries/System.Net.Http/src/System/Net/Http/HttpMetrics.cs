@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Threading;
 
 namespace System.Net.Http
 {
@@ -40,20 +39,6 @@ namespace System.Net.Http
             TagList tags = InitializeCommonTags(request);
             _currentRequests.Add(1, tags);
         }
-
-#if !TARGET_BROWSER
-        public void LogRequestStopSuccessIfNecessary(HttpRequestMessage request, HttpResponseMessage response)
-        {
-            if (RequestCountersEnabled())
-            {
-                Interlocked.Increment(ref response._metricsStatus);
-                if (response._metricsStatus == 2)
-                {
-                    RequestStop(request, response, null, request._requestStartTimestamp, Stopwatch.GetTimestamp());
-                }
-            }
-        }
-#endif
 
         public void RequestStop(HttpRequestMessage request, HttpResponseMessage? response, Exception? unhandledException, long startTimestamp, long currentTimestamp)
         {

@@ -33,10 +33,6 @@ namespace System.Net.Http
         private HttpRequestOptions? _options;
         private List<KeyValuePair<string, object?>>? _metricsTags;
 
-#if !TARGET_BROWSER
-        internal long _requestStartTimestamp;
-#endif
-
         public Version Version
         {
             get { return _version; }
