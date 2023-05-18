@@ -47,6 +47,7 @@ namespace System.Net.Http
         private readonly TransportContext? _transportContext;
 
         private HttpRequestMessage? _currentRequest;
+        private HttpResponseMessage? _currentResponse;
         private ArrayBuffer _writeBuffer;
         private int _allowedReadLineBytes;
 
@@ -638,10 +639,15 @@ namespace System.Net.Http
                     throw new IOException(SR.net_http_invalid_response_premature_eof);
                 }
 
+                var response = new HttpResponseMessage()
+                {
+                    RequestMessage = request,
+                    Content = new HttpConnectionResponseContent(),
+                    _metrics = _pool.Metrics
+                };
+                _currentResponse = response;
 
                 // Parse the response status line.
-                var response = new HttpResponseMessage() { RequestMessage = request, Content = new HttpConnectionResponseContent() };
-
                 while (!ParseStatusLine(response))
                 {
                     await FillForHeadersAsync(async).ConfigureAwait(false);
@@ -2001,8 +2007,14 @@ namespace System.Net.Http
             Debug.Assert(_currentRequest != null, "Expected the connection to be associated with a request.");
             Debug.Assert(_writeBuffer.ActiveLength == 0, "Everything in write buffer should have been flushed.");
 
+            if (_pool.Metrics.RequestCountersEnabled())
+            {
+                _pool.Metrics.LogRequestStopSuccessIfNecessary(_currentRequest!, _currentResponse!);
+            }
+
             // Disassociate the connection from a request.
             _currentRequest = null;
+            _currentResponse = null;
 
             // If we have extraneous data in the read buffer, don't reuse the connection;
             // otherwise we'd interpret this as part of the next response. Plus, we may

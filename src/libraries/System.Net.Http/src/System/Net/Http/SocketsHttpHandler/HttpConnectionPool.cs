@@ -340,6 +340,8 @@ namespace System.Net.Http
             return sslOptions;
         }
 
+        public HttpMetrics Metrics => _poolManager.Metrics;
+
         public HttpAuthority? OriginAuthority => _originAuthority;
         public HttpConnectionSettings Settings => _poolManager.Settings;
         public HttpConnectionKind Kind => _kind;

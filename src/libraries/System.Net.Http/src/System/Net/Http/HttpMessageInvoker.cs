@@ -38,30 +38,26 @@ namespace System.Net.Http
             if (ShouldSendWithTelemetry(request))
             {
                 HttpTelemetry.Log.RequestStart(request);
-
-                HttpResponseMessage? response = null;
-                try
-                {
-                    response = _handler.Send(request, cancellationToken);
-                    return response;
-                }
-                catch (Exception ex) when (LogRequestFailed(ex, telemetryStarted: true))
-                {
-                    // Unreachable as LogRequestFailed will return false
-                    throw;
-                }
-                finally
-                {
-                    HttpTelemetry.Log.RequestStop(response);
-                }
             }
-            else
+
+            HttpResponseMessage? response = null;
+            try
             {
-                return _handler.Send(request, cancellationToken);
+                response = _handler.Send(request, cancellationToken);
+                return response;
+            }
+            catch (Exception ex) when (ShouldSendWithTelemetry(request) && LogRequestFailed(ex, telemetryStarted: true))
+            {
+                // Unreachable as LogRequestFailed will return false
+                throw;
+            }
+            finally
+            {
+                HttpTelemetry.Log.RequestStop(response);
             }
         }
 
-        public virtual Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public virtual async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(request);
 
@@ -69,30 +65,29 @@ namespace System.Net.Http
 
             if (ShouldSendWithTelemetry(request))
             {
-                return SendAsyncWithTelemetry(_handler, request, cancellationToken);
+                HttpTelemetry.Log.RequestStart(request);
             }
 
-            return _handler.SendAsync(request, cancellationToken);
-
-            static async Task<HttpResponseMessage> SendAsyncWithTelemetry(HttpMessageHandler handler, HttpRequestMessage request, CancellationToken cancellationToken)
+            HttpResponseMessage? response = null;
+            try
             {
-                HttpTelemetry.Log.RequestStart(request);
-
-                HttpResponseMessage? response = null;
-                try
-                {
-                    response = await handler.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                    return response;
-                }
-                catch (Exception ex) when (LogRequestFailed(ex, telemetryStarted: true))
-                {
-                    // Unreachable as LogRequestFailed will return false
-                    throw;
-                }
-                finally
+                response = await _handler.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                return response;
+            }
+            catch (Exception ex) when (ShouldSendWithTelemetry(request) && LogRequestFailed(ex, telemetryStarted: true))
+            {
+                // Unreachable as LogRequestFailed will return false
+                throw;
+            }
+            finally
+            {
+                if (ShouldSendWithTelemetry(request))
                 {
                     HttpTelemetry.Log.RequestStop(response);
                 }
+#if !TARGET_BROWSER
+                response?._metrics?.LogRequestStopSuccessIfNecessary(request, response);
+#endif
             }
         }
 

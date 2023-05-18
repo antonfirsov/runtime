@@ -4,8 +4,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
+using System.IO;
 using System.Linq;
 using System.Net.Test.Common;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,9 +16,9 @@ using Xunit.Abstractions;
 
 namespace System.Net.Http.Functional.Tests
 {
-    public class HttpClientHandlerMetricsTest : HttpClientHandlerTestBase
+    public class HttpMetricsTest : HttpClientHandlerTestBase
     {
-        public HttpClientHandlerMetricsTest(ITestOutputHelper output) : base(output)
+        public HttpMetricsTest(ITestOutputHelper output) : base(output)
         {
         }
 
@@ -164,8 +166,21 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
-        [Fact]
-        public Task SendAsync_RequestDuration_EnrichmentHandler_Success()
+        public enum ResponseContentMode
+        {
+            Empty,
+            ContentLength,
+            TransferEncodingChunked
+        }
+
+        [Theory]
+        [InlineData(false, ResponseContentMode.Empty)]
+        [InlineData(false, ResponseContentMode.ContentLength)]
+        [InlineData(false, ResponseContentMode.TransferEncodingChunked)]
+        [InlineData(true, ResponseContentMode.Empty)]
+        [InlineData(true, ResponseContentMode.ContentLength)]
+        [InlineData(true, ResponseContentMode.TransferEncodingChunked)]
+        public Task SendAsync_RequestDuration_EnrichmentHandler_Success(bool loadIntoBuffer, ResponseContentMode mode)
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
@@ -176,19 +191,44 @@ namespace System.Net.Http.Functional.Tests
 
                 using HttpRequestMessage request = new(HttpMethod.Get, uri);
 
-                using var response = await client.SendAsync(request);
+                using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
+                if (loadIntoBuffer)
+                {
+                    await response.Content.LoadIntoBufferAsync();
+                }
+                else
+                {
+                    Stream stream = await response.Content.ReadAsStreamAsync();
+                    await new StreamReader(stream).ReadToEndAsync();
+                }
 
                 Assert.Collection(recorder.GetMeasurements(),
-                m =>
-                {
-                    AssertRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200); ;
-                    Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
-                    Assert.Equal("after!", m.Tags.ToArray().Single(t => t.Key == "after").Value);
-                });
+                    m =>
+                    {
+                        AssertRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200); ;
+                        Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
+                        Assert.Equal("after!", m.Tags.ToArray().Single(t => t.Key == "after").Value);
+                    });
 
             }, async server =>
             {
-                await server.AcceptConnectionSendResponseAndCloseAsync();
+                if (mode == ResponseContentMode.ContentLength)
+                {
+                    string content = string.Join(' ', Enumerable.Range(0, 100));
+                    int contentLength = Encoding.ASCII.GetByteCount(content);
+                    await server.AcceptConnectionSendResponseAndCloseAsync(content: content, additionalHeaders: new[] { new HttpHeaderData("Content-Length", $"{contentLength}")});
+                }
+                else if (mode == ResponseContentMode.TransferEncodingChunked)
+                {
+                    string content = "3\r\nfoo\r\n3\r\nbar\r\n0\r\n\r\n";
+                    await server.AcceptConnectionSendResponseAndCloseAsync(content: content, additionalHeaders: new[] { new HttpHeaderData("Transfer-Encoding", "chunked") });
+                }
+                else
+                {
+                    // Empty
+                    await server.AcceptConnectionSendResponseAndCloseAsync();
+                }
             });
         }
 
