@@ -4,8 +4,10 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
+using System.IO;
 using System.Linq;
 using System.Net.Test.Common;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,9 +16,9 @@ using Xunit.Abstractions;
 
 namespace System.Net.Http.Functional.Tests
 {
-    public class HttpClientHandlerMetricsTest : HttpClientHandlerTestBase
+    public class HttpMetricsTest : HttpClientHandlerTestBase
     {
-        public HttpClientHandlerMetricsTest(ITestOutputHelper output) : base(output)
+        public HttpMetricsTest(ITestOutputHelper output) : base(output)
         {
         }
 
@@ -61,9 +63,7 @@ namespace System.Net.Http.Functional.Tests
                 try
                 {
                     request.MetricsTags.Add(new KeyValuePair<string, object?>("before", "before!"));
-                    var response = base.Send(request, cancellationToken);
-                    request.MetricsTags.Add(new KeyValuePair<string, object?>("after", "after!"));
-                    return response;
+                    return base.Send(request, cancellationToken);
                 }
                 catch
                 {
@@ -77,9 +77,7 @@ namespace System.Net.Http.Functional.Tests
                 try
                 {
                     request.MetricsTags.Add(new KeyValuePair<string, object?>("before", "before!"));
-                    var response = await base.SendAsync(request, cancellationToken);
-                    request.MetricsTags.Add(new KeyValuePair<string, object?>("after", "after!"));
-                    return response;
+                    return await base.SendAsync(request, cancellationToken);
                 }
                 catch
                 {
@@ -164,31 +162,73 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
-        [Fact]
-        public Task SendAsync_RequestDuration_EnrichmentHandler_Success()
+        public enum ResponseContentType
+        {
+            Empty,
+            ContentLength,
+            TransferEncodingChunked
+        }
+
+        [Theory]
+        [InlineData(HttpCompletionOption.ResponseContentRead, false, ResponseContentType.Empty)]
+        [InlineData(HttpCompletionOption.ResponseContentRead, false, ResponseContentType.ContentLength)]
+        [InlineData(HttpCompletionOption.ResponseContentRead, false, ResponseContentType.TransferEncodingChunked)]
+        [InlineData(HttpCompletionOption.ResponseHeadersRead, false, ResponseContentType.Empty)]
+        [InlineData(HttpCompletionOption.ResponseHeadersRead, false, ResponseContentType.ContentLength)]
+        [InlineData(HttpCompletionOption.ResponseHeadersRead, false, ResponseContentType.TransferEncodingChunked)]
+        [InlineData(HttpCompletionOption.ResponseHeadersRead, true, ResponseContentType.Empty)]
+        [InlineData(HttpCompletionOption.ResponseHeadersRead, true, ResponseContentType.ContentLength)]
+        [InlineData(HttpCompletionOption.ResponseHeadersRead, true, ResponseContentType.TransferEncodingChunked)]
+        public Task SendAsync_RequestDuration_EnrichmentHandler_Success(HttpCompletionOption completionOption, bool loadIntoBuffer, ResponseContentType responseContentType)
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
                 using HttpClientHandler handler = CreateHttpClientHandler();
                 using HttpClient client = CreateHttpClient(new EnrichmentHandler(handler));
-
                 using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
-
                 using HttpRequestMessage request = new(HttpMethod.Get, uri);
+                using var response = await client.SendAsync(request, completionOption);
 
-                using var response = await client.SendAsync(request);
+                if (completionOption == HttpCompletionOption.ResponseHeadersRead)
+                {
+                    // Instrumentation should be delayed until reaching content EOF
+                    Assert.Empty(recorder.GetMeasurements());
+
+                    if (loadIntoBuffer)
+                    {
+                        await response.Content.LoadIntoBufferAsync();
+                    }
+                    else
+                    {
+                        using Stream stream = await response.Content.ReadAsStreamAsync();
+                        await stream.CopyToAsync(new MemoryStream());
+                    }
+                }
 
                 Assert.Collection(recorder.GetMeasurements(),
-                m =>
-                {
-                    AssertRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200); ;
-                    Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
-                    Assert.Equal("after!", m.Tags.ToArray().Single(t => t.Key == "after").Value);
-                });
-
+                    m =>
+                    {
+                        AssertRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200); ;
+                        Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
+                    });
             }, async server =>
             {
-                await server.AcceptConnectionSendResponseAndCloseAsync();
+                if (responseContentType == ResponseContentType.ContentLength)
+                {
+                    string content = string.Join(' ', Enumerable.Range(0, 100));
+                    int contentLength = Encoding.ASCII.GetByteCount(content);
+                    await server.AcceptConnectionSendResponseAndCloseAsync(content: content, additionalHeaders: new[] { new HttpHeaderData("Content-Length", $"{contentLength}") });
+                }
+                else if (responseContentType == ResponseContentType.TransferEncodingChunked)
+                {
+                    string content = "3\r\nfoo\r\n3\r\nbar\r\n0\r\n\r\n";
+                    await server.AcceptConnectionSendResponseAndCloseAsync(content: content, additionalHeaders: new[] { new HttpHeaderData("Transfer-Encoding", "chunked") });
+                }
+                else
+                {
+                    // Empty
+                    await server.AcceptConnectionSendResponseAndCloseAsync();
+                }
             });
         }
 
@@ -204,281 +244,29 @@ namespace System.Net.Http.Functional.Tests
 
                 using HttpRequestMessage request = new(HttpMethod.Get, uri);
 
-                using var response = await client.SendAsync(request);
+                await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(request));
 
                 Assert.Collection(recorder.GetMeasurements(),
                     m =>
                     {
                         AssertRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200); ;
                         Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
-                        Assert.Equal("after!", m.Tags.ToArray().Single(t => t.Key == "after").Value);
+                        Assert.Equal(typeof(HttpRequestException).FullName, m.Tags.ToArray().Single(t => t.Key == "exception-name").Value);
                     });
 
             }, async server =>
             {
                 await server.AcceptConnectionAsync(async connection =>
                 {
-                    await connection.ReadRequestDataAsync();
-
-                    // Contnet-Lenghth mistmatch error:
-                    await connection.SendResponseHeadersAsync(HttpStatusCode.OK, new HttpHeaderData[]
+                    // Emulate Content-Length mismatch
+                    await connection.SendResponseAsync(headers: new[]
                     {
-                        new HttpHeaderData("Content-Length", "42")
-                    });
-
-                    await connection.SendResponseBodyAsync(new byte[43], true);
+                        new HttpHeaderData("Content-Length", "1000")
+                    }, content: "x");
                 });
             });
         }
     }
-
-    //public class HttpMetricsTest_Orig
-    //{
-    //    [Fact]
-    //    public async Task SendAsync_CurrentRequests_Success()
-    //    {
-    //        var invoker = new HttpMessageInvoker(new MockHandler());
-    //        var currentRequestsRecorder = new InstrumentRecorder<long>(invoker.Meter, "current-requests");
-
-    //        var response = await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "https://localhost/test"), CancellationToken.None);
-
-    //        Assert.Collection(currentRequestsRecorder.GetMeasurements(),
-    //            m => AssertCurrentRequest(m, 1, "https", "localhost"),
-    //            m => AssertCurrentRequest(m, -1, "https", "localhost"));
-    //    }
-
-    //    [Fact]
-    //    public void Send_CurrentRequests_Success()
-    //    {
-    //        var invoker = new HttpMessageInvoker(new MockHandler());
-    //        var currentRequestsRecorder = new InstrumentRecorder<long>(invoker.Meter, "current-requests");
-
-    //        var response = invoker.Send(new HttpRequestMessage(HttpMethod.Get, "https://localhost/test"), CancellationToken.None);
-
-    //        Assert.Collection(currentRequestsRecorder.GetMeasurements(),
-    //            m => AssertCurrentRequest(m, 1, "https", "localhost"),
-    //            m => AssertCurrentRequest(m, -1, "https", "localhost"));
-    //    }
-
-    //    [Fact]
-    //    public async Task SendAsync_RequestDuration_Success()
-    //    {
-    //        var invoker = new HttpMessageInvoker(new MockHandler());
-    //        var currentRequestsRecorder = new InstrumentRecorder<double>(invoker.Meter, "request-duration");
-
-    //        var response = await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "https://localhost/test"), CancellationToken.None);
-
-    //        Assert.Collection(currentRequestsRecorder.GetMeasurements(),
-    //            m => AssertRequestDuration(m, "https", "localhost", "HTTP/1.1", 200));
-    //    }
-
-    //    [Fact]
-    //    public async Task SendAsync_RequestDuration_CustomTags()
-    //    {
-    //        var invoker = new HttpMessageInvoker(new MockHandler());
-    //        var currentRequestsRecorder = new InstrumentRecorder<double>(invoker.Meter, "request-duration");
-
-    //        var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/test");
-    //        request.MetricsTags.Add(new KeyValuePair<string, object>("route", "/test"));
-    //        var response = await invoker.SendAsync(request, CancellationToken.None);
-
-    //        Assert.Collection(currentRequestsRecorder.GetMeasurements(),
-    //            m =>
-    //            {
-    //                AssertRequestDuration(m, "http", "localhost", "HTTP/1.1", 200);
-    //                Assert.Equal("/test", m.Tags.ToArray().Single(t => t.Key == "route").Value);
-    //            });
-    //    }
-
-    //    [Fact]
-    //    public async Task SendAsync_RequestDuration_EnrichmentHandler_Success()
-    //    {
-    //        var invoker = new HttpMessageInvoker(new EnrichmentHandler(new MockHandler()));
-    //        var currentRequestsRecorder = new InstrumentRecorder<double>(invoker.Meter, "request-duration");
-
-    //        var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/test");
-    //        var response = await invoker.SendAsync(request, CancellationToken.None);
-
-    //        Assert.Collection(currentRequestsRecorder.GetMeasurements(),
-    //            m =>
-    //            {
-    //                AssertRequestDuration(m, "http", "localhost", "HTTP/1.1", 200);
-    //                Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
-    //                Assert.Equal("after!", m.Tags.ToArray().Single(t => t.Key == "after").Value);
-    //            });
-    //    }
-
-    //    [Fact]
-    //    public void Send_RequestDuration_EnrichmentHandler_Success()
-    //    {
-    //        var invoker = new HttpMessageInvoker(new EnrichmentHandler(new MockHandler()));
-    //        var currentRequestsRecorder = new InstrumentRecorder<double>(invoker.Meter, "request-duration");
-
-    //        var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/test");
-    //        var response = invoker.SendAsync(request, CancellationToken.None);
-
-    //        Assert.Collection(currentRequestsRecorder.GetMeasurements(),
-    //            m =>
-    //            {
-    //                AssertRequestDuration(m, "http", "localhost", "HTTP/1.1", 200);
-    //                Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
-    //                Assert.Equal("after!", m.Tags.ToArray().Single(t => t.Key == "after").Value);
-    //            });
-    //    }
-
-    //    [Fact]
-    //    public async Task SendAsync_RequestDuration_EnrichmentHandler_Error()
-    //    {
-    //        var invoker = new HttpMessageInvoker(new EnrichmentHandler(new MockHandler { ThrowError = true }));
-    //        var currentRequestsRecorder = new InstrumentRecorder<double>(invoker.Meter, "request-duration");
-
-    //        var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/test");
-    //        await Assert.ThrowsAsync<Exception>(() => invoker.SendAsync(request, CancellationToken.None));
-
-    //        Assert.Collection(currentRequestsRecorder.GetMeasurements(),
-    //            m =>
-    //            {
-    //                AssertRequestDuration(m, "http", "localhost", null, null);
-    //                Assert.Equal("System.Exception", m.Tags.ToArray().Single(t => t.Key == "exception-name").Value);
-    //                Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
-    //                Assert.Equal("error!", m.Tags.ToArray().Single(t => t.Key == "error").Value);
-    //            });
-    //    }
-
-    //    [Fact]
-    //    public void Send_RequestDuration_EnrichmentHandler_Error()
-    //    {
-    //        var invoker = new HttpMessageInvoker(new EnrichmentHandler(new MockHandler { ThrowError = true }));
-    //        var currentRequestsRecorder = new InstrumentRecorder<double>(invoker.Meter, "request-duration");
-
-    //        var request = new HttpRequestMessage(HttpMethod.Get, "http://localhost/test");
-    //        Assert.Throws<Exception>(() => invoker.Send(request, CancellationToken.None));
-
-    //        Assert.Collection(currentRequestsRecorder.GetMeasurements(),
-    //            m =>
-    //            {
-    //                AssertRequestDuration(m, "http", "localhost", null, null);
-    //                Assert.Equal("System.Exception", m.Tags.ToArray().Single(t => t.Key == "exception-name").Value);
-    //                Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
-    //                Assert.Equal("error!", m.Tags.ToArray().Single(t => t.Key == "error").Value);
-    //            });
-    //    }
-
-    //    private static void AssertCurrentRequest(Measurement<long> measurement, long expectedValue, string scheme, string host, int? port = null)
-    //    {
-    //        Assert.Equal(expectedValue, measurement.Value);
-    //        Assert.Equal(scheme, measurement.Tags.ToArray().Single(t => t.Key == "scheme").Value);
-    //        Assert.Equal(host, measurement.Tags.ToArray().Single(t => t.Key == "host").Value);
-    //        AssertOptionalTag(measurement.Tags, "port", port);
-    //    }
-
-    //    private static void AssertRequestDuration(Measurement<double> measurement, string scheme, string host, string? protocol, int? statusCode, int? port = null)
-    //    {
-    //        Assert.True(measurement.Value > 0);
-    //        Assert.Equal(scheme, measurement.Tags.ToArray().Single(t => t.Key == "scheme").Value);
-    //        Assert.Equal(host, measurement.Tags.ToArray().Single(t => t.Key == "host").Value);
-    //        AssertOptionalTag(measurement.Tags, "port", port);
-    //        AssertOptionalTag(measurement.Tags, "protocol", protocol);
-    //        AssertOptionalTag(measurement.Tags, "status-code", statusCode);
-    //    }
-
-    //    private static void AssertOptionalTag<T>(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name, T value)
-    //    {
-    //        if (value is null)
-    //        {
-    //            Assert.DoesNotContain(tags.ToArray(), t => t.Key == "name");
-    //        }
-    //        else
-    //        {
-    //            Assert.Equal(value, (T)tags.ToArray().Single(t => t.Key == name).Value);
-    //        }
-    //    }
-
-    //    private sealed class EnrichmentHandler : DelegatingHandler
-    //    {
-    //        public EnrichmentHandler(HttpMessageHandler innerHandler) : base(innerHandler)
-    //        {
-    //        }
-
-    //        protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
-    //        {
-    //            try
-    //            {
-    //                request.MetricsTags.Add(new KeyValuePair<string, object?>("before", "before!"));
-    //                var response = base.Send(request, cancellationToken);
-    //                request.MetricsTags.Add(new KeyValuePair<string, object?>("after", "after!"));
-    //                return response;
-    //            }
-    //            catch
-    //            {
-    //                request.MetricsTags.Add(new KeyValuePair<string, object?>("error", "error!"));
-    //                throw;
-    //            }
-    //        }
-
-    //        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    //        {
-    //            try
-    //            {
-    //                request.MetricsTags.Add(new KeyValuePair<string, object?>("before", "before!"));
-    //                var response = await base.SendAsync(request, cancellationToken);
-    //                request.MetricsTags.Add(new KeyValuePair<string, object?>("after", "after!"));
-    //                return response;
-    //            }
-    //            catch
-    //            {
-    //                request.MetricsTags.Add(new KeyValuePair<string, object?>("error", "error!"));
-    //                throw;
-    //            }
-    //        }
-    //    }
-
-    //    #region Helpers
-
-    //    private class MockHandler : HttpMessageHandler
-    //    {
-    //        public int DisposeCount { get; private set; }
-    //        public int SendAsyncCount { get; private set; }
-    //        public int SendCount { get; private set; }
-    //        public bool ThrowError { get; set; }
-
-    //        public MockHandler()
-    //        {
-    //        }
-
-    //        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-    //            CancellationToken cancellationToken)
-    //        {
-    //            SendAsyncCount++;
-
-    //            if (ThrowError)
-    //            {
-    //                return Task.FromException<HttpResponseMessage>(new Exception("Error."));
-    //            }
-    //            return Task.FromResult<HttpResponseMessage>(new HttpResponseMessage());
-    //        }
-
-    //        protected override HttpResponseMessage Send(HttpRequestMessage request,
-    //            CancellationToken cancellationToken)
-    //        {
-    //            SendCount++;
-
-    //            if (ThrowError)
-    //            {
-    //                throw new Exception("Error.");
-    //            }
-    //            return new HttpResponseMessage();
-    //        }
-
-    //        protected override void Dispose(bool disposing)
-    //        {
-    //            DisposeCount++;
-    //            base.Dispose(disposing);
-    //        }
-    //    }
-
-    //    #endregion Helepers
-    //}
 
     // TODO: Remove when Metrics DI intergration package is available https://github.com/dotnet/aspnetcore/issues/47618
     internal sealed class InstrumentRecorder<T> : IDisposable where T : struct
