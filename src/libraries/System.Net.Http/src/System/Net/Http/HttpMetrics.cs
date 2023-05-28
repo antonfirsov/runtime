@@ -40,15 +40,15 @@ namespace System.Net.Http
             _currentRequests.Add(1, tags);
         }
 
-        public void RequestStop(HttpRequestMessage request, HttpResponseMessage? response, Exception? unhandledException, long startTimestamp, long currentTimestamp)
+        public void RequestStop(HttpRequestMessage request, HttpResponseMessage? response, long startTimestamp, long currentTimestamp)
         {
             if (_currentRequests.Enabled || _requestsDuration.Enabled)
             {
-                RequestStopCore(request, response, unhandledException, startTimestamp, currentTimestamp);
+                RequestStopCore(request, response, startTimestamp, currentTimestamp);
             }
         }
 
-        private void RequestStopCore(HttpRequestMessage request, HttpResponseMessage? response, Exception? unhandledException, long startTimestamp, long currentTimestamp)
+        private void RequestStopCore(HttpRequestMessage request, HttpResponseMessage? response, long startTimestamp, long currentTimestamp)
         {
             TagList tags = InitializeCommonTags(request);
 
@@ -59,10 +59,7 @@ namespace System.Net.Http
                 tags.Add("status-code", (int)response.StatusCode); // Boxing?
                 tags.Add("protocol", $"HTTP/{response.Version}"); // Hacky
             }
-            if (unhandledException is not null)
-            {
-                tags.Add("exception-name", unhandledException.GetType().FullName);
-            }
+
             if (request.HasTags)
             {
                 foreach (var customTag in request.MetricsTags)

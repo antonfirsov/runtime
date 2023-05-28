@@ -46,13 +46,13 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
                 await _innerHandler.SendAsync(request, cancellationToken).ConfigureAwait(false) :
                 _innerHandler.Send(request, cancellationToken);
         }
-        catch (Exception ex)
+        catch
         {
-            _metrics.RequestStop(request, response, ex, startTimestamp, Stopwatch.GetTimestamp());
+            _metrics.RequestStop(request, response, startTimestamp, Stopwatch.GetTimestamp());
             throw;
         }
 
-        response.Content = new TrackEofContent(new ResponseMetricsContext(startTimestamp, _metrics, response));
+        response.Content = new TrackEofContent(startTimestamp, _metrics, response);
         return response;
     }
 
@@ -66,14 +66,14 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         base.Dispose(disposing);
     }
 
-    private struct ResponseMetricsContext
+    private struct MetricsRecorderData
     {
         private readonly long _startTimestamp;
         private HttpMetrics? _metrics;
         private readonly HttpResponseMessage _response;
         public readonly HttpContent InnerContent;
 
-        public ResponseMetricsContext(long startTimestamp, HttpMetrics metrics, HttpResponseMessage response)
+        public MetricsRecorderData(long startTimestamp, HttpMetrics metrics, HttpResponseMessage response)
         {
             _startTimestamp = startTimestamp;
             _metrics = metrics;
@@ -81,24 +81,29 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
             InnerContent = response.Content;
         }
 
-        internal void LogRequestStop(Exception? exception)
+        internal void LogRequestStop()
         {
             Debug.Assert(_response.RequestMessage is not null);
-            _metrics?.RequestStop(_response.RequestMessage, _response, exception, _startTimestamp, Stopwatch.GetTimestamp());
+            _metrics?.RequestStop(_response.RequestMessage, _response, _startTimestamp, Stopwatch.GetTimestamp());
             _metrics = null;
         }
     }
 
-    private sealed class TrackEofContent : HttpContent
+    private interface IMetricsRecorder
     {
-        private readonly ResponseMetricsContext _metricsContext;
+        void LogRequestStop();
+    }
+
+    private sealed class TrackEofContent : HttpContent, IMetricsRecorder
+    {
+        private MetricsRecorderData _metricsData;
         private Stream? _innerStream;
 
-        private HttpContent InnerContent => _metricsContext.InnerContent;
+        private HttpContent InnerContent => _metricsData.InnerContent;
 
-        public TrackEofContent(ResponseMetricsContext metricsContext)
+        public TrackEofContent(long startTimestamp, HttpMetrics metrics, HttpResponseMessage response)
         {
-            _metricsContext = metricsContext;
+            _metricsData = new MetricsRecorderData(startTimestamp, metrics, response);
 
             foreach (var header in InnerContent.Headers)
             {
@@ -110,20 +115,14 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         {
             _innerStream = await InnerContent.ReadAsStreamAsync().ConfigureAwait(false);
 
-            Exception? unhandledException = null;
-
             try
             {
                 await _innerStream.CopyToAsync(stream).ConfigureAwait(false);
             }
-            catch (Exception ex)
-            {
-                unhandledException = ex;
-                throw;
-            }
+
             finally
             {
-                _metricsContext.LogRequestStop(unhandledException);
+                LogRequestStop();
             }
         }
 
@@ -131,7 +130,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         {
             var stream = await InnerContent.ReadAsStreamAsync().ConfigureAwait(false);
 
-            return new TrackEofStream(stream, _metricsContext);
+            return new TrackEofStream(stream, this);
         }
 
         protected internal override bool TryComputeLength(out long length) => InnerContent.TryComputeLength(out length);
@@ -140,23 +139,26 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         {
             if (disposing)
             {
+                LogRequestStop();
                 InnerContent.Dispose();
                 _innerStream?.Dispose();
             }
 
             base.Dispose(disposing);
         }
+
+        public void LogRequestStop() => _metricsData.LogRequestStop();
     }
 
     private sealed class TrackEofStream : Stream
     {
         private readonly Stream _inner;
-        private readonly ResponseMetricsContext _metricsContext;
+        private readonly IMetricsRecorder _metricsRecorder;
 
-        public TrackEofStream(Stream inner, ResponseMetricsContext metricsContext)
+        public TrackEofStream(Stream inner, IMetricsRecorder metricsRecorder)
         {
             _inner = inner;
-            _metricsContext = metricsContext;
+            _metricsRecorder = metricsRecorder;
         }
 
         public override bool CanRead => _inner.CanRead;
@@ -204,7 +206,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
             // TODO: Handle errors.
             if (count != 0 && result == 0)
             {
-                _metricsContext.LogRequestStop(null);
+                _metricsRecorder.LogRequestStop();
             }
             return result;
         }
@@ -216,7 +218,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
             // TODO: Handle errors.
             if (buffer.Length != 0 && result == 0)
             {
-                _metricsContext.LogRequestStop(null);
+                _metricsRecorder.LogRequestStop();
             }
             return result;
         }
@@ -224,7 +226,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
         {
             await _inner.CopyToAsync(destination, bufferSize, cancellationToken).ConfigureAwait(false);
-            _metricsContext.LogRequestStop(null);
+            _metricsRecorder.LogRequestStop();
         }
 
         public override async ValueTask DisposeAsync()

@@ -23,37 +23,49 @@ namespace System.Net.Http.Functional.Tests
         {
         }
 
-        protected static void VerifyCurrentRequest(Measurement<long> measurement, long expectedValue, string scheme, string host, int? port = null)
+        protected static void VerifyCurrentRequest(Measurement<long> measurement, long expectedValue, Uri uri)
         {
             Assert.Equal(expectedValue, measurement.Value);
-            Assert.Equal(scheme, measurement.Tags.ToArray().Single(t => t.Key == "scheme").Value);
-            Assert.Equal(host, measurement.Tags.ToArray().Single(t => t.Key == "host").Value);
-            AssertOptionalTag(measurement.Tags, "port", port);
+
+            string scheme = uri.Scheme;
+            string host = uri.Host;
+            int? port = uri.Port;
+            KeyValuePair<string, object?>[] tags = measurement.Tags.ToArray();
+            
+            Assert.Equal(scheme, tags.Single(t => t.Key == "scheme").Value);
+            Assert.Equal(host, tags.Single(t => t.Key == "host").Value);
+            AssertOptionalTag(tags, "port", port);
         }
 
-        protected static void VerifyRequestDuration(Measurement<double> measurement, string scheme, string host, string? protocol, int? statusCode, int? port = null)
+        protected static void VerifyRequestDuration(Measurement<double> measurement, Uri uri, string? protocol, int? statusCode)
         {
             Assert.True(measurement.Value > 0);
-            Assert.Equal(scheme, measurement.Tags.ToArray().Single(t => t.Key == "scheme").Value);
-            Assert.Equal(host, measurement.Tags.ToArray().Single(t => t.Key == "host").Value);
-            AssertOptionalTag(measurement.Tags, "port", port);
-            AssertOptionalTag(measurement.Tags, "protocol", protocol);
-            AssertOptionalTag(measurement.Tags, "status-code", statusCode);
+
+            string scheme = uri.Scheme;
+            string host = uri.IdnHost;
+            int? port = uri.Port;
+            KeyValuePair<string, object?>[] tags = measurement.Tags.ToArray();
+
+            Assert.Equal(scheme, tags.Single(t => t.Key == "scheme").Value);
+            Assert.Equal(host, tags.Single(t => t.Key == "host").Value);
+            AssertOptionalTag(tags, "port", port);
+            AssertOptionalTag(tags, "protocol", protocol);
+            AssertOptionalTag(tags, "status-code", statusCode);
         }
 
-        protected static void AssertOptionalTag<T>(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name, T value)
+        protected static void AssertOptionalTag<T>(KeyValuePair<string, object?>[] tags, string name, T value)
         {
             if (value is null)
             {
-                Assert.DoesNotContain(tags.ToArray(), t => t.Key == "name");
+                Assert.DoesNotContain(tags, t => t.Key == name);
             }
             else
             {
-                Assert.Equal(value, (T)tags.ToArray().Single(t => t.Key == name).Value);
+                Assert.Equal(value, (T)tags.Single(t => t.Key == name).Value);
             }
         }
 
-        private sealed class EnrichmentHandler : DelegatingHandler
+        protected sealed class EnrichmentHandler : DelegatingHandler
         {
             public EnrichmentHandler(HttpMessageHandler innerHandler) : base(innerHandler)
             {
@@ -100,11 +112,12 @@ namespace System.Net.Http.Functional.Tests
 
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
 
-                using var response = await client.SendAsync(request);
+                HttpResponseMessage response = await client.SendAsync(request);
+                response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
                 Assert.Collection(recorder.GetMeasurements(),
-                    m => VerifyCurrentRequest(m, 1, uri.Scheme, uri.IdnHost),
-                    m => VerifyCurrentRequest(m, -1, uri.Scheme, uri.IdnHost));
+                    m => VerifyCurrentRequest(m, 1, uri),
+                    m => VerifyCurrentRequest(m, -1, uri));
 
             }, async server =>
             {
@@ -124,10 +137,11 @@ namespace System.Net.Http.Functional.Tests
 
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
 
-                using var response = await client.SendAsync(request);
+                HttpResponseMessage response = await client.SendAsync(request);
+                response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri.Scheme, uri.IdnHost, $"HTTP/{UseVersion}", 200);
+                VerifyRequestDuration(m, uri, $"HTTP/{UseVersion}", 200);
 
             }, async server =>
             {
@@ -149,9 +163,10 @@ namespace System.Net.Http.Functional.Tests
                 request.MetricsTags.Add(new KeyValuePair<string, object>("route", "/test"));
 
                 using var response = await client.SendAsync(request);
+                response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri.Scheme, uri.IdnHost, $"HTTP/{UseVersion}", 200);
+                VerifyRequestDuration(m, uri, $"HTTP/{UseVersion}", 200);
                 Assert.Equal("/test", m.Tags.ToArray().Single(t => t.Key == "route").Value);
 
             }, async server =>
@@ -204,7 +219,7 @@ namespace System.Net.Http.Functional.Tests
                 }
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri.Scheme, uri.IdnHost, $"HTTP/{UseVersion}", 200); ;
+                VerifyRequestDuration(m, uri, $"HTTP/{UseVersion}", 200); ;
                 Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
             }, async server =>
             {
@@ -227,37 +242,6 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
-        [Fact]
-        public Task SendAsync_RequestDuration_EnrichmentHandler_Error()
-        {
-            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
-            {
-                using HttpClientHandler handler = CreateHttpClientHandler();
-                using HttpClient client = CreateHttpClient(new EnrichmentHandler(handler));
-
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
-
-                using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
-
-                await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(request));
-
-                Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri.Scheme, uri.IdnHost, $"HTTP/{UseVersion}", 200); ;
-                Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
-
-            }, async server =>
-            {
-                await server.AcceptConnectionAsync(async connection =>
-                {
-                    // Emulate Content-Length mismatch
-                    await connection.SendResponseAsync(headers: new[]
-                    {
-                        new HttpHeaderData("Content-Length", "1000")
-                    }, content: "x");
-                });
-            });
-        }
-
         
     }
 
@@ -268,31 +252,109 @@ namespace System.Net.Http.Functional.Tests
         {
         }
 
-        [Fact]
-        public Task SendAsync_HttpVersionDowngrade_RequestDuration_LogsActualProtocol()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task SendAsync_HttpVersionDowngrade_RequestDuration_LogsActualProtocol(bool malformedResponse)
         {
-            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            await LoopbackServer.CreateServerAsync(async server =>
             {
                 using HttpClientHandler handler = CreateHttpClientHandler();
                 using HttpClient client = CreateHttpClient(handler);
 
                 using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
 
-                using HttpRequestMessage request = new(HttpMethod.Get, uri)
+                using HttpRequestMessage request = new(HttpMethod.Get, server.Address)
                 {
                     Version = HttpVersion.Version20,
                     VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
                 };
 
-                using var response = await client.SendAsync(request);
+                Task<HttpResponseMessage> clientTask = client.SendAsync(request);
+
+                Debug.Print(malformedResponse.ToString());
+
+                await server.AcceptConnectionAsync(async connection =>
+                {
+                    if (malformedResponse)
+                    {
+                        await connection.ReadRequestHeaderAndSendCustomResponseAsync("!malformed!");
+                    }
+                    else
+                    {
+                        await connection.ReadRequestHeaderAndSendResponseAsync();
+                    }
+                    
+                });
+
+                if (malformedResponse)
+                {
+                    await Assert.ThrowsAsync<HttpRequestException>(() => clientTask);
+                    Measurement<double> m = recorder.GetMeasurements().Single();
+                    VerifyRequestDuration(m, server.Address, null, null); // Protocol is not logged.
+                }
+                else
+                {
+                    HttpResponseMessage response = await clientTask;
+                    response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
+
+                    Measurement<double> m = recorder.GetMeasurements().Single();
+                    VerifyRequestDuration(m, server.Address, "HTTP/1.1", 200);
+                }
+                
+            }, new LoopbackServer.Options() { UseSsl = true });
+
+            //return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            //{
+            //    using HttpClientHandler handler = CreateHttpClientHandler();
+            //    using HttpClient client = CreateHttpClient(handler);
+
+            //    using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+
+            //    using HttpRequestMessage request = new(HttpMethod.Get, uri)
+            //    {
+            //        Version = HttpVersion.Version20,
+            //        VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+            //    };
+
+            //    HttpResponseMessage response = await client.SendAsync(request);
+            //    response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
+
+            //    Measurement<double> m = recorder.GetMeasurements().Single();
+            //    VerifyRequestDuration(m, uri, "HTTP/1.1", 200);
+
+            //}, async server =>
+            //{
+            //    Debug.Print(errorAfterDowngrade.ToString());
+                
+            //    await server.AcceptConnectionSendResponseAndCloseAsync();
+            //}, options: new GenericLoopbackOptions() { UseSsl = true });
+        }
+
+        [Fact]
+        public Task SendAsync_RequestDuration_EnrichmentHandler_ContentLengthError()
+        {
+            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using HttpClientHandler handler = CreateHttpClientHandler();
+                using HttpClient client = CreateHttpClient(new EnrichmentHandler(handler));
+
+                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+
+                using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
+
+                await Assert.ThrowsAsync<HttpRequestException>(async () =>
+                {
+                    using HttpResponseMessage response = await client.SendAsync(request);
+                });
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri.Scheme, uri.IdnHost, "HTTP/1.1", 200);
+                VerifyRequestDuration(m, uri, $"HTTP/{UseVersion}", 200); ;
+                Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
 
-            }, async server =>
-            {
-                await server.AcceptConnectionSendResponseAndCloseAsync();
-            });
+            }, server => server.HandleRequestAsync(headers: new[] {
+                new HttpHeaderData("Content-Length", "1000")
+            }, content: "x"));
         }
     }
 
@@ -329,14 +391,40 @@ namespace System.Net.Http.Functional.Tests
 
                     Assert.Collection(recorder.GetMeasurements(), m0 =>
                     {
-                        VerifyRequestDuration(m0, "http", originalUri.IdnHost, $"HTTP/1.1", (int)HttpStatusCode.Redirect);
+                        VerifyRequestDuration(m0, originalUri, $"HTTP/1.1", (int)HttpStatusCode.Redirect);
                     }, m1 =>
                     {
-                        VerifyRequestDuration(m1, "https", originalUri.IdnHost, $"HTTP/2.0", (int)HttpStatusCode.OK);
+                        VerifyRequestDuration(m1, redirectUri, $"HTTP/2.0", (int)HttpStatusCode.OK);
                     });
 
                 }, options: new GenericLoopbackOptions() { UseSsl = true });
             }, options: new GenericLoopbackOptions() { UseSsl = false});
+        }
+
+        [Fact]
+        public async Task SendAsync_ProtocolError_RequestDurationRecorded()
+        {
+            using Http2LoopbackServer server = Http2LoopbackServer.CreateServer();
+            using HttpClientHandler handler = CreateHttpClientHandler();
+            using HttpClient client = CreateHttpClient(handler);
+            using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+
+            Task<HttpResponseMessage> sendTask = client.GetAsync(server.Address);
+
+            Http2LoopbackConnection connection = await server.EstablishConnectionAsync();
+            int streamId = await connection.ReadRequestHeaderAsync();
+
+            // Send a reset stream frame so that the stream moves to a terminal state.
+            RstStreamFrame resetStream = new RstStreamFrame(FrameFlags.None, (int)ProtocolErrors.INTERNAL_ERROR, streamId);
+            await connection.WriteFrameAsync(resetStream);
+
+            await Assert.ThrowsAsync<HttpRequestException>(async () =>
+            {
+                using HttpResponseMessage response = await sendTask;
+            });
+
+            Measurement<double> m = recorder.GetMeasurements().Single(); // Protocol is not recorded
+            VerifyRequestDuration(m, server.Address, null, null); 
         }
     }
 
