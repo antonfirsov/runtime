@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 
@@ -60,14 +61,14 @@ namespace System.Net.Http
                 tags.Add("protocol", $"HTTP/{response.Version}"); // Hacky
             }
 
-            if (request.HasTags)
+            if (request.Options.TryGetCustomMetricsTags(out IReadOnlyCollection<KeyValuePair<string, object?>>? customTags))
             {
-                foreach (var customTag in request.MetricsTags)
+                foreach (var customTag in customTags!)
                 {
                     tags.Add(customTag);
                 }
             }
-            var duration = Stopwatch.GetElapsedTime(startTimestamp, currentTimestamp);
+            TimeSpan duration = Stopwatch.GetElapsedTime(startTimestamp, currentTimestamp);
             _requestsDuration.Record(duration.TotalSeconds, tags);
         }
 

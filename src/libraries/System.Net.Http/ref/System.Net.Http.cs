@@ -263,7 +263,6 @@ namespace System.Net.Http
         [System.ObsoleteAttribute("HttpRequestMessage.Properties has been deprecated. Use Options instead.")]
         public System.Collections.Generic.IDictionary<string, object?> Properties { get { throw null; } }
         public HttpRequestOptions Options { get { throw null; } }
-        public ICollection<KeyValuePair<string, object?>> MetricsTags { get { throw null; } }
         public System.Uri? RequestUri { get { throw null; } set { } }
         public System.Version Version { get { throw null; } set { } }
         public System.Net.Http.HttpVersionPolicy VersionPolicy { get { throw null; } set { } }
@@ -298,6 +297,11 @@ namespace System.Net.Http
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() { throw null; }
         public bool TryGetValue<TValue>(HttpRequestOptionsKey<TValue> key, [MaybeNullWhen(false)] out TValue value) { throw null; }
         public void Set<TValue>(HttpRequestOptionsKey<TValue> key, TValue value) { throw null; }
+    }
+
+    public static class HttpRequestOptionsExtensions
+    {
+        public static void SetCustomMetricsTags(this HttpRequestOptions options, IReadOnlyCollection<KeyValuePair<string, object?>> tags) { throw null; }
     }
 
     public partial class HttpResponseMessage : System.IDisposable

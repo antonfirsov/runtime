@@ -59,6 +59,7 @@
     <Compile Include="System\Net\Http\HttpRequestException.cs" />
     <Compile Include="System\Net\Http\HttpRequestMessage.cs" />
     <Compile Include="System\Net\Http\HttpRequestOptions.cs" />
+    <Compile Include="System\Net\Http\HttpRequestOptionsExtensions.cs" />
     <Compile Include="System\Net\Http\HttpRequestOptionsKey.cs" />
     <Compile Include="System\Net\Http\HttpResponseMessage.cs" />
     <Compile Include="System\Net\Http\HttpRuleParser.cs" />

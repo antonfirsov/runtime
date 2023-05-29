@@ -73,30 +73,14 @@ namespace System.Net.Http.Functional.Tests
 
             protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
             {
-                try
-                {
-                    request.MetricsTags.Add(new KeyValuePair<string, object?>("before", "before!"));
-                    return base.Send(request, cancellationToken);
-                }
-                catch
-                {
-                    request.MetricsTags.Add(new KeyValuePair<string, object?>("error", "error!"));
-                    throw;
-                }
+                request.Options.SetCustomMetricsTags(new[] { new KeyValuePair<string, object?>("before", "before!") });
+                return base.Send(request, cancellationToken);
             }
 
-            protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             {
-                try
-                {
-                    request.MetricsTags.Add(new KeyValuePair<string, object?>("before", "before!"));
-                    return await base.SendAsync(request, cancellationToken);
-                }
-                catch
-                {
-                    request.MetricsTags.Add(new KeyValuePair<string, object?>("error", "error!"));
-                    throw;
-                }
+                request.Options.SetCustomMetricsTags(new[] { new KeyValuePair<string, object?>("before", "before!") });
+                return base.SendAsync(request, cancellationToken);
             }
         }
 
@@ -160,7 +144,10 @@ namespace System.Net.Http.Functional.Tests
                 using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
 
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
-                request.MetricsTags.Add(new KeyValuePair<string, object>("route", "/test"));
+                request.Options.SetCustomMetricsTags(new[]
+                {
+                    new KeyValuePair<string, object>("route", "/test")
+                });
 
                 using var response = await client.SendAsync(request);
                 response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
