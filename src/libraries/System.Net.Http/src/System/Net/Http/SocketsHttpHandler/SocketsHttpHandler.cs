@@ -458,6 +458,11 @@ namespace System.Net.Http
             set
             {
                 ArgumentNullException.ThrowIfNull(value);
+                if (value.Name != "System.Net.Http")
+                {
+                    throw new ArgumentException("Meter name must be 'System.Net.Http'.");
+                }
+
                 CheckDisposedOrStarted();
                 _settings._meter = value;
             }
