@@ -13,6 +13,8 @@ namespace System.Net.Http
         private readonly UpDownCounter<long> _currentRequests;
         private readonly Histogram<double> _requestsDuration;
 
+        public static Meter DefaultMeter { get; } = new Meter("System.Net.Http");
+
         public HttpMetrics(Meter meter)
         {
             _meter = meter;

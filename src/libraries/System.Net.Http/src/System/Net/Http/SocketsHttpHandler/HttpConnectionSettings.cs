@@ -36,7 +36,7 @@ namespace System.Net.Http
         internal int _maxResponseDrainSize = HttpHandlerDefaults.DefaultMaxResponseDrainSize;
         internal TimeSpan _maxResponseDrainTime = HttpHandlerDefaults.DefaultResponseDrainTimeout;
         internal int _maxResponseHeadersLength = HttpHandlerDefaults.DefaultMaxResponseHeadersLength;
-        internal Meter _meter = HttpHandlerDefaults.DefaultMeter;
+        internal Meter _meter = HttpMetrics.DefaultMeter;
 
         internal TimeSpan _pooledConnectionLifetime = HttpHandlerDefaults.DefaultPooledConnectionLifetime;
         internal TimeSpan _pooledConnectionIdleTimeout = HttpHandlerDefaults.DefaultPooledConnectionIdleTimeout;

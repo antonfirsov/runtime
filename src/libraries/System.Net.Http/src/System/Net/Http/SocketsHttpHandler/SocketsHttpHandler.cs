@@ -469,7 +469,7 @@ namespace System.Net.Http
             {
                 _disposed = true;
                 _handler?.Dispose();
-                if (_settings._meter != HttpHandlerDefaults.DefaultMeter)
+                if (_settings._meter != HttpMetrics.DefaultMeter)
                 {
                     _settings._meter.Dispose();
                 }
