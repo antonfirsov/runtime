@@ -23,20 +23,6 @@ namespace System.Net.Http.Functional.Tests
         {
         }
 
-        protected static void VerifyCurrentRequest(Measurement<long> measurement, long expectedValue, Uri uri)
-        {
-            Assert.Equal(expectedValue, measurement.Value);
-
-            string scheme = uri.Scheme;
-            string host = uri.Host;
-            int? port = uri.Port;
-            KeyValuePair<string, object?>[] tags = measurement.Tags.ToArray();
-            
-            Assert.Equal(scheme, tags.Single(t => t.Key == "scheme").Value);
-            Assert.Equal(host, tags.Single(t => t.Key == "host").Value);
-            AssertOptionalTag(tags, "port", port);
-        }
-
         protected static void VerifyRequestDuration(Measurement<double> measurement, Uri uri, string? protocol, int? statusCode)
         {
             Assert.True(measurement.Value > 0);
@@ -100,8 +86,8 @@ namespace System.Net.Http.Functional.Tests
                 response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
                 Assert.Collection(recorder.GetMeasurements(),
-                    m => VerifyCurrentRequest(m, 1, uri),
-                    m => VerifyCurrentRequest(m, -1, uri));
+                    m => Assert.Equal(1L, m.Value),
+                    m => Assert.Equal(-1L, m.Value));
 
             }, async server =>
             {
@@ -125,7 +111,7 @@ namespace System.Net.Http.Functional.Tests
                 response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri, $"HTTP/{UseVersion}", 200);
+                VerifyRequestDuration(m, uri, ExpectedProtocolString, 200);
 
             }, async server =>
             {
@@ -153,7 +139,7 @@ namespace System.Net.Http.Functional.Tests
                 response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri, $"HTTP/{UseVersion}", 200);
+                VerifyRequestDuration(m, uri, ExpectedProtocolString, 200);
                 Assert.Equal("/test", m.Tags.ToArray().Single(t => t.Key == "route").Value);
 
             }, async server =>
@@ -206,7 +192,7 @@ namespace System.Net.Http.Functional.Tests
                 }
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri, $"HTTP/{UseVersion}", 200); ;
+                VerifyRequestDuration(m, uri, ExpectedProtocolString, 200); ;
                 Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
             }, async server =>
             {
@@ -229,7 +215,13 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
-        
+        private string ExpectedProtocolString => (UseVersion.Major, UseVersion.Minor) switch
+        {
+            (1, 1) => "HTTP/1.1",
+            (2, 0) => "HTTP/2",
+            (3, 0) => "HTTP/3",
+            _ => throw new Exception("Unknown version.")
+        };
     }
 
     public class HttpMetricsTest_Http11 : HttpMetricsTest
@@ -381,7 +373,7 @@ namespace System.Net.Http.Functional.Tests
                         VerifyRequestDuration(m0, originalUri, $"HTTP/1.1", (int)HttpStatusCode.Redirect);
                     }, m1 =>
                     {
-                        VerifyRequestDuration(m1, redirectUri, $"HTTP/2.0", (int)HttpStatusCode.OK);
+                        VerifyRequestDuration(m1, redirectUri, $"HTTP/2", (int)HttpStatusCode.OK);
                     });
 
                 }, options: new GenericLoopbackOptions() { UseSsl = true });

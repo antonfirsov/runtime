@@ -29,18 +29,12 @@ namespace System.Net.Http
                 description: "The duration of outbound HTTP requests.");
         }
 
-        public void RequestStart(HttpRequestMessage request)
+        public void RequestStart()
         {
             if (_currentRequests.Enabled)
             {
-                RequestStartCore(request);
+                _currentRequests.Add(1);
             }
-        }
-
-        private void RequestStartCore(HttpRequestMessage request)
-        {
-            TagList tags = InitializeCommonTags(request);
-            _currentRequests.Add(1, tags);
         }
 
         public void RequestStop(HttpRequestMessage request, HttpResponseMessage? response, long startTimestamp, long currentTimestamp)
@@ -59,8 +53,8 @@ namespace System.Net.Http
 
             if (response is not null)
             {
-                tags.Add("status-code", (int)response.StatusCode); // Boxing?
-                tags.Add("protocol", $"HTTP/{response.Version}"); // Hacky
+                tags.Add("status-code", StatusCodeCache.GetBoxedStatusCode(response.StatusCode));
+                tags.Add("protocol", GetProtocolName(response.Version)); // Hacky
             }
 
             if (request.Options.TryGetCustomMetricsTags(out IReadOnlyCollection<KeyValuePair<string, object?>>? customTags))
@@ -100,5 +94,38 @@ namespace System.Net.Http
         }
 
         internal bool RequestCountersEnabled() => _currentRequests.Enabled || _requestsDuration.Enabled;
+
+        private static string GetProtocolName(Version httpVersion) => (httpVersion.Major, httpVersion.Minor) switch
+        {
+            (1, 1) => "HTTP/1.1",
+            (2, 0) => "HTTP/2",
+            (3, 0) => "HTTP/3",
+            _ => "unknown"
+        };
+
+        private static class StatusCodeCache
+        {
+            private static readonly object OK = (int)HttpStatusCode.OK;
+            private static readonly object Created = (int)HttpStatusCode.Created;
+            private static readonly object Accepted = (int)HttpStatusCode.Accepted;
+            private static readonly object NoContent = (int)HttpStatusCode.NoContent;
+            private static readonly object Moved = (int)HttpStatusCode.Moved;
+            private static readonly object Redirect = (int)HttpStatusCode.Redirect;
+            private static readonly object NotModified = (int)HttpStatusCode.NotModified;
+            private static readonly object InternalServerError = (int)HttpStatusCode.InternalServerError;
+
+            public static object GetBoxedStatusCode(HttpStatusCode statusCode) => statusCode switch
+            {
+                HttpStatusCode.OK => OK,
+                HttpStatusCode.Created => Created,
+                HttpStatusCode.Accepted => Accepted,
+                HttpStatusCode.NoContent => NoContent,
+                HttpStatusCode.Moved => Moved,
+                HttpStatusCode.Redirect => Redirect,
+                HttpStatusCode.NotModified => NotModified,
+                HttpStatusCode.InternalServerError => InternalServerError,
+                _ => (int)statusCode
+            };
+        }
     }
 }

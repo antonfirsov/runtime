@@ -38,7 +38,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
     private async ValueTask<HttpResponseMessage> SendAsyncWithMetrics(HttpRequestMessage request, bool async, CancellationToken cancellationToken)
     {
         long startTimestamp = Stopwatch.GetTimestamp();
-        _metrics.RequestStart(request);
+        _metrics.RequestStart();
         HttpResponseMessage? response = null;
         try
         {
