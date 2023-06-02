@@ -92,7 +92,7 @@ namespace System.Net.Http.Functional.Tests
                 using HttpClientHandler handler = CreateHttpClientHandler();
                 using HttpClient client = CreateHttpClient(handler);
 
-                using var recorder = new InstrumentRecorder<long>(GetUnderlyingSocketsHttpHandler(handler).Meter, "current-requests");
+                using var recorder = new InstrumentRecorder<long>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-current-requests");
 
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
 
@@ -117,7 +117,7 @@ namespace System.Net.Http.Functional.Tests
                 using HttpClientHandler handler = CreateHttpClientHandler();
                 using HttpClient client = CreateHttpClient(handler);
 
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+                using var recorder = new InstrumentRecorder<double>(handler.Meter, "http-client-request-duration");
 
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
 
@@ -141,7 +141,7 @@ namespace System.Net.Http.Functional.Tests
                 using HttpClientHandler handler = CreateHttpClientHandler();
                 using HttpClient client = CreateHttpClient(handler);
 
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
 
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
                 request.Options.SetCustomMetricsTags(new[]
@@ -185,7 +185,7 @@ namespace System.Net.Http.Functional.Tests
             {
                 using HttpClientHandler handler = CreateHttpClientHandler();
                 using HttpClient client = CreateHttpClient(new EnrichmentHandler(handler));
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
                 using var response = await client.SendAsync(request, completionOption);
 
@@ -249,7 +249,7 @@ namespace System.Net.Http.Functional.Tests
                 using HttpClientHandler handler = CreateHttpClientHandler();
                 using HttpClient client = CreateHttpClient(handler);
 
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
 
                 using HttpRequestMessage request = new(HttpMethod.Get, server.Address)
                 {
@@ -326,7 +326,7 @@ namespace System.Net.Http.Functional.Tests
                 using HttpClientHandler handler = CreateHttpClientHandler();
                 using HttpClient client = CreateHttpClient(new EnrichmentHandler(handler));
 
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
 
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
 
@@ -362,7 +362,7 @@ namespace System.Net.Http.Functional.Tests
                     using HttpClientHandler handler = CreateHttpClientHandler();
                     using HttpClient client = CreateHttpClient(handler);
 
-                    using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+                    using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
                     using HttpRequestMessage request = new(HttpMethod.Get, originalUri) { Version = HttpVersion.Version20 };
 
                     Task clientTask = client.SendAsync(request);
@@ -394,7 +394,7 @@ namespace System.Net.Http.Functional.Tests
             using Http2LoopbackServer server = Http2LoopbackServer.CreateServer();
             using HttpClientHandler handler = CreateHttpClientHandler();
             using HttpClient client = CreateHttpClient(handler);
-            using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
+            using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
 
             Task<HttpResponseMessage> sendTask = client.GetAsync(server.Address);
 
@@ -422,96 +422,5 @@ namespace System.Net.Http.Functional.Tests
         public HttpMetricsTest_Http30(ITestOutputHelper output) : base(output)
         {
         }
-    }
-
-    // TODO: Remove when Metrics DI intergration package is available https://github.com/dotnet/aspnetcore/issues/47618
-    internal sealed class InstrumentRecorder<T> : IDisposable where T : struct
-    {
-        private readonly object _lock = new object();
-        private readonly string _meterName;
-        private readonly string _instrumentName;
-        private readonly MeterListener _meterListener;
-        private readonly List<Measurement<T>> _values;
-        private readonly List<Action<Measurement<T>>> _callbacks;
-
-        public InstrumentRecorder(Meter meter, string instrumentName, object? state = null) : this(new TestMeterRegistry(new List<Meter> { meter }), meter.Name, instrumentName, state)
-        {
-        }
-
-        public InstrumentRecorder(IMeterRegistry registry, string meterName, string instrumentName, object? state = null)
-        {
-            _meterName = meterName;
-            _instrumentName = instrumentName;
-            _callbacks = new List<Action<Measurement<T>>>();
-            _values = new List<Measurement<T>>();
-            _meterListener = new MeterListener();
-            _meterListener.InstrumentPublished = (instrument, listener) =>
-            {
-                if (instrument.Meter.Name == _meterName && registry.Contains(instrument.Meter) && instrument.Name == _instrumentName)
-                {
-                    listener.EnableMeasurementEvents(instrument, state);
-                }
-            };
-            _meterListener.SetMeasurementEventCallback<T>(OnMeasurementRecorded);
-            _meterListener.Start();
-        }
-
-        private void OnMeasurementRecorded(Instrument instrument, T measurement, ReadOnlySpan<KeyValuePair<string, object?>> tags, object? state)
-        {
-            lock (_lock)
-            {
-                var m = new Measurement<T>(measurement, tags);
-                _values.Add(m);
-
-                // Should this happen in the lock?
-                // Is there a better way to notify listeners that there are new measurements?
-                foreach (var callback in _callbacks)
-                {
-                    callback(m);
-                }
-            }
-        }
-
-        public void Register(Action<Measurement<T>> callback)
-        {
-            _callbacks.Add(callback);
-        }
-
-        public IReadOnlyList<Measurement<T>> GetMeasurements()
-        {
-            lock (_lock)
-            {
-                return _values.ToArray();
-            }
-        }
-
-        public void Dispose()
-        {
-            _meterListener.Dispose();
-        }
-    }
-
-    internal interface IMeterRegistry
-    {
-        void Add(Meter meter);
-        bool Contains(Meter meter);
-    }
-
-    internal class TestMeterRegistry : IMeterRegistry
-    {
-        private readonly List<Meter> _meters;
-
-        public TestMeterRegistry() : this(new List<Meter>())
-        {
-        }
-
-        public TestMeterRegistry(List<Meter> meters)
-        {
-            _meters = meters;
-        }
-
-        public void Add(Meter meter) => _meters.Add(meter);
-
-        public bool Contains(Meter meter) => _meters.Contains(meter);
     }
 }

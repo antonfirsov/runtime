@@ -20,11 +20,11 @@ namespace System.Net.Http
             _meter = meter;
 
             _currentRequests = _meter.CreateUpDownCounter<long>(
-                "current-requests",
+                "http-client-current-requests",
                 description: "Number of outbound HTTP requests that are currently active on the client.");
 
             _requestsDuration = _meter.CreateHistogram<double>(
-                "request-duration",
+                "http-client-request-duration",
                 unit: "s",
                 description: "The duration of outbound HTTP requests.");
         }
