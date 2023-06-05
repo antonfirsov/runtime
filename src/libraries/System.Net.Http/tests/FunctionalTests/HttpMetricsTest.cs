@@ -19,55 +19,11 @@ namespace System.Net.Http.Functional.Tests
 {
     public abstract class HttpMetricsTest : HttpClientHandlerTestBase
     {
+        protected HttpClientHandler Handler { get; }
+
         public HttpMetricsTest(ITestOutputHelper output) : base(output)
         {
-        }
-
-        protected static void VerifyRequestDuration(Measurement<double> measurement, Uri uri, string? protocol, int? statusCode)
-        {
-            Assert.True(measurement.Value > 0);
-
-            string scheme = uri.Scheme;
-            string host = uri.IdnHost;
-            int? port = uri.Port;
-            KeyValuePair<string, object?>[] tags = measurement.Tags.ToArray();
-
-            Assert.Equal(scheme, tags.Single(t => t.Key == "scheme").Value);
-            Assert.Equal(host, tags.Single(t => t.Key == "host").Value);
-            AssertOptionalTag(tags, "port", port);
-            AssertOptionalTag(tags, "protocol", protocol);
-            AssertOptionalTag(tags, "status-code", statusCode);
-        }
-
-        protected static void AssertOptionalTag<T>(KeyValuePair<string, object?>[] tags, string name, T value)
-        {
-            if (value is null)
-            {
-                Assert.DoesNotContain(tags, t => t.Key == name);
-            }
-            else
-            {
-                Assert.Equal(value, (T)tags.Single(t => t.Key == name).Value);
-            }
-        }
-
-        protected sealed class EnrichmentHandler : DelegatingHandler
-        {
-            public EnrichmentHandler(HttpMessageHandler innerHandler) : base(innerHandler)
-            {
-            }
-
-            protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
-            {
-                request.Options.SetCustomMetricsTags(new[] { new KeyValuePair<string, object?>("before", "before!") });
-                return base.Send(request, cancellationToken);
-            }
-
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            {
-                request.Options.SetCustomMetricsTags(new[] { new KeyValuePair<string, object?>("before", "before!") });
-                return base.SendAsync(request, cancellationToken);
-            }
+            Handler = CreateHttpClientHandler();
         }
 
         [Fact]
@@ -75,11 +31,8 @@ namespace System.Net.Http.Functional.Tests
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
-                using HttpClientHandler handler = CreateHttpClientHandler();
-                using HttpClient client = CreateHttpClient(handler);
-
-                using var recorder = new InstrumentRecorder<long>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-current-requests");
-
+                using HttpClient client = new HttpClient(Handler);
+                using InstrumentRecorder<long> recorder = CreateInstrumentRecorder<long>("http-client-current-requests");
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
 
                 HttpResponseMessage response = await client.SendAsync(request);
@@ -100,11 +53,8 @@ namespace System.Net.Http.Functional.Tests
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
-                using HttpClientHandler handler = CreateHttpClientHandler();
-                using HttpClient client = CreateHttpClient(handler);
-
-                using var recorder = new InstrumentRecorder<double>(handler.Meter, "http-client-request-duration");
-
+                using HttpClient client = new HttpClient(Handler);
+                using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
 
                 HttpResponseMessage response = await client.SendAsync(request);
@@ -124,18 +74,15 @@ namespace System.Net.Http.Functional.Tests
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
-                using HttpClientHandler handler = CreateHttpClientHandler();
-                using HttpClient client = CreateHttpClient(handler);
-
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
-
+                using HttpClient client = new HttpClient(Handler);
+                using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
                 request.Options.SetCustomMetricsTags(new[]
                 {
                     new KeyValuePair<string, object>("route", "/test")
                 });
 
-                using var response = await client.SendAsync(request);
+                using HttpResponseMessage response = await client.SendAsync(request);
                 response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
@@ -169,9 +116,8 @@ namespace System.Net.Http.Functional.Tests
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
-                using HttpClientHandler handler = CreateHttpClientHandler();
-                using HttpClient client = CreateHttpClient(new EnrichmentHandler(handler));
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
+                using HttpClient client = CreateHttpClient(new EnrichmentHandler(Handler));
+                using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
                 using var response = await client.SendAsync(request, completionOption);
 
@@ -215,6 +161,53 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                Handler.Dispose();
+                Handler.Meter.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        protected static void VerifyRequestDuration(Measurement<double> measurement, Uri uri, string? protocol, int? statusCode)
+        {
+            Assert.True(measurement.Value > 0);
+
+            string scheme = uri.Scheme;
+            string host = uri.IdnHost;
+            int? port = uri.Port;
+            KeyValuePair<string, object?>[] tags = measurement.Tags.ToArray();
+
+            Assert.Equal(scheme, tags.Single(t => t.Key == "scheme").Value);
+            Assert.Equal(host, tags.Single(t => t.Key == "host").Value);
+            AssertOptionalTag(tags, "port", port);
+            AssertOptionalTag(tags, "protocol", protocol);
+            AssertOptionalTag(tags, "status-code", statusCode);
+        }
+
+        protected static void AssertOptionalTag<T>(KeyValuePair<string, object?>[] tags, string name, T value)
+        {
+            if (value is null)
+            {
+                Assert.DoesNotContain(tags, t => t.Key == name);
+            }
+            else
+            {
+                Assert.Equal(value, (T)tags.Single(t => t.Key == name).Value);
+            }
+        }
+
+        protected InstrumentRecorder<T> CreateInstrumentRecorder<T>(string instrumentName)
+            where T : struct
+        {
+            Meter meter = new("System.Net.Http");
+            Handler.Meter = meter;
+            return new InstrumentRecorder<T>(meter, instrumentName);
+        }
+
         private string ExpectedProtocolString => (UseVersion.Major, UseVersion.Minor) switch
         {
             (1, 1) => "HTTP/1.1",
@@ -222,6 +215,25 @@ namespace System.Net.Http.Functional.Tests
             (3, 0) => "HTTP/3",
             _ => throw new Exception("Unknown version.")
         };
+
+        protected sealed class EnrichmentHandler : DelegatingHandler
+        {
+            public EnrichmentHandler(HttpMessageHandler innerHandler) : base(innerHandler)
+            {
+            }
+
+            protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                request.Options.SetCustomMetricsTags(new[] { new KeyValuePair<string, object?>("before", "before!") });
+                return base.Send(request, cancellationToken);
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                request.Options.SetCustomMetricsTags(new[] { new KeyValuePair<string, object?>("before", "before!") });
+                return base.SendAsync(request, cancellationToken);
+            }
+        }
     }
 
     public class HttpMetricsTest_Http11 : HttpMetricsTest
@@ -238,11 +250,8 @@ namespace System.Net.Http.Functional.Tests
         {
             await LoopbackServer.CreateServerAsync(async server =>
             {
-                using HttpClientHandler handler = CreateHttpClientHandler();
-                using HttpClient client = CreateHttpClient(handler);
-
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
-
+                using HttpClient client = CreateHttpClient(Handler);
+                using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
                 using HttpRequestMessage request = new(HttpMethod.Get, server.Address)
                 {
                     Version = HttpVersion.Version20,
@@ -282,32 +291,6 @@ namespace System.Net.Http.Functional.Tests
                 }
                 
             }, new LoopbackServer.Options() { UseSsl = true });
-
-            //return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
-            //{
-            //    using HttpClientHandler handler = CreateHttpClientHandler();
-            //    using HttpClient client = CreateHttpClient(handler);
-
-            //    using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "request-duration");
-
-            //    using HttpRequestMessage request = new(HttpMethod.Get, uri)
-            //    {
-            //        Version = HttpVersion.Version20,
-            //        VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
-            //    };
-
-            //    HttpResponseMessage response = await client.SendAsync(request);
-            //    response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
-
-            //    Measurement<double> m = recorder.GetMeasurements().Single();
-            //    VerifyRequestDuration(m, uri, "HTTP/1.1", 200);
-
-            //}, async server =>
-            //{
-            //    Debug.Print(errorAfterDowngrade.ToString());
-                
-            //    await server.AcceptConnectionSendResponseAndCloseAsync();
-            //}, options: new GenericLoopbackOptions() { UseSsl = true });
         }
 
         [Fact]
@@ -315,11 +298,8 @@ namespace System.Net.Http.Functional.Tests
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
-                using HttpClientHandler handler = CreateHttpClientHandler();
-                using HttpClient client = CreateHttpClient(new EnrichmentHandler(handler));
-
-                using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
-
+                using HttpClient client = CreateHttpClient(new EnrichmentHandler(Handler));
+                using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
 
                 await Assert.ThrowsAsync<HttpRequestException>(async () =>
@@ -351,10 +331,8 @@ namespace System.Net.Http.Functional.Tests
             {
                 return GetFactoryForVersion(HttpVersion.Version20).CreateServerAsync(async (redirectServer, redirectUri) =>
                 {
-                    using HttpClientHandler handler = CreateHttpClientHandler();
-                    using HttpClient client = CreateHttpClient(handler);
-
-                    using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
+                    using HttpClient client = CreateHttpClient(Handler);
+                    using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
                     using HttpRequestMessage request = new(HttpMethod.Get, originalUri) { Version = HttpVersion.Version20 };
 
                     Task clientTask = client.SendAsync(request);
@@ -384,9 +362,8 @@ namespace System.Net.Http.Functional.Tests
         public async Task SendAsync_ProtocolError_RequestDurationRecorded()
         {
             using Http2LoopbackServer server = Http2LoopbackServer.CreateServer();
-            using HttpClientHandler handler = CreateHttpClientHandler();
-            using HttpClient client = CreateHttpClient(handler);
-            using var recorder = new InstrumentRecorder<double>(GetUnderlyingSocketsHttpHandler(handler).Meter, "http-client-request-duration");
+            using HttpClient client = CreateHttpClient(Handler);
+            using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
 
             Task<HttpResponseMessage> sendTask = client.GetAsync(server.Address);
 
@@ -413,6 +390,68 @@ namespace System.Net.Http.Functional.Tests
         protected override Version UseVersion => HttpVersion.Version30;
         public HttpMetricsTest_Http30(ITestOutputHelper output) : base(output)
         {
+        }
+    }
+
+    public class HttpMetricsTest_General
+    {
+        [Fact]
+        public void SocketsHttpHandler_DefaultMeter_IsSharedInstance()
+        {
+            SocketsHttpHandler h1 = new();
+            SocketsHttpHandler h2 = new();
+            Assert.Same(h1.Meter, h2.Meter);
+        }
+
+        [Fact]
+        public void HttpClientHandler_DefaultMeter_IsSharedInstance()
+        {
+            HttpClientHandler h1 = new();
+            HttpClientHandler h2 = new();
+            Assert.Same(h1.Meter, h2.Meter);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void SocketsHttpHandler_Dispose_DoesNotDisposeMeter(bool globalMeter)
+        {
+            SocketsHttpHandler h = new();
+            if (!globalMeter)
+            {
+                h.Meter = new Meter("System.Net.Http");
+            }
+            Dispose_DoesNotDisposeMeter_Common(h, h.Meter);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void HttpClientHandler_Dispose_DoesNotDisposeMeter(bool globalMeter)
+        {
+            HttpClientHandler h = new();
+            if (!globalMeter)
+            {
+                h.Meter = new Meter("System.Net.Http");
+            }
+            Dispose_DoesNotDisposeMeter_Common(h, h.Meter);
+        }
+
+        private static void Dispose_DoesNotDisposeMeter_Common(HttpMessageHandler handler, Meter meter)
+        {
+            Instrument testInstrument = meter.CreateCounter<int>("test");
+            using MeterListener listener = new MeterListener();
+            listener.InstrumentPublished = (instrument, _) =>
+            {
+                if (instrument.Meter == meter)
+                {
+                    listener.EnableMeasurementEvents(instrument);
+                }
+            };
+
+            listener.Start();
+            handler.Dispose();
+            Assert.True(testInstrument.Enabled);
         }
     }
 }

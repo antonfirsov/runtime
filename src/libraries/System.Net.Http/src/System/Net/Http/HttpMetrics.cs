@@ -13,7 +13,7 @@ namespace System.Net.Http
         private readonly UpDownCounter<long> _currentRequests;
         private readonly Histogram<double> _requestsDuration;
 
-        public static Meter DefaultMeter { get; } = new Meter("System.Net.Http");
+        public static Meter DefaultMeter { get; } = new SharedMeter();
 
         public HttpMetrics(Meter meter)
         {
@@ -126,6 +126,19 @@ namespace System.Net.Http
                 HttpStatusCode.InternalServerError => InternalServerError,
                 _ => (int)statusCode
             };
+        }
+
+        private sealed class SharedMeter : Meter
+        {
+            public SharedMeter()
+                : base("System.Net.Http")
+            {
+            }
+
+            protected override void Dispose(bool disposing)
+            {
+                // NOP to prevent disposing the global instance from arbitrary user code.
+            }
         }
     }
 }

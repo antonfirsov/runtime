@@ -474,10 +474,6 @@ namespace System.Net.Http
             {
                 _disposed = true;
                 _handler?.Dispose();
-                if (_settings._meter != HttpMetrics.DefaultMeter)
-                {
-                    _settings._meter.Dispose();
-                }
             }
 
             base.Dispose(disposing);
