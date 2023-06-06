@@ -39,11 +39,39 @@ namespace System.Net.Http.Functional.Tests
                 response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
                 Assert.Collection(recorder.GetMeasurements(),
-                    m => Assert.Equal(1L, m.Value),
-                    m => Assert.Equal(-1L, m.Value));
-
+                    m => VerifyCurrentRequest(m, 1, uri),
+                    m => VerifyCurrentRequest(m, -1, uri));
             }, async server =>
             {
+                await server.AcceptConnectionSendResponseAndCloseAsync();
+            });
+        }
+
+        [Fact]
+        public async Task SendAsync_CurrentRequests_InstrumentEnabledAfterSending_NotRecorded()
+        {
+            SemaphoreSlim instrumentEnabledSemaphore = new SemaphoreSlim(0);
+
+            await LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using HttpClient client = new HttpClient(Handler);
+
+                // Enable recording request-duration to test the path with metrics enabled.
+                using InstrumentRecorder<double> unrelatedRecorder = CreateInstrumentRecorder<double>("http-client-request-duration");
+
+                using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
+                Task<HttpResponseMessage> clientTask = client.SendAsync(request);
+                await Task.Delay(100);
+                using InstrumentRecorder<long> recorder = new(Handler.Meter, "http-client-current-requests");
+                instrumentEnabledSemaphore.Release();
+
+                HttpResponseMessage response = await clientTask;
+                response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
+
+                Assert.Empty(recorder.GetMeasurements());
+            }, async server =>
+            {
+                await instrumentEnabledSemaphore.WaitAsync();
                 await server.AcceptConnectionSendResponseAndCloseAsync();
             });
         }
@@ -161,6 +189,37 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
+        [Fact]
+        public Task SendAsync_Redirect_CurrentRequests_RecordedForEachHttpSpan()
+        {
+            return LoopbackServerFactory.CreateServerAsync((originalServer, originalUri) =>
+            {
+                return LoopbackServerFactory.CreateServerAsync(async (redirectServer, redirectUri) =>
+                {
+                    using HttpClient client = CreateHttpClient(Handler);
+                    using InstrumentRecorder<long> recorder = CreateInstrumentRecorder<long>("http-client-current-requests");
+                    using HttpRequestMessage request = new(HttpMethod.Get, originalUri) { Version = UseVersion };
+
+                    Task clientTask = client.SendAsync(request);
+                    Task serverTask = originalServer.HandleRequestAsync(HttpStatusCode.Redirect, new[] { new HttpHeaderData("Location", redirectUri.AbsoluteUri) });
+
+                    await Task.WhenAny(clientTask, serverTask);
+                    Assert.False(clientTask.IsCompleted, $"{clientTask.Status}: {clientTask.Exception}");
+                    await serverTask;
+
+                    serverTask = redirectServer.HandleRequestAsync();
+                    await TestHelper.WhenAllCompletedOrAnyFailed(clientTask, serverTask);
+                    await clientTask;
+
+                    Assert.Collection(recorder.GetMeasurements(),
+                        m => VerifyCurrentRequest(m, 1, originalUri),
+                        m => VerifyCurrentRequest(m, -1, originalUri),
+                        m => VerifyCurrentRequest(m, 1, redirectUri),
+                        m => VerifyCurrentRequest(m, -1, redirectUri));
+                }, options: new GenericLoopbackOptions() { UseSsl = true });
+            }, options: new GenericLoopbackOptions() { UseSsl = false });
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -186,6 +245,20 @@ namespace System.Net.Http.Functional.Tests
             AssertOptionalTag(tags, "port", port);
             AssertOptionalTag(tags, "protocol", protocol);
             AssertOptionalTag(tags, "status-code", statusCode);
+        }
+
+        protected static void VerifyCurrentRequest(Measurement<long> measurement, long expectedValue, Uri uri)
+        {
+            Assert.Equal(expectedValue, measurement.Value);
+
+            string scheme = uri.Scheme;
+            string host = uri.Host;
+            int? port = uri.Port;
+            KeyValuePair<string, object?>[] tags = measurement.Tags.ToArray();
+
+            Assert.Equal(scheme, tags.Single(t => t.Key == "scheme").Value);
+            Assert.Equal(host, tags.Single(t => t.Key == "host").Value);
+            AssertOptionalTag(tags, "port", port);
         }
 
         protected static void AssertOptionalTag<T>(KeyValuePair<string, object?>[] tags, string name, T value)
@@ -324,7 +397,7 @@ namespace System.Net.Http.Functional.Tests
         {
         }
 
-        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.IsNotBrowser))]
+        [Fact]
         public Task SendAsync_Redirect_RequestDuration_RecordedForEachHttpSpan()
         {
             return GetFactoryForVersion(HttpVersion.Version11).CreateServerAsync((originalServer, originalUri) =>
