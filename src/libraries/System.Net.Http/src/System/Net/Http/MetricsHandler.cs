@@ -79,7 +79,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
     private RequestSpanData RequestStart(HttpRequestMessage request)
     {
         TagList tags = InitializeCommonTags(request);
-        RequestSpanData span = new RequestSpanData(_currentRequests.Enabled, _requestsDuration.Enabled, tags);
+        RequestSpanData span = new RequestSpanData(_currentRequests.Enabled, _requestsDuration.Enabled);
 
         if (span.CurrentRequestsEnabled)
         {
@@ -91,20 +91,21 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
 
     private void RequestStop(HttpRequestMessage request, HttpResponseMessage? response, in RequestSpanData span)
     {
+        TagList tags = InitializeCommonTags(request);
+
         if (span.CurrentRequestsEnabled)
         {
-            _currentRequests.Add(-1, span.TagsAtStart);
+            _currentRequests.Add(-1, tags);
         }
 
         if (_requestsDuration.Enabled)
         {
             long endTimeStamp = Stopwatch.GetTimestamp();
 
-            TagList tags = InitializeCommonTags(request);
             if (response is not null)
             {
                 tags.Add("status-code", StatusCodeCache.GetBoxedStatusCode(response.StatusCode));
-                tags.Add("protocol", GetProtocolName(response.Version)); // Hacky
+                tags.Add("protocol", GetProtocolName(response.Version));
             }
 
             if (request._options?.TryGetCustomMetricsTags(out IReadOnlyCollection<KeyValuePair<string, object?>>? customTags) is true)
@@ -118,6 +119,14 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
             TimeSpan duration = Stopwatch.GetElapsedTime(span.StartTimestamp, endTimeStamp);
             _requestsDuration.Record(duration.TotalSeconds, tags);
         }
+
+        static string GetProtocolName(Version httpVersion) => (httpVersion.Major, httpVersion.Minor) switch
+        {
+            (1, 1) => "HTTP/1.1",
+            (2, 0) => "HTTP/2",
+            (3, 0) => "HTTP/3",
+            _ => "unknown"
+        };
     }
 
     private static TagList InitializeCommonTags(HttpRequestMessage request)
@@ -144,14 +153,6 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
 
         return tags;
     }
-
-    private static string GetProtocolName(Version httpVersion) => (httpVersion.Major, httpVersion.Minor) switch
-    {
-        (1, 1) => "HTTP/1.1",
-        (2, 0) => "HTTP/2",
-        (3, 0) => "HTTP/3",
-        _ => "unknown"
-    };
 
     private static class StatusCodeCache
     {
@@ -196,14 +197,12 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         public long StartTimestamp;
         public readonly bool CurrentRequestsEnabled;
         public readonly bool RequestDurationEnabled;
-        public readonly TagList TagsAtStart;
 
-        public RequestSpanData(bool currentRequestsEnabled, bool requestDurationEnabled, in TagList tagsAtStart)
+        public RequestSpanData(bool currentRequestsEnabled, bool requestDurationEnabled)
         {
             StartTimestamp = Stopwatch.GetTimestamp();
             CurrentRequestsEnabled = currentRequestsEnabled;
             RequestDurationEnabled = requestDurationEnabled;
-            TagsAtStart = tagsAtStart;
         }
     }
 }
