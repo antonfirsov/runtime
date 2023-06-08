@@ -304,67 +304,14 @@ namespace System.Net.Http.Functional.Tests
         }
     }
 
-    public class HttpMetricsTest_Http11 : HttpMetricsTest
+    public abstract class HttpMetricsTest_Http11 : HttpMetricsTest
     {
         protected override Version UseVersion => HttpVersion.Version11;
         public HttpMetricsTest_Http11(ITestOutputHelper output) : base(output)
         {
         }
 
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public async Task RequestDuration_HttpVersionDowngrade_LogsActualProtocol(bool malformedResponse)
-        {
-            if (!TestAsync)
-            {
-                // This test also uses HTTP/2, skip if synchrounous.
-                return;
-            }
-
-            await LoopbackServer.CreateServerAsync(async server =>
-            {
-                using HttpClient client = CreateHttpClient(Handler);
-                using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
-                using HttpRequestMessage request = new(HttpMethod.Get, server.Address)
-                {
-                    Version = HttpVersion.Version20,
-                    VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
-                };
-
-                Task<HttpResponseMessage> clientTask = client.SendAsync(TestAsync, request);
-
-                Debug.Print(malformedResponse.ToString());
-
-                await server.AcceptConnectionAsync(async connection =>
-                {
-                    if (malformedResponse)
-                    {
-                        await connection.ReadRequestHeaderAndSendCustomResponseAsync("!malformed!");
-                    }
-                    else
-                    {
-                        await connection.ReadRequestHeaderAndSendResponseAsync();
-                    }
-                    
-                });
-
-                if (malformedResponse)
-                {
-                    await Assert.ThrowsAsync<HttpRequestException>(() => clientTask);
-                    Measurement<double> m = recorder.GetMeasurements().Single();
-                    VerifyRequestDuration(m, server.Address, null, null); // Protocol is not logged.
-                }
-                else
-                {
-                    using HttpResponseMessage response = await clientTask;
-
-                    Measurement<double> m = recorder.GetMeasurements().Single();
-                    VerifyRequestDuration(m, server.Address, "HTTP/1.1", 200);
-                }
-                
-            }, new LoopbackServer.Options() { UseSsl = true });
-        }
+        
 
         [Fact]
         public Task RequestDuration_EnrichmentHandler_ContentLengthError_Recorded()
@@ -389,7 +336,7 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Fact]
-        public Task FailedRequests_ContentLengthError_Recorded()
+        public Task Send_FailedRequests_ContentLengthError_Recorded()
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
@@ -400,6 +347,82 @@ namespace System.Net.Http.Functional.Tests
                 await Assert.ThrowsAsync<HttpRequestException>(async () =>
                 {
                     using HttpResponseMessage response = await client.SendAsync(TestAsync, request);
+                });
+
+                Measurement<long> m = recorder.GetMeasurements().Single();
+                VerifyFailedRequests(m, 1, uri, ExpectedProtocolString, 200);
+            }, server => server.HandleRequestAsync(headers: new[] {
+                new HttpHeaderData("Content-Length", "1000")
+            }, content: "x"));
+        }    
+    }
+
+    public class HttpMetricsTest_Http11_Async : HttpMetricsTest_Http11
+    {
+        public HttpMetricsTest_Http11_Async(ITestOutputHelper output) : base(output)
+        {
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task RequestDuration_HttpVersionDowngrade_LogsActualProtocol(bool malformedResponse)
+        {
+            await LoopbackServer.CreateServerAsync(async server =>
+            {
+                using HttpClient client = CreateHttpClient(Handler);
+                using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
+                using HttpRequestMessage request = new(HttpMethod.Get, server.Address)
+                {
+                    Version = HttpVersion.Version20,
+                    VersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+                };
+
+                Task<HttpResponseMessage> clientTask = client.SendAsync(TestAsync, request);
+
+                Debug.Print(malformedResponse.ToString());
+
+                await server.AcceptConnectionAsync(async connection =>
+                {
+                    if (malformedResponse)
+                    {
+                        await connection.ReadRequestHeaderAndSendCustomResponseAsync("!malformed!");
+                    }
+                    else
+                    {
+                        await connection.ReadRequestHeaderAndSendResponseAsync();
+                    }
+
+                });
+
+                if (malformedResponse)
+                {
+                    await Assert.ThrowsAsync<HttpRequestException>(() => clientTask);
+                    Measurement<double> m = recorder.GetMeasurements().Single();
+                    VerifyRequestDuration(m, server.Address, null, null); // Protocol is not logged.
+                }
+                else
+                {
+                    using HttpResponseMessage response = await clientTask;
+
+                    Measurement<double> m = recorder.GetMeasurements().Single();
+                    VerifyRequestDuration(m, server.Address, "HTTP/1.1", 200);
+                }
+
+            }, new LoopbackServer.Options() { UseSsl = true });
+        }
+
+        [Fact]
+        public Task GetStringAsync_FailedRequests_ContentLengthError_Recorded()
+        {
+            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using HttpClient client = CreateHttpClient(Handler);
+                using InstrumentRecorder<long> recorder = CreateInstrumentRecorder<long>("http-client-failed-requests");
+                
+                await Assert.ThrowsAsync<HttpRequestException>(async () =>
+                {
+                    await client.GetStringAsync(uri);
                 });
 
                 Measurement<long> m = recorder.GetMeasurements().Single();
