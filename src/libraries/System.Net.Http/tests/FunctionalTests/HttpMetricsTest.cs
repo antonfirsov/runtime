@@ -1,17 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.IO;
 using System.Linq;
 using System.Net.Test.Common;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -27,7 +24,7 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Fact]
-        public Task SendAsync_CurrentRequests_Success()
+        public Task CurrentRequests_Success_Recorded()
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
@@ -48,7 +45,7 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Fact]
-        public async Task SendAsync_CurrentRequests_InstrumentEnabledAfterSending_NotRecorded()
+        public async Task CurrentRequests_InstrumentEnabledAfterSending_NotRecorded()
         {
             SemaphoreSlim instrumentEnabledSemaphore = new SemaphoreSlim(0);
 
@@ -76,9 +73,9 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Theory]
-        [InlineData("GET")]
-        [InlineData("POST")]
-        public Task SendAsync_RequestDuration_Success(string method)
+        [InlineData("GET", HttpStatusCode.OK)]
+        [InlineData("PUT", HttpStatusCode.Created)]
+        public Task RequestDuration_Success_Recorded(string method, HttpStatusCode statusCode)
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
@@ -89,16 +86,16 @@ namespace System.Net.Http.Functional.Tests
                 using HttpResponseMessage response = await client.SendAsync(TestAsync, request);
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri, ExpectedProtocolString, 200, method);
+                VerifyRequestDuration(m, uri, ExpectedProtocolString, (int)statusCode, method);
 
             }, async server =>
             {
-                await server.AcceptConnectionSendResponseAndCloseAsync();
+                await server.AcceptConnectionSendResponseAndCloseAsync(statusCode);
             });
         }
 
         [Fact]
-        public Task SendAsync_RequestDuration_CustomTags()
+        public Task RequestDuration_CustomTags_Recorded()
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
@@ -136,7 +133,7 @@ namespace System.Net.Http.Functional.Tests
         [InlineData(HttpCompletionOption.ResponseHeadersRead, ResponseContentType.Empty)]
         [InlineData(HttpCompletionOption.ResponseHeadersRead, ResponseContentType.ContentLength)]
         [InlineData(HttpCompletionOption.ResponseHeadersRead, ResponseContentType.TransferEncodingChunked)]
-        public Task SendAsync_RequestDuration_EnrichmentHandler_Success(HttpCompletionOption completionOption, ResponseContentType responseContentType)
+        public Task RequestDuration_EnrichmentHandler_Success_Recorded(HttpCompletionOption completionOption, ResponseContentType responseContentType)
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
@@ -170,7 +167,7 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Fact]
-        public Task SendAsync_Redirect_CurrentRequests_RecordedForEachHttpSpan()
+        public Task CurrentRequests_Redirect_RecordedForEachHttpSpan()
         {
             return LoopbackServerFactory.CreateServerAsync((originalServer, originalUri) =>
             {
@@ -242,6 +239,23 @@ namespace System.Net.Http.Functional.Tests
             AssertOptionalTag(tags, "port", port);
         }
 
+        protected static void VerifyFailedRequests(Measurement<long> measurement, long expectedValue, Uri uri, string? protocol, int? statusCode, string method = "GET")
+        {
+            Assert.Equal(expectedValue, measurement.Value);
+
+            string scheme = uri.Scheme;
+            string host = uri.IdnHost;
+            int? port = uri.Port;
+            KeyValuePair<string, object?>[] tags = measurement.Tags.ToArray();
+
+            Assert.Equal(scheme, tags.Single(t => t.Key == "scheme").Value);
+            Assert.Equal(host, tags.Single(t => t.Key == "host").Value);
+            Assert.Equal(method, tags.Single(t => t.Key == "method").Value);
+            AssertOptionalTag(tags, "port", port);
+            AssertOptionalTag(tags, "protocol", protocol);
+            AssertOptionalTag(tags, "status-code", statusCode);
+        }
+
         protected static void AssertOptionalTag<T>(KeyValuePair<string, object?>[] tags, string name, T value)
         {
             if (value is null)
@@ -262,7 +276,7 @@ namespace System.Net.Http.Functional.Tests
             return new InstrumentRecorder<T>(meter, instrumentName);
         }
 
-        private string ExpectedProtocolString => (UseVersion.Major, UseVersion.Minor) switch
+        protected string ExpectedProtocolString => (UseVersion.Major, UseVersion.Minor) switch
         {
             (1, 1) => "HTTP/1.1",
             (2, 0) => "HTTP/2",
@@ -300,7 +314,7 @@ namespace System.Net.Http.Functional.Tests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task SendAsync_HttpVersionDowngrade_RequestDuration_LogsActualProtocol(bool malformedResponse)
+        public async Task RequestDuration_HttpVersionDowngrade_LogsActualProtocol(bool malformedResponse)
         {
             if (!TestAsync)
             {
@@ -353,7 +367,7 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Fact]
-        public Task SendAsync_RequestDuration_EnrichmentHandler_ContentLengthError()
+        public Task RequestDuration_EnrichmentHandler_ContentLengthError_Recorded()
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
@@ -365,11 +379,31 @@ namespace System.Net.Http.Functional.Tests
                 {
                     using HttpResponseMessage response = await client.SendAsync(TestAsync, request);
                 });
-
                 Measurement<double> m = recorder.GetMeasurements().Single();
-                VerifyRequestDuration(m, uri, $"HTTP/{UseVersion}", 200); ;
+                VerifyRequestDuration(m, uri, ExpectedProtocolString, 200); ;
                 Assert.Equal("before!", m.Tags.ToArray().Single(t => t.Key == "before").Value);
 
+            }, server => server.HandleRequestAsync(headers: new[] {
+                new HttpHeaderData("Content-Length", "1000")
+            }, content: "x"));
+        }
+
+        [Fact]
+        public Task FailedRequests_ContentLengthError_Recorded()
+        {
+            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using HttpClient client = CreateHttpClient(Handler);
+                using InstrumentRecorder<long> recorder = CreateInstrumentRecorder<long>("http-client-failed-requests");
+                using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
+
+                await Assert.ThrowsAsync<HttpRequestException>(async () =>
+                {
+                    using HttpResponseMessage response = await client.SendAsync(TestAsync, request);
+                });
+
+                Measurement<long> m = recorder.GetMeasurements().Single();
+                VerifyFailedRequests(m, 1, uri, ExpectedProtocolString, 200);
             }, server => server.HandleRequestAsync(headers: new[] {
                 new HttpHeaderData("Content-Length", "1000")
             }, content: "x"));
@@ -393,7 +427,7 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Fact]
-        public Task SendAsync_Redirect_RequestDuration_RecordedForEachHttpSpan()
+        public Task RequestDuration_Redirect_RecordedForEachHttpSpan()
         {
             return GetFactoryForVersion(HttpVersion.Version11).CreateServerAsync((originalServer, originalUri) =>
             {
@@ -427,7 +461,7 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Fact]
-        public async Task SendAsync_ProtocolError_RequestDurationRecorded()
+        public async Task RequestDuration_ProtocolError_Recorded()
         {
             using Http2LoopbackServer server = Http2LoopbackServer.CreateServer();
             using HttpClient client = CreateHttpClient(Handler);
@@ -447,8 +481,33 @@ namespace System.Net.Http.Functional.Tests
                 using HttpResponseMessage response = await sendTask;
             });
 
-            Measurement<double> m = recorder.GetMeasurements().Single(); // Protocol is not recorded
-            VerifyRequestDuration(m, server.Address, null, null); 
+            Measurement<double> m = recorder.GetMeasurements().Single();
+            VerifyRequestDuration(m, server.Address, null, null); // Protocol is not recorded
+        }
+
+        [Fact]
+        public async Task FailedRequests_ProtocolError_Recorded()
+        {
+            using Http2LoopbackServer server = Http2LoopbackServer.CreateServer();
+            using HttpClient client = CreateHttpClient(Handler);
+            using InstrumentRecorder<long> recorder = CreateInstrumentRecorder<long>("http-client-failed-requests");
+
+            Task<HttpResponseMessage> sendTask = client.GetAsync(server.Address);
+
+            Http2LoopbackConnection connection = await server.EstablishConnectionAsync();
+            int streamId = await connection.ReadRequestHeaderAsync();
+
+            // Send a reset stream frame so that the stream moves to a terminal state.
+            RstStreamFrame resetStream = new RstStreamFrame(FrameFlags.None, (int)ProtocolErrors.INTERNAL_ERROR, streamId);
+            await connection.WriteFrameAsync(resetStream);
+
+            await Assert.ThrowsAsync<HttpRequestException>(async () =>
+            {
+                using HttpResponseMessage response = await sendTask;
+            });
+
+            Measurement<long> m = recorder.GetMeasurements().Single();
+            VerifyFailedRequests(m, 1, server.Address, null, null);
         }
     }
 

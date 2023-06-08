@@ -14,6 +14,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
     private readonly HttpMessageHandler _innerHandler;
     private readonly Meter _meter;
     private readonly UpDownCounter<long> _currentRequests;
+    private readonly Counter<long> _failedRequests;
     private readonly Histogram<double> _requestsDuration;
 
     public MetricsHandler(HttpMessageHandler innerHandler, Meter meter)
@@ -22,9 +23,11 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         _innerHandler = innerHandler;
 
         _currentRequests = _meter.CreateUpDownCounter<long>(
-               "http-client-current-requests",
-               description: "Number of outbound HTTP requests that are currently active on the client.");
-
+            "http-client-current-requests",
+            description: "Number of outbound HTTP requests that are currently active on the client.");
+        _failedRequests = _meter.CreateCounter<long>(
+            "http-client-failed-requests",
+            description: "Number of outbound HTTP requests that have failed.");
         _requestsDuration = _meter.CreateHistogram<double>(
             "http-client-request-duration",
             unit: "s",
@@ -35,7 +38,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
 
     internal override ValueTask<HttpResponseMessage> SendAsync(HttpRequestMessage request, bool async, CancellationToken cancellationToken)
     {
-        if (_currentRequests.Enabled || _requestsDuration.Enabled)
+        if (_currentRequests.Enabled || _failedRequests.Enabled || _requestsDuration.Enabled)
         {
             ArgumentNullException.ThrowIfNull(request);
             return SendAsyncWithMetrics(request, async, cancellationToken);
@@ -50,7 +53,8 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
 
     private async ValueTask<HttpResponseMessage> SendAsyncWithMetrics(HttpRequestMessage request, bool async, CancellationToken cancellationToken)
     {
-        RequestSpanData span = RequestStart(request);
+        (long startTimestamp, bool recordCurrentRequsts) = RequestStart(request);
+        bool failed = false;
         HttpResponseMessage? response = null;
         try
         {
@@ -58,9 +62,14 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
                 await _innerHandler.SendAsync(request, cancellationToken).ConfigureAwait(false) :
                 _innerHandler.Send(request, cancellationToken);
         }
+        catch
+        {
+            failed = true;
+            throw;
+        }
         finally
         {
-            RequestStop(request, response, span);
+            RequestStop(request, response, startTimestamp, recordCurrentRequsts, failed);
         }
 
         return response;
@@ -76,32 +85,34 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         base.Dispose(disposing);
     }
 
-    private RequestSpanData RequestStart(HttpRequestMessage request)
+    private (long StartTimestamp, bool RecordCurrentRequests) RequestStart(HttpRequestMessage request)
     {
-        TagList tags = InitializeCommonTags(request);
-        RequestSpanData span = new RequestSpanData(_currentRequests.Enabled, _requestsDuration.Enabled);
+        bool recordCurrentRequests = _currentRequests.Enabled;
+        long startTimestamp = Stopwatch.GetTimestamp();
 
-        if (span.CurrentRequestsEnabled)
+        if (recordCurrentRequests)
         {
+            TagList tags = InitializeCommonTags(request);
             _currentRequests.Add(1, tags);
         }
 
-        return span;
+        return (startTimestamp, recordCurrentRequests);
     }
 
-    private void RequestStop(HttpRequestMessage request, HttpResponseMessage? response, in RequestSpanData span)
+    private void RequestStop(HttpRequestMessage request, HttpResponseMessage? response, long startTimestamp, bool recordCurrentRequsts, bool failed)
     {
         TagList tags = InitializeCommonTags(request);
 
-        if (span.CurrentRequestsEnabled)
+        if (recordCurrentRequsts)
         {
             _currentRequests.Add(-1, tags);
         }
 
-        if (_requestsDuration.Enabled)
-        {
-            long endTimeStamp = Stopwatch.GetTimestamp();
+        bool recordRequestDuration = _requestsDuration.Enabled;
+        bool recordFailedRequests = _failedRequests.Enabled && failed;
 
+        if (recordRequestDuration || recordFailedRequests)
+        {
             if (response is not null)
             {
                 tags.Add("status-code", StatusCodeCache.GetBoxedStatusCode(response.StatusCode));
@@ -115,9 +126,17 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
                     tags.Add(customTag);
                 }
             }
+        }
 
-            TimeSpan duration = Stopwatch.GetElapsedTime(span.StartTimestamp, endTimeStamp);
+        if (recordRequestDuration)
+        {
+            TimeSpan duration = Stopwatch.GetElapsedTime(startTimestamp, Stopwatch.GetTimestamp());
             _requestsDuration.Record(duration.TotalSeconds, tags);
+        }
+
+        if (recordFailedRequests)
+        {
+            _failedRequests.Add(1, tags);
         }
 
         static string GetProtocolName(Version httpVersion) => (httpVersion.Major, httpVersion.Minor) switch
@@ -189,20 +208,6 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         protected override void Dispose(bool disposing)
         {
             // NOP to prevent disposing the global instance from arbitrary user code.
-        }
-    }
-
-    private struct RequestSpanData
-    {
-        public long StartTimestamp;
-        public readonly bool CurrentRequestsEnabled;
-        public readonly bool RequestDurationEnabled;
-
-        public RequestSpanData(bool currentRequestsEnabled, bool requestDurationEnabled)
-        {
-            StartTimestamp = Stopwatch.GetTimestamp();
-            CurrentRequestsEnabled = currentRequestsEnabled;
-            RequestDurationEnabled = requestDurationEnabled;
         }
     }
 }
