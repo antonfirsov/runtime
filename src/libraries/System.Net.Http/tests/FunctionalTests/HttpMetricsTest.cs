@@ -131,39 +131,20 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Theory]
-        [InlineData(HttpCompletionOption.ResponseContentRead, false, ResponseContentType.Empty)]
-        [InlineData(HttpCompletionOption.ResponseContentRead, false, ResponseContentType.ContentLength)]
-        [InlineData(HttpCompletionOption.ResponseContentRead, false, ResponseContentType.TransferEncodingChunked)]
-        [InlineData(HttpCompletionOption.ResponseHeadersRead, false, ResponseContentType.Empty)]
-        [InlineData(HttpCompletionOption.ResponseHeadersRead, false, ResponseContentType.ContentLength)]
-        [InlineData(HttpCompletionOption.ResponseHeadersRead, false, ResponseContentType.TransferEncodingChunked)]
-        [InlineData(HttpCompletionOption.ResponseHeadersRead, true, ResponseContentType.Empty)]
-        [InlineData(HttpCompletionOption.ResponseHeadersRead, true, ResponseContentType.ContentLength)]
-        [InlineData(HttpCompletionOption.ResponseHeadersRead, true, ResponseContentType.TransferEncodingChunked)]
-        public Task SendAsync_RequestDuration_EnrichmentHandler_Success(HttpCompletionOption completionOption, bool loadIntoBuffer, ResponseContentType responseContentType)
+        [InlineData(HttpCompletionOption.ResponseContentRead, ResponseContentType.Empty)]
+        [InlineData(HttpCompletionOption.ResponseContentRead, ResponseContentType.ContentLength)]
+        [InlineData(HttpCompletionOption.ResponseContentRead, ResponseContentType.TransferEncodingChunked)]
+        [InlineData(HttpCompletionOption.ResponseHeadersRead, ResponseContentType.Empty)]
+        [InlineData(HttpCompletionOption.ResponseHeadersRead, ResponseContentType.ContentLength)]
+        [InlineData(HttpCompletionOption.ResponseHeadersRead, ResponseContentType.TransferEncodingChunked)]
+        public Task SendAsync_RequestDuration_EnrichmentHandler_Success(HttpCompletionOption completionOption, ResponseContentType responseContentType)
         {
             return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
                 using HttpClient client = CreateHttpClient(new EnrichmentHandler(Handler));
                 using InstrumentRecorder<double> recorder = CreateInstrumentRecorder<double>("http-client-request-duration");
                 using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
-                using var response = await client.SendAsync(request, completionOption);
-
-                if (completionOption == HttpCompletionOption.ResponseHeadersRead)
-                {
-                    // Instrumentation should be delayed until reaching content EOF
-                    Assert.Empty(recorder.GetMeasurements());
-
-                    if (loadIntoBuffer)
-                    {
-                        await response.Content.LoadIntoBufferAsync();
-                    }
-                    else
-                    {
-                        using Stream stream = await response.Content.ReadAsStreamAsync();
-                        await stream.CopyToAsync(new MemoryStream());
-                    }
-                }
+                using HttpResponseMessage response = await client.SendAsync(request, completionOption);
 
                 Measurement<double> m = recorder.GetMeasurements().Single();
                 VerifyRequestDuration(m, uri, ExpectedProtocolString, 200); ;
@@ -216,8 +197,8 @@ namespace System.Net.Http.Functional.Tests
                         m => VerifyCurrentRequest(m, -1, originalUri),
                         m => VerifyCurrentRequest(m, 1, redirectUri),
                         m => VerifyCurrentRequest(m, -1, redirectUri));
-                }, options: new GenericLoopbackOptions() { UseSsl = true });
-            }, options: new GenericLoopbackOptions() { UseSsl = false });
+                });
+            });
         }
 
         protected override void Dispose(bool disposing)

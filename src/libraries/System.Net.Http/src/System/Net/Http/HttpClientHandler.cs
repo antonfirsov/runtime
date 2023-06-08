@@ -25,7 +25,7 @@ namespace System.Net.Http
         private HttpMessageHandler? _handler;
 
 #if TARGET_BROWSER
-        private Meter _meter = HttpMetrics.DefaultMeter;
+        private Meter _meter = MetricsHandler.DefaultMeter;
 #endif
 
         private ClientCertificateOption _clientCertificateOptions;

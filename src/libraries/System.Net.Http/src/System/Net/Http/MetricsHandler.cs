@@ -1,9 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -12,17 +12,30 @@ namespace System.Net.Http;
 internal sealed class MetricsHandler : HttpMessageHandlerStage
 {
     private readonly HttpMessageHandler _innerHandler;
-    private readonly HttpMetrics _metrics;
+    private readonly Meter _meter;
+    private readonly UpDownCounter<long> _currentRequests;
+    private readonly Histogram<double> _requestsDuration;
 
     public MetricsHandler(HttpMessageHandler innerHandler, Meter meter)
     {
-        _metrics = new HttpMetrics(meter);
+        _meter = meter;
         _innerHandler = innerHandler;
+
+        _currentRequests = _meter.CreateUpDownCounter<long>(
+               "http-client-current-requests",
+               description: "Number of outbound HTTP requests that are currently active on the client.");
+
+        _requestsDuration = _meter.CreateHistogram<double>(
+            "http-client-request-duration",
+            unit: "s",
+            description: "The duration of outbound HTTP requests.");
     }
+
+    public static Meter DefaultMeter { get; } = new SharedMeter();
 
     internal override ValueTask<HttpResponseMessage> SendAsync(HttpRequestMessage request, bool async, CancellationToken cancellationToken)
     {
-        if (_metrics.RequestCountersEnabled())
+        if (_currentRequests.Enabled || _requestsDuration.Enabled)
         {
             ArgumentNullException.ThrowIfNull(request);
             return SendAsyncWithMetrics(request, async, cancellationToken);
@@ -37,8 +50,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
 
     private async ValueTask<HttpResponseMessage> SendAsyncWithMetrics(HttpRequestMessage request, bool async, CancellationToken cancellationToken)
     {
-        long startTimestamp = Stopwatch.GetTimestamp();
-        _metrics.RequestStart();
+        RequestSpanData span = RequestStart(request);
         HttpResponseMessage? response = null;
         try
         {
@@ -46,13 +58,11 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
                 await _innerHandler.SendAsync(request, cancellationToken).ConfigureAwait(false) :
                 _innerHandler.Send(request, cancellationToken);
         }
-        catch
+        finally
         {
-            _metrics.RequestStop(request, response, startTimestamp, Stopwatch.GetTimestamp());
-            throw;
+            RequestStop(request, response, span);
         }
 
-        response.Content = new TrackEofContent(startTimestamp, _metrics, response);
         return response;
     }
 
@@ -66,183 +76,134 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         base.Dispose(disposing);
     }
 
-    private struct MetricsRecorderData
+    private RequestSpanData RequestStart(HttpRequestMessage request)
     {
-        private readonly long _startTimestamp;
-        private HttpMetrics? _metrics;
-        private readonly HttpResponseMessage _response;
-        public readonly HttpContent InnerContent;
+        TagList tags = InitializeCommonTags(request);
+        RequestSpanData span = new RequestSpanData(_currentRequests.Enabled, _requestsDuration.Enabled, tags);
 
-        public MetricsRecorderData(long startTimestamp, HttpMetrics metrics, HttpResponseMessage response)
+        if (span.CurrentRequestsEnabled)
         {
-            _startTimestamp = startTimestamp;
-            _metrics = metrics;
-            _response = response;
-            InnerContent = response.Content;
+            _currentRequests.Add(1, tags);
         }
 
-        internal void LogRequestStop()
+        return span;
+    }
+
+    private void RequestStop(HttpRequestMessage request, HttpResponseMessage? response, in RequestSpanData span)
+    {
+        if (span.CurrentRequestsEnabled)
         {
-            Debug.Assert(_response.RequestMessage is not null);
-            _metrics?.RequestStop(_response.RequestMessage, _response, _startTimestamp, Stopwatch.GetTimestamp());
-            _metrics = null;
+            _currentRequests.Add(-1, span.TagsAtStart);
+        }
+
+        if (_requestsDuration.Enabled)
+        {
+            long endTimeStamp = Stopwatch.GetTimestamp();
+
+            TagList tags = InitializeCommonTags(request);
+            if (response is not null)
+            {
+                tags.Add("status-code", StatusCodeCache.GetBoxedStatusCode(response.StatusCode));
+                tags.Add("protocol", GetProtocolName(response.Version)); // Hacky
+            }
+
+            if (request._options?.TryGetCustomMetricsTags(out IReadOnlyCollection<KeyValuePair<string, object?>>? customTags) is true)
+            {
+                foreach (var customTag in customTags!)
+                {
+                    tags.Add(customTag);
+                }
+            }
+
+            TimeSpan duration = Stopwatch.GetElapsedTime(span.StartTimestamp, endTimeStamp);
+            _requestsDuration.Record(duration.TotalSeconds, tags);
         }
     }
 
-    private interface IMetricsRecorder
+    private static TagList InitializeCommonTags(HttpRequestMessage request)
     {
-        void LogRequestStop();
+        TagList tags = default;
+
+        if (request.RequestUri is { } requestUri && requestUri.IsAbsoluteUri)
+        {
+            if (requestUri.Scheme is not null)
+            {
+                tags.Add("scheme", requestUri.Scheme);
+            }
+            if (requestUri.Host is not null)
+            {
+                tags.Add("host", requestUri.Host);
+            }
+            // Add port tag when not the default value for the current scheme
+            if (!requestUri.IsDefaultPort)
+            {
+                tags.Add("port", requestUri.Port);
+            }
+        }
+        tags.Add("method", request.Method.Method);
+
+        return tags;
     }
 
-    private sealed class TrackEofContent : HttpContent, IMetricsRecorder
+    private static string GetProtocolName(Version httpVersion) => (httpVersion.Major, httpVersion.Minor) switch
     {
-        private MetricsRecorderData _metricsData;
-        private Stream? _innerStream;
+        (1, 1) => "HTTP/1.1",
+        (2, 0) => "HTTP/2",
+        (3, 0) => "HTTP/3",
+        _ => "unknown"
+    };
 
-        private HttpContent InnerContent => _metricsData.InnerContent;
+    private static class StatusCodeCache
+    {
+        private static readonly object OK = (int)HttpStatusCode.OK;
+        private static readonly object Created = (int)HttpStatusCode.Created;
+        private static readonly object Accepted = (int)HttpStatusCode.Accepted;
+        private static readonly object NoContent = (int)HttpStatusCode.NoContent;
+        private static readonly object Moved = (int)HttpStatusCode.Moved;
+        private static readonly object Redirect = (int)HttpStatusCode.Redirect;
+        private static readonly object NotModified = (int)HttpStatusCode.NotModified;
+        private static readonly object InternalServerError = (int)HttpStatusCode.InternalServerError;
 
-        public TrackEofContent(long startTimestamp, HttpMetrics metrics, HttpResponseMessage response)
+        public static object GetBoxedStatusCode(HttpStatusCode statusCode) => statusCode switch
         {
-            _metricsData = new MetricsRecorderData(startTimestamp, metrics, response);
-
-            foreach (var header in InnerContent.Headers)
-            {
-                Headers.TryAddWithoutValidation(header.Key, header.Value);
-            }
-        }
-
-        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context)
-        {
-            _innerStream = await InnerContent.ReadAsStreamAsync().ConfigureAwait(false);
-
-            try
-            {
-                await _innerStream.CopyToAsync(stream).ConfigureAwait(false);
-            }
-
-            finally
-            {
-                LogRequestStop();
-            }
-        }
-
-        protected override async Task<Stream> CreateContentReadStreamAsync()
-        {
-            var stream = await InnerContent.ReadAsStreamAsync().ConfigureAwait(false);
-
-            return new TrackEofStream(stream, this);
-        }
-
-        protected internal override bool TryComputeLength(out long length) => InnerContent.TryComputeLength(out length);
-
-        protected override void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                LogRequestStop();
-                InnerContent.Dispose();
-                _innerStream?.Dispose();
-            }
-
-            base.Dispose(disposing);
-        }
-
-        public void LogRequestStop() => _metricsData.LogRequestStop();
+            HttpStatusCode.OK => OK,
+            HttpStatusCode.Created => Created,
+            HttpStatusCode.Accepted => Accepted,
+            HttpStatusCode.NoContent => NoContent,
+            HttpStatusCode.Moved => Moved,
+            HttpStatusCode.Redirect => Redirect,
+            HttpStatusCode.NotModified => NotModified,
+            HttpStatusCode.InternalServerError => InternalServerError,
+            _ => (int)statusCode
+        };
     }
 
-    private sealed class TrackEofStream : Stream
+    private sealed class SharedMeter : Meter
     {
-        private readonly Stream _inner;
-        private readonly IMetricsRecorder _metricsRecorder;
-
-        public TrackEofStream(Stream inner, IMetricsRecorder metricsRecorder)
+        public SharedMeter()
+            : base("System.Net.Http")
         {
-            _inner = inner;
-            _metricsRecorder = metricsRecorder;
-        }
-
-        public override bool CanRead => _inner.CanRead;
-        public override bool CanSeek => _inner.CanSeek;
-        public override bool CanWrite => _inner.CanWrite;
-        public override long Length => _inner.Length;
-        public override long Position
-        {
-            get => _inner.Position;
-            set => _inner.Position = value;
-        }
-        public override int ReadTimeout
-        {
-            get => _inner.ReadTimeout;
-            set => _inner.ReadTimeout = value;
-        }
-        public override int WriteTimeout
-        {
-            get => _inner.WriteTimeout;
-            set => _inner.WriteTimeout = value;
-        }
-
-        public override void Flush() => _inner.Flush();
-
-        public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
-
-        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
-
-        public override void SetLength(long value) => _inner.SetLength(value);
-
-        public override void Write(byte[] buffer, int offset, int count) => _inner.Write(buffer, offset, count);
-
-        public override Task FlushAsync(CancellationToken cancellationToken) => _inner.FlushAsync(cancellationToken);
-
-        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
-            _inner.WriteAsync(buffer, offset, count, cancellationToken);
-
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
-            _inner.WriteAsync(buffer, cancellationToken);
-
-        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-        {
-            var result = await _inner.ReadAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
-
-            // TODO: Handle errors.
-            if (count != 0 && result == 0)
-            {
-                _metricsRecorder.LogRequestStop();
-            }
-            return result;
-        }
-
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            var result = await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-
-            // TODO: Handle errors.
-            if (buffer.Length != 0 && result == 0)
-            {
-                _metricsRecorder.LogRequestStop();
-            }
-            return result;
-        }
-
-        public override async Task CopyToAsync(Stream destination, int bufferSize, CancellationToken cancellationToken)
-        {
-            await _inner.CopyToAsync(destination, bufferSize, cancellationToken).ConfigureAwait(false);
-            _metricsRecorder.LogRequestStop();
-        }
-
-        public override async ValueTask DisposeAsync()
-        {
-            await base.DisposeAsync().ConfigureAwait(false);
-            await _inner.DisposeAsync().ConfigureAwait(false);
         }
 
         protected override void Dispose(bool disposing)
         {
-            base.Dispose(disposing);
+            // NOP to prevent disposing the global instance from arbitrary user code.
+        }
+    }
 
-            if (disposing)
-            {
-                _inner.Dispose();
-            }
+    private struct RequestSpanData
+    {
+        public long StartTimestamp;
+        public readonly bool CurrentRequestsEnabled;
+        public readonly bool RequestDurationEnabled;
+        public readonly TagList TagsAtStart;
+
+        public RequestSpanData(bool currentRequestsEnabled, bool requestDurationEnabled, in TagList tagsAtStart)
+        {
+            StartTimestamp = Stopwatch.GetTimestamp();
+            CurrentRequestsEnabled = currentRequestsEnabled;
+            RequestDurationEnabled = requestDurationEnabled;
+            TagsAtStart = tagsAtStart;
         }
     }
 }
