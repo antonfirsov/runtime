@@ -4,12 +4,13 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace System.Net.Http;
 
-internal sealed class MetricsHandler : HttpMessageHandlerStage
+internal sealed class MetricsHandler : HttpMessageHandlerStage, IRequestFailureMetricsLogger
 {
     private readonly HttpMessageHandler _innerHandler;
     private readonly Meter _meter;
@@ -72,6 +73,12 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
             RequestStop(request, response, startTimestamp, recordCurrentRequsts, failed);
         }
 
+        if (!failed && _failedRequests.Enabled)
+        {
+            // Logs content read failures:
+            response._requestFailedMetricsLogger = this;
+        }
+
         return response;
     }
 
@@ -113,19 +120,7 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
 
         if (recordRequestDuration || recordFailedRequests)
         {
-            if (response is not null)
-            {
-                tags.Add("status-code", StatusCodeCache.GetBoxedStatusCode(response.StatusCode));
-                tags.Add("protocol", GetProtocolName(response.Version));
-            }
-
-            if (request._options?.TryGetCustomMetricsTags(out IReadOnlyCollection<KeyValuePair<string, object?>>? customTags) is true)
-            {
-                foreach (var customTag in customTags!)
-                {
-                    tags.Add(customTag);
-                }
-            }
+            ApplyExtendedTags(ref tags, request, response);
         }
 
         if (recordRequestDuration)
@@ -138,15 +133,32 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         {
             _failedRequests.Add(1, tags);
         }
-
-        static string GetProtocolName(Version httpVersion) => (httpVersion.Major, httpVersion.Minor) switch
-        {
-            (1, 1) => "HTTP/1.1",
-            (2, 0) => "HTTP/2",
-            (3, 0) => "HTTP/3",
-            _ => "unknown"
-        };
     }
+
+    private static void ApplyExtendedTags(ref TagList tags, HttpRequestMessage request, HttpResponseMessage? response)
+    {
+        if (response is not null)
+        {
+            tags.Add("status-code", StatusCodeCache.GetBoxedStatusCode(response.StatusCode));
+            tags.Add("protocol", GetProtocolName(response.Version));
+        }
+
+        if (request._options?.TryGetCustomMetricsTags(out IReadOnlyCollection<KeyValuePair<string, object?>>? customTags) is true)
+        {
+            foreach (var customTag in customTags!)
+            {
+                tags.Add(customTag);
+            }
+        }
+    }
+
+    private static string GetProtocolName(Version httpVersion) => (httpVersion.Major, httpVersion.Minor) switch
+    {
+        (1, 1) => "HTTP/1.1",
+        (2, 0) => "HTTP/2",
+        (3, 0) => "HTTP/3",
+        _ => "unknown"
+    };
 
     private static TagList InitializeCommonTags(HttpRequestMessage request)
     {
@@ -171,6 +183,14 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
         tags.Add("method", request.Method.Method);
 
         return tags;
+    }
+
+    void IRequestFailureMetricsLogger.LogRequestFailed(HttpResponseMessage response)
+    {
+        Debug.Assert(response.RequestMessage is not null);
+        TagList tags = InitializeCommonTags(response.RequestMessage);
+        ApplyExtendedTags(ref tags, response.RequestMessage, response);
+        _failedRequests.Add(1, tags);
     }
 
     private static class StatusCodeCache
@@ -210,4 +230,9 @@ internal sealed class MetricsHandler : HttpMessageHandlerStage
             // NOP to prevent disposing the global instance from arbitrary user code.
         }
     }
+}
+
+internal interface IRequestFailureMetricsLogger
+{
+    void LogRequestFailed(HttpResponseMessage response);
 }
