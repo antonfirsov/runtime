@@ -252,15 +252,27 @@ namespace System.Net.Http
                 {
                     case Http3ErrorCode.VersionFallback:
                         // The server is requesting us fall back to an older HTTP version.
-                        throw new HttpRequestException(SR.net_http_retry_on_older_version, ex, RequestRetryType.RetryOnLowerHttpVersion);
+                        throw new HttpRequestException(SR.net_http_retry_on_older_version, ex, RequestRetryType.RetryOnLowerHttpVersion, httpRequestError: HttpRequestError.VersionNegotiationError);
 
                     case Http3ErrorCode.RequestRejected:
                         // The server is rejecting the request without processing it, retry it on a different connection.
-                        throw new HttpRequestException(SR.net_http_request_aborted, ex, RequestRetryType.RetryOnConnectionFailure);
+                        throw new HttpRequestException(SR.net_http_request_aborted, ex, RequestRetryType.RetryOnConnectionFailure, httpRequestError: HttpRequestError.Unknown);
 
                     default:
                         // Our stream was reset.
-                        throw new HttpRequestException(SR.net_http_client_execution_error, _connection.AbortException ?? HttpProtocolException.CreateHttp3StreamException(code));
+                        HttpRequestError httpRequestError;
+                        Exception innerException;
+                        if (_connection.AbortException != null)
+                        {
+                            httpRequestError = HttpRequestError.Unknown;
+                            innerException = _connection.AbortException;
+                        }
+                        else
+                        {
+                            httpRequestError = HttpRequestError.HttpProtocolError;
+                            innerException = HttpProtocolException.CreateHttp3StreamException(code);
+                        }
+                        throw new HttpRequestException(SR.net_http_client_execution_error, innerException, httpRequestError: httpRequestError);
                 }
             }
             catch (QuicException ex) when (ex.QuicError == QuicError.ConnectionAborted)
@@ -270,12 +282,12 @@ namespace System.Net.Http
                 Http3ErrorCode code = (Http3ErrorCode)ex.ApplicationErrorCode.Value;
 
                 Exception abortException = _connection.Abort(HttpProtocolException.CreateHttp3ConnectionException(code, SR.net_http_http3_connection_close));
-                throw new HttpRequestException(SR.net_http_client_execution_error, abortException);
+                throw new HttpRequestException(SR.net_http_client_execution_error, abortException, httpRequestError: HttpRequestError.HttpProtocolError);
             }
             catch (QuicException ex) when (ex.QuicError == QuicError.OperationAborted && _connection.AbortException != null)
             {
                 // we close the connection, propagate the AbortException
-                throw new HttpRequestException(SR.net_http_client_execution_error, _connection.AbortException);
+                throw new HttpRequestException(SR.net_http_client_execution_error, _connection.AbortException, httpRequestError: HttpRequestError.Unknown);
             }
             // It is possible for user's Content code to throw an unexpected OperationCanceledException.
             catch (OperationCanceledException ex) when (ex.CancellationToken == _requestBodyCancellationSource.Token || ex.CancellationToken == cancellationToken)
@@ -289,7 +301,7 @@ namespace System.Net.Http
                 else
                 {
                     Debug.Assert(_requestBodyCancellationSource.IsCancellationRequested);
-                    throw new HttpRequestException(SR.net_http_request_aborted, ex, RequestRetryType.RetryOnConnectionFailure);
+                    throw new HttpRequestException(SR.net_http_request_aborted, ex, RequestRetryType.RetryOnConnectionFailure, httpRequestError: HttpRequestError.Unknown);
                 }
             }
             catch (HttpIOException ex)
@@ -304,7 +316,7 @@ namespace System.Net.Http
                 {
                     throw;
                 }
-                throw new HttpRequestException(SR.net_http_client_execution_error, ex);
+                throw new HttpRequestException(SR.net_http_client_execution_error, ex, httpRequestError: HttpRequestError.Unknown);
             }
             finally
             {

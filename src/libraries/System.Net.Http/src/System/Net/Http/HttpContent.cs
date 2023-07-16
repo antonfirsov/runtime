@@ -719,7 +719,8 @@ namespace System.Net.Http
         internal static Exception WrapStreamCopyException(Exception e)
         {
             Debug.Assert(StreamCopyExceptionNeedsWrapping(e));
-            return new HttpRequestException(SR.net_http_content_stream_copy_error, e);
+            HttpRequestError error = e is HttpIOException ioEx ? ioEx.HttpRequestError : HttpRequestError.Unknown;
+            return new HttpRequestException(SR.net_http_content_stream_copy_error, e, httpRequestError: error);
         }
 
         private static int GetPreambleLength(ArraySegment<byte> buffer, Encoding encoding)
