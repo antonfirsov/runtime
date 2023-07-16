@@ -1764,7 +1764,7 @@ namespace System.Net.Http
             if (tunnelResponse.StatusCode != HttpStatusCode.OK)
             {
                 tunnelResponse.Dispose();
-                throw new HttpRequestException(SR.Format(SR.net_http_proxy_tunnel_returned_failure_status_code, _proxyUri, (int)tunnelResponse.StatusCode));
+                throw new HttpRequestException(SR.Format(SR.net_http_proxy_tunnel_returned_failure_status_code, _proxyUri, (int)tunnelResponse.StatusCode), httpRequestError: HttpRequestError.ProxyTunnelError);
             }
 
             try
@@ -1791,7 +1791,7 @@ namespace System.Net.Http
             catch (Exception e) when (!(e is OperationCanceledException))
             {
                 Debug.Assert(!(e is HttpRequestException));
-                throw new HttpRequestException(SR.net_http_request_aborted, e);
+                throw new HttpRequestException(SR.net_http_request_aborted, e, httpRequestError: HttpRequestError.ProxyTunnelError);
             }
 
             return stream;

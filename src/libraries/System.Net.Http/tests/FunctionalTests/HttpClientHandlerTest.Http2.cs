@@ -32,13 +32,16 @@ namespace System.Net.Http.Functional.Tests
         {
             HttpRequestException outerEx = await Assert.ThrowsAsync<HttpRequestException>(() => task);
             _output.WriteLine(outerEx.InnerException.Message);
+            Assert.Equal(HttpRequestError.HttpProtocolError, outerEx.HttpRequestError);
             HttpProtocolException protocolEx = Assert.IsType<HttpProtocolException>(outerEx.InnerException);
+            Assert.Equal(HttpRequestError.HttpProtocolError, protocolEx.HttpRequestError);
             Assert.Equal(errorCode, (ProtocolErrors)protocolEx.ErrorCode);
         }
 
         private async Task AssertHttpProtocolException(Task task, ProtocolErrors errorCode)
         {
             HttpProtocolException protocolEx = await Assert.ThrowsAsync<HttpProtocolException>(() => task);
+            Assert.Equal(HttpRequestError.HttpProtocolError, protocolEx.HttpRequestError);
             Assert.Equal(errorCode, (ProtocolErrors)protocolEx.ErrorCode);
         }
 

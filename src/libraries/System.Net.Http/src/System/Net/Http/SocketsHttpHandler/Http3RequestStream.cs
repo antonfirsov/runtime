@@ -1276,8 +1276,7 @@ namespace System.Net.Http
             }
 
             _stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.InternalError);
-            // TODO: should this be HttpIOException with HttpRequestError.InvalidResponse?
-            throw new IOException(SR.net_http_client_execution_error, new HttpRequestException(SR.net_http_client_execution_error, ex));
+            throw new HttpIOException(HttpRequestError.Unknown, SR.net_http_client_execution_error, new HttpRequestException(SR.net_http_client_execution_error, ex));
         }
 
         private async ValueTask<bool> ReadNextDataFrameAsync(HttpResponseMessage response, CancellationToken cancellationToken)

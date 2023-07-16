@@ -7,6 +7,7 @@ using System.Net.Quic;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
+using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
@@ -138,8 +139,23 @@ namespace System.Net.Http
         {
             return CancellationHelper.ShouldWrapInOperationCanceledException(exception, cancellationToken) ?
                 CancellationHelper.CreateOperationCanceledException(exception, cancellationToken) :
-                // TODO: We should return a more specific error case depending on QuicException.TransportErrorCode once https://github.com/dotnet/runtime/issues/87262 is implemented.
-                new HttpRequestException($"{exception.Message} ({host}:{port})", exception, RequestRetryType.RetryOnNextProxy, HttpRequestError.ConnectionError);
+                new HttpRequestException($"{exception.Message} ({host}:{port})", exception, RequestRetryType.RetryOnNextProxy, DeduceError(exception));
+
+            static HttpRequestError DeduceError(Exception exception)
+            {
+                // TODO: Deduce quic errors from QuicException.TransportErrorCode once https://github.com/dotnet/runtime/issues/87262 is implemented.
+                if (exception is AuthenticationException)
+                {
+                    return HttpRequestError.SecureConnectionError;
+                }
+
+                if (exception is SocketException socketException && socketException.SocketErrorCode == SocketError.HostNotFound)
+                {
+                    return HttpRequestError.NameResolutionError;
+                }
+
+                return HttpRequestError.ConnectionError;
+            }
         }
     }
 }
