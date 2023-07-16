@@ -88,7 +88,7 @@ namespace System.Net.Http
                     throw CancellationHelper.CreateOperationCanceledException(e, cancellationToken);
                 }
 
-                HttpRequestException ex = new HttpRequestException(SR.net_http_ssl_connection_failed, e);
+                HttpRequestException ex = new HttpRequestException(SR.net_http_ssl_connection_failed, e, HttpRequestError.SecureConnectionError);
                 if (request.IsExtendedConnectRequest)
                 {
                     // Extended connect request is negotiating strictly for ALPN = "h2" because HttpClient is unaware of a possible downgrade.
@@ -134,11 +134,21 @@ namespace System.Net.Http
             }
         }
 
-        internal static Exception CreateWrappedException(Exception error, string host, int port, CancellationToken cancellationToken)
+        internal static Exception CreateWrappedException(Exception exception, string host, int port, CancellationToken cancellationToken)
         {
-            return CancellationHelper.ShouldWrapInOperationCanceledException(error, cancellationToken) ?
-                CancellationHelper.CreateOperationCanceledException(error, cancellationToken) :
-                new HttpRequestException($"{error.Message} ({host}:{port})", error, RequestRetryType.RetryOnNextProxy);
+            return CancellationHelper.ShouldWrapInOperationCanceledException(exception, cancellationToken) ?
+                CancellationHelper.CreateOperationCanceledException(exception, cancellationToken) :
+                new HttpRequestException($"{exception.Message} ({host}:{port})", exception, RequestRetryType.RetryOnNextProxy, DeduceError(exception));
+
+            static HttpRequestError DeduceError(Exception ex)
+            {
+                if (ex is SocketException socketEx && socketEx.SocketErrorCode == SocketError.HostNotFound)
+                {
+                    return HttpRequestError.NameResolutionError;
+                }
+
+                return HttpRequestError.ConnectionError;
+            }
         }
     }
 }

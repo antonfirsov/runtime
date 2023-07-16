@@ -6,6 +6,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 
 namespace System.Net.Http
 {
@@ -241,9 +242,9 @@ namespace System.Net.Http
         public static bool operator !=(System.Net.Http.HttpMethod? left, System.Net.Http.HttpMethod? right) { throw null; }
         public override string ToString() { throw null; }
     }
-    public sealed class HttpProtocolException : System.IO.IOException
+    public sealed class HttpProtocolException : HttpResponseReadException
     {
-        public HttpProtocolException(long errorCode, string? message, System.Exception? innerException) { }
+        public HttpProtocolException(long errorCode, string? message, System.Exception? innerException) : base(HttpRequestError.HttpProtocolError, message, innerException) { }
         public long ErrorCode { get { throw null; } }
     }
     public partial class HttpRequestException : System.Exception
@@ -251,8 +252,12 @@ namespace System.Net.Http
         public HttpRequestException() { }
         public HttpRequestException(string? message) { }
         public HttpRequestException(string? message, System.Exception? inner) { }
+        public HttpRequestException(string? message, HttpRequestError? httpRequestError) { }
+        public HttpRequestException(string? message, Exception? inner, HttpRequestError? httpRequestError) { }
         public HttpRequestException(string? message, System.Exception? inner, System.Net.HttpStatusCode? statusCode) { }
+        public HttpRequestException(string? message, Exception? inner, HttpStatusCode? statusCode, HttpRequestError? httpRequestError) { }
         public System.Net.HttpStatusCode? StatusCode { get { throw null; } }
+        public System.Net.Http.HttpRequestError? HttpRequestError { get { throw null; } }
     }
     public partial class HttpRequestMessage : System.IDisposable
     {
@@ -460,6 +465,29 @@ namespace System.Net.Http
         public StringContent(string content, System.Text.Encoding? encoding, System.Net.Http.Headers.MediaTypeHeaderValue mediaType) : base (default(byte[])) { }
         public StringContent(string content, System.Text.Encoding? encoding, string mediaType) : base (default(byte[])) { }
         protected override System.Threading.Tasks.Task SerializeToStreamAsync(System.IO.Stream stream, System.Net.TransportContext? context, System.Threading.CancellationToken cancellationToken) { throw null; }
+    }
+    public enum HttpRequestError
+    {
+        NameResolutionError,
+        ConnectionError,
+        TransportError,
+        SecureConnectionError,
+        HttpProtocolError,
+
+        ResponseEnded,
+        InvalidResponse,
+        InvalidResponseHeader,
+        ContentBufferSizeExceeded,
+        ResponseHeaderExceededLengthLimit,
+        UnsupportedExtendedConnect,
+        VersionNegotiationError,
+        AuthenticationError,
+        SocksTunnelError
+    }
+    public class HttpResponseReadException : IOException
+    {
+        public HttpRequestError HttpRequestError { get { throw null; } }
+        public HttpResponseReadException(HttpRequestError? httpRequestError, string? message, Exception? innerException = null) { }
     }
 }
 namespace System.Net.Http.Headers
