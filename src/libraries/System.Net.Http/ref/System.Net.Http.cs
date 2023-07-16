@@ -6,7 +6,6 @@
 
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.IO;
 
 namespace System.Net.Http
 {
@@ -204,6 +203,11 @@ namespace System.Net.Http
         protected virtual System.Threading.Tasks.Task SerializeToStreamAsync(System.IO.Stream stream, System.Net.TransportContext? context, System.Threading.CancellationToken cancellationToken) { throw null; }
         protected internal abstract bool TryComputeLength(out long length);
     }
+    public class HttpIOException : System.IO.IOException
+    {
+        public System.Net.Http.HttpRequestError HttpRequestError { get { throw null; } }
+        public HttpIOException(System.Net.Http.HttpRequestError httpRequestError, string? message = null, System.Exception? innerException = null) { }
+    }
     public abstract partial class HttpMessageHandler : System.IDisposable
     {
         protected HttpMessageHandler() { }
@@ -244,8 +248,24 @@ namespace System.Net.Http
     }
     public sealed class HttpProtocolException : HttpIOException
     {
-        public HttpProtocolException(long errorCode, string? message, System.Exception? innerException) : base(HttpRequestError.HttpProtocolError, message, innerException) { }
+        public HttpProtocolException(long errorCode, string? message, System.Exception? innerException) : base (default(System.Net.Http.HttpRequestError), default(string?), default(System.Exception?)) { }
         public long ErrorCode { get { throw null; } }
+    }
+    public enum HttpRequestError
+    {
+        Unknown = 0,
+        NameResolutionError,
+        ConnectionError,
+        TransportError,
+        SecureConnectionError,
+        HttpProtocolError,
+        ExtendedConnectNotSupported,
+        VersionNegotiationError,
+        UserAuthenticationError,
+        ProxyTunnelError,
+        InvalidResponse,
+        ResponseEnded,
+        ConfigurationLimitExceeded,
     }
     public partial class HttpRequestException : System.Exception
     {
@@ -463,27 +483,6 @@ namespace System.Net.Http
         public StringContent(string content, System.Text.Encoding? encoding, System.Net.Http.Headers.MediaTypeHeaderValue mediaType) : base (default(byte[])) { }
         public StringContent(string content, System.Text.Encoding? encoding, string mediaType) : base (default(byte[])) { }
         protected override System.Threading.Tasks.Task SerializeToStreamAsync(System.IO.Stream stream, System.Net.TransportContext? context, System.Threading.CancellationToken cancellationToken) { throw null; }
-    }
-    public enum HttpRequestError
-    {
-        Unknown = 0,
-        NameResolutionError,
-        ConnectionError,
-        TransportError,
-        SecureConnectionError,
-        HttpProtocolError,
-        ExtendedConnectNotSupported,
-        VersionNegotiationError,
-        UserAuthenticationError,
-        ProxyTunnelError,
-        InvalidResponse,
-        ResponseEnded,
-        ConfigurationLimitExceeded,
-    }
-    public class HttpIOException : IOException
-    {
-        public HttpRequestError HttpRequestError { get { throw null; } }
-        public HttpIOException(HttpRequestError httpRequestError, string? message = null, Exception? innerException = null) { }
     }
 }
 namespace System.Net.Http.Headers

@@ -526,7 +526,6 @@ namespace System.Net.Http
                 }
                 catch (HttpProtocolException e)
                 {
-                    // Fix https://github.com/dotnet/runtime/issues/82168
                     InitialSettingsReceived.TrySetException(e);
                     throw;
                 }
@@ -2104,21 +2103,13 @@ namespace System.Net.Http
 
                 return http2Stream.GetAndClearResponse();
             }
-            catch (Exception e)
+            catch (HttpIOException e)
             {
-                if (e is IOException ||
-                    e is ObjectDisposedException ||
-                    e is InvalidOperationException)
-                {
-                    if (e is HttpIOException responseReadEx)
-                    {
-                        throw new HttpRequestException(responseReadEx.Message, e, httpRequestError: responseReadEx.HttpRequestError);
-                    }
-
-                    throw new HttpRequestException(SR.net_http_client_execution_error, e);
-                }
-
-                throw;
+                throw new HttpRequestException(e.Message, e, httpRequestError: e.HttpRequestError);
+            }
+            catch (Exception e) when (e is IOException || e is ObjectDisposedException || e is InvalidOperationException)
+            {
+                throw new HttpRequestException(SR.net_http_client_execution_error, e, httpRequestError: HttpRequestError.Unknown);
             }
         }
 

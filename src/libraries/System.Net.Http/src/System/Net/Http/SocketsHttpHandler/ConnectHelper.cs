@@ -138,17 +138,8 @@ namespace System.Net.Http
         {
             return CancellationHelper.ShouldWrapInOperationCanceledException(exception, cancellationToken) ?
                 CancellationHelper.CreateOperationCanceledException(exception, cancellationToken) :
-                new HttpRequestException($"{exception.Message} ({host}:{port})", exception, RequestRetryType.RetryOnNextProxy, DeduceError(exception));
-
-            static HttpRequestError DeduceError(Exception ex)
-            {
-                if (ex is SocketException socketEx && socketEx.SocketErrorCode == SocketError.HostNotFound)
-                {
-                    return HttpRequestError.NameResolutionError;
-                }
-
-                return HttpRequestError.ConnectionError;
-            }
+                // TODO: We should return a more specific error case depending on QuicException.TransportErrorCode once https://github.com/dotnet/runtime/issues/87262 is implemented.
+                new HttpRequestException($"{exception.Message} ({host}:{port})", exception, RequestRetryType.RetryOnNextProxy, HttpRequestError.ConnectionError);
         }
     }
 }
