@@ -5,11 +5,11 @@ using System.IO;
 
 namespace System.Net.Http
 {
-    public class HttpResponseReadException : IOException
+    public class HttpIOException : IOException
     {
-        public HttpRequestError? HttpRequestError { get; }
+        public HttpRequestError HttpRequestError { get; }
 
-        public HttpResponseReadException(HttpRequestError? httpRequestError, string? message, Exception? innerException = null)
+        public HttpIOException(HttpRequestError httpRequestError, string? message = null, Exception? innerException = null)
             : base(message, innerException)
         {
             HttpRequestError = httpRequestError;

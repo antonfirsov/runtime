@@ -5,20 +5,23 @@ namespace System.Net.Http
 {
     public enum HttpRequestError
     {
-        NameResolutionError,                    // DNS request failed
-        ConnectionError,                        // Transport-level errors during connection
-        TransportError,                         // Transport-level errors after connection
-        SecureConnectionError,                  // SSL/TLS errors
-        HttpProtocolError,                      // HTTP 2.0/3.0 protocol error occured
+        Unknown = 0,                            // Uncategorized/generic error
 
-        ResponseEnded,                          // Received EOF
-        InvalidResponse,                        // General error in response/malformed response
-        InvalidResponseHeader,                  // Error with response headers
-        ContentBufferSizeExceeded,              // Response Content size exceeded MaxResponseContentBufferSize
-        ResponseHeaderExceededLengthLimit,      // Response Header length exceeded MaxResponseHeadersLength
-        UnsupportedExtendedConnect,             // Extended CONNECT for WebSockets over HTTP/2 is not supported. (SETTINGS_ENABLE_CONNECT_PROTOCOL has not been sent).
+        NameResolutionError,                    // DNS request failed
+        ConnectionError,                        // Transport-level error during connection
+        TransportError,                         // Transport-level error after connection
+        SecureConnectionError,                  // SSL/TLS error
+        HttpProtocolError,                      // HTTP 2.0/3.0 protocol error occurred
+        ExtendedConnectNotSupported,            // Extended CONNECT for WebSockets over HTTP/2 is not supported.
+                                                // (SETTINGS_ENABLE_CONNECT_PROTOCOL has not been sent).
         VersionNegotiationError,                // Cannot negotiate the HTTP Version requested
-        AuthenticationError,
-        SocksTunnelError,
+        UserAuthenticationError,                // Authentication failed with the provided credentials
+        ProxyTunnelError,
+
+        InvalidResponse,                        // General error in response/malformed response
+        ResponseEnded,                          // EOF received
+        ConfigurationLimitExceeded,             // Response Content size exceeded MaxResponseContentBufferSize -or-
+                                                // Response Header length exceeded MaxResponseHeadersLength -or-
+                                                // any future limits are exceeded.
     }
 }

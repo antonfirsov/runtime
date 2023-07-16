@@ -292,10 +292,10 @@ namespace System.Net.Http
                     throw new HttpRequestException(SR.net_http_request_aborted, ex, RequestRetryType.RetryOnConnectionFailure);
                 }
             }
-            catch (HttpResponseReadException ex)
+            catch (HttpIOException ex)
             {
                 _connection.Abort(ex);
-                throw new HttpRequestException(SR.net_http_client_execution_error, ex, ex.HttpRequestError);
+                throw new HttpRequestException(SR.net_http_client_execution_error, ex, httpRequestError: ex.HttpRequestError);
             }
             catch (Exception ex)
             {
@@ -341,7 +341,7 @@ namespace System.Net.Http
                     {
                         Trace($"Expected HEADERS as first response frame; received {frameType}.");
                     }
-                    throw new HttpResponseReadException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
+                    throw new HttpIOException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
                 }
 
                 await ReadHeadersAsync(payloadLength, cancellationToken).ConfigureAwait(false);
@@ -527,7 +527,7 @@ namespace System.Net.Http
                             {
                                 Trace("Response content exceeded Content-Length.");
                             }
-                            throw new HttpResponseReadException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
+                            throw new HttpIOException(HttpRequestError.InvalidResponse, SR.net_http_invalid_response);
                         }
                         break;
                     default:
@@ -823,7 +823,7 @@ namespace System.Net.Http
                     else
                     {
                         // Our buffer has partial frame data in it but not enough to complete the read: bail out.
-                        throw new HttpResponseReadException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
+                        throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
                     }
                 }
 
@@ -867,7 +867,7 @@ namespace System.Net.Http
             if (headersLength > _headerBudgetRemaining)
             {
                 _stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.ExcessiveLoad);
-                throw new HttpRequestException(SR.Format(SR.net_http_response_headers_exceeded_length, _connection.Pool.Settings.MaxResponseHeadersByteLength), HttpRequestError.ResponseHeaderExceededLengthLimit);
+                throw new HttpRequestException(SR.Format(SR.net_http_response_headers_exceeded_length, _connection.Pool.Settings.MaxResponseHeadersByteLength), httpRequestError: HttpRequestError.ConfigurationLimitExceeded);
             }
 
             _headerBudgetRemaining -= (int)headersLength;
@@ -886,7 +886,7 @@ namespace System.Net.Http
                     else
                     {
                         if (NetEventSource.Log.IsEnabled()) Trace($"Server closed response stream before entire header payload could be read. {headersLength:N0} bytes remaining.");
-                        throw new HttpResponseReadException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
+                        throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_premature_eof);
                     }
                 }
 
@@ -908,7 +908,7 @@ namespace System.Net.Http
             if (!HeaderDescriptor.TryGet(name, out HeaderDescriptor descriptor))
             {
                 // Invalid header name
-                throw new HttpRequestException(SR.Format(SR.net_http_invalid_response_header_name, Encoding.ASCII.GetString(name)), HttpRequestError.InvalidResponse);
+                throw new HttpRequestException(SR.Format(SR.net_http_invalid_response_header_name, Encoding.ASCII.GetString(name)), httpRequestError: HttpRequestError.InvalidResponse);
             }
             OnHeader(staticIndex: null, descriptor, staticValue: default, literalValue: value);
         }
@@ -1146,7 +1146,7 @@ namespace System.Net.Http
 
                         if (bytesRead == 0 && buffer.Length != 0)
                         {
-                            throw new HttpResponseReadException(HttpRequestError.ResponseEnded, SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, _responseDataPayloadRemaining));
+                            throw new HttpIOException(HttpRequestError.ResponseEnded, SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, _responseDataPayloadRemaining));
                             //throw new HttpRequestException(SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, _responseDataPayloadRemaining));
                         }
 
@@ -1220,7 +1220,7 @@ namespace System.Net.Http
                         if (bytesRead == 0 && buffer.Length != 0)
                         {
                             //throw new HttpRequestException(SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, _responseDataPayloadRemaining));
-                            throw new HttpResponseReadException(HttpRequestError.ResponseEnded, SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, _responseDataPayloadRemaining));
+                            throw new HttpIOException(HttpRequestError.ResponseEnded, SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, _responseDataPayloadRemaining));
                         }
 
                         totalBytesRead += bytesRead;
@@ -1264,7 +1264,7 @@ namespace System.Net.Http
                     _connection.Abort(exception);
                     throw exception;
 
-                case HttpResponseReadException:
+                case HttpIOException:
                     _connection.Abort(ex);
                     ExceptionDispatchInfo.Throw(ex); // Rethrow.
                     return; // Never reached.
@@ -1276,7 +1276,7 @@ namespace System.Net.Http
             }
 
             _stream.Abort(QuicAbortDirection.Read, (long)Http3ErrorCode.InternalError);
-            // TODO: should this be HttpResponseReadException with HttpRequestError.InvalidResponse?
+            // TODO: should this be HttpIOException with HttpRequestError.InvalidResponse?
             throw new IOException(SR.net_http_client_execution_error, new HttpRequestException(SR.net_http_client_execution_error, ex));
         }
 

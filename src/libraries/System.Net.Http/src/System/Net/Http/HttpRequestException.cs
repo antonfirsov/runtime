@@ -26,17 +26,6 @@ namespace System.Net.Http
             }
         }
 
-        public HttpRequestException(string? message, HttpRequestError? httpRequestError)
-            : this(message, null, httpRequestError)
-        {
-        }
-
-        public HttpRequestException(string? message, Exception? inner, HttpRequestError? httpRequestError)
-            : this(message, inner)
-        {
-            HttpRequestError = httpRequestError;
-        }
-
         /// <summary>
         /// Initializes a new instance of the <see cref="HttpRequestException" /> class with a specific message that describes the current exception, an inner exception, and an HTTP status code.
         /// </summary>
@@ -49,11 +38,13 @@ namespace System.Net.Http
             StatusCode = statusCode;
         }
 
-        public HttpRequestException(string? message, Exception? inner, HttpStatusCode? statusCode, HttpRequestError? httpRequestError)
+        public HttpRequestException(string? message, Exception? inner = null, HttpStatusCode? statusCode = null, HttpRequestError? httpRequestError = null)
             : this(message, inner, statusCode)
         {
             HttpRequestError = httpRequestError;
         }
+
+        public HttpRequestError? HttpRequestError { get; }
 
         /// <summary>
         /// Gets the HTTP status code to be returned with the exception.
@@ -63,15 +54,12 @@ namespace System.Net.Http
         /// </value>
         public HttpStatusCode? StatusCode { get; }
 
-        public HttpRequestError? HttpRequestError { get; }
-
         // This constructor is used internally to indicate that a request was not successfully sent due to an IOException,
         // and the exception occurred early enough so that the request may be retried on another connection.
         internal HttpRequestException(string? message, Exception? inner, RequestRetryType allowRetry, HttpRequestError? httpRequestError = null)
-            : this(message, inner)
+            : this(message, inner, httpRequestError: httpRequestError)
         {
             AllowRetry = allowRetry;
-            HttpRequestError = httpRequestError;
         }
     }
 }

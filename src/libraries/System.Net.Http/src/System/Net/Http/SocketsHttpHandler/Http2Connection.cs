@@ -489,10 +489,10 @@ namespace System.Net.Http
             return frameHeader;
 
             void ThrowPrematureEOF(int requiredBytes) =>
-                throw new HttpResponseReadException(HttpRequestError.ResponseEnded, SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, requiredBytes - _incomingBuffer.ActiveLength));
+                throw new HttpIOException(HttpRequestError.ResponseEnded, SR.Format(SR.net_http_invalid_response_premature_eof_bytecount, requiredBytes - _incomingBuffer.ActiveLength));
 
             void ThrowMissingFrame() =>
-                throw new HttpResponseReadException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_missing_frame);
+                throw new HttpIOException(HttpRequestError.ResponseEnded, SR.net_http_invalid_response_missing_frame);
         }
 
         private async Task ProcessIncomingFramesAsync()
@@ -532,7 +532,7 @@ namespace System.Net.Http
                 }
                 catch (Exception e)
                 {
-                    var ex = new HttpResponseReadException(HttpRequestError.InvalidResponse, SR.net_http_http2_connection_not_established, e);
+                    var ex = new HttpIOException(HttpRequestError.InvalidResponse, SR.net_http_http2_connection_not_established, e);
                     InitialSettingsReceived.TrySetException(ex);
                     throw ex;
                 }
@@ -2110,9 +2110,9 @@ namespace System.Net.Http
                     e is ObjectDisposedException ||
                     e is InvalidOperationException)
                 {
-                    if (e is HttpResponseReadException responseReadEx && responseReadEx.HttpRequestError.HasValue)
+                    if (e is HttpIOException responseReadEx)
                     {
-                        throw new HttpRequestException(responseReadEx.Message, e, responseReadEx.HttpRequestError.Value);
+                        throw new HttpRequestException(responseReadEx.Message, e, httpRequestError: responseReadEx.HttpRequestError);
                     }
 
                     throw new HttpRequestException(SR.net_http_client_execution_error, e);
@@ -2218,7 +2218,7 @@ namespace System.Net.Http
             throw new HttpRequestException(message, innerException, allowRetry: RequestRetryType.RetryOnConnectionFailure);
 
         private static Exception GetRequestAbortedException(Exception? innerException = null) =>
-            innerException as HttpResponseReadException ?? new IOException(SR.net_http_request_aborted, innerException);
+            innerException as HttpIOException ?? new IOException(SR.net_http_request_aborted, innerException);
 
         [DoesNotReturn]
         private static void ThrowRequestAborted(Exception? innerException = null) =>

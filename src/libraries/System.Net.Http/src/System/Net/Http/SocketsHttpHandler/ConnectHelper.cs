@@ -88,7 +88,7 @@ namespace System.Net.Http
                     throw CancellationHelper.CreateOperationCanceledException(e, cancellationToken);
                 }
 
-                HttpRequestException ex = new HttpRequestException(SR.net_http_ssl_connection_failed, e, HttpRequestError.SecureConnectionError);
+                HttpRequestException ex = new HttpRequestException(SR.net_http_ssl_connection_failed, e, httpRequestError: HttpRequestError.SecureConnectionError);
                 if (request.IsExtendedConnectRequest)
                 {
                     // Extended connect request is negotiating strictly for ALPN = "h2" because HttpClient is unaware of a possible downgrade.
