@@ -192,6 +192,8 @@
              Link="ProductionCode\System\Net\Http\HttpCompletionOption.cs" />
     <Compile Include="..\..\src\System\Net\Http\HttpContent.cs"
              Link="ProductionCode\System\Net\Http\HttpContent.cs" />
+    <Compile Include="..\..\src\System\Net\Http\HttpIOException.cs"
+                 Link="ProductionCode\System\Net\Http\HttpIOException.cs" />
     <Compile Include="..\..\src\System\Net\Http\HttpMessageHandler.cs"
              Link="ProductionCode\System\Net\Http\HttpMessageHandler.cs" />
     <Compile Include="..\..\src\System\Net\Http\HttpMessageInvoker.cs"

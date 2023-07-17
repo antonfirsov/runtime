@@ -256,7 +256,6 @@ namespace System.Net.Http
         Unknown = 0,
         NameResolutionError,
         ConnectionError,
-        TransportError,
         SecureConnectionError,
         HttpProtocolError,
         ExtendedConnectNotSupported,
