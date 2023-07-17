@@ -447,13 +447,7 @@ namespace System.Net.Http
         {
             Debug.Assert(desiredVersion == 2 || desiredVersion == 3);
 
-            HttpRequestException ex = new HttpRequestException(SR.Format(SR.net_http_requested_version_cannot_establish, request.Version, request.VersionPolicy, desiredVersion), inner, httpRequestError: HttpRequestError.VersionNegotiationError);
-            if (request.IsExtendedConnectRequest && desiredVersion == 2)
-            {
-                ex.Data["HTTP2_ENABLED"] = false;
-            }
-
-            throw ex;
+            throw new HttpRequestException(SR.Format(SR.net_http_requested_version_cannot_establish, request.Version, request.VersionPolicy, desiredVersion), inner, httpRequestError: HttpRequestError.VersionNegotiationError);
         }
 
         private bool CheckExpirationOnGet(HttpConnectionBase connection)
@@ -1100,9 +1094,7 @@ namespace System.Net.Http
                                     await connection.InitialSettingsReceived.WaitWithCancellationAsync(cancellationToken).ConfigureAwait(false);
                                     if (!connection.IsConnectEnabled)
                                     {
-                                        HttpRequestException exception = new(SR.net_unsupported_extended_connect, httpRequestError: HttpRequestError.ExtendedConnectNotSupported);
-                                        exception.Data["SETTINGS_ENABLE_CONNECT_PROTOCOL"] = false;
-                                        throw exception;
+                                        throw new HttpRequestException(SR.net_unsupported_extended_connect, httpRequestError: HttpRequestError.ExtendedConnectNotSupported);
                                     }
                                 }
 
