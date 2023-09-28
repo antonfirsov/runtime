@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -633,8 +635,11 @@ namespace System.Net
             return false;
         }
 
-        /// <summary>Mapping from key to current task in flight for that key.</summary>
-        private static readonly Dictionary<object, Task> s_tasks = new Dictionary<object, Task>();
+        /// <summary>Mapping from key to current task in flight and a timestamp for that key.</summary>
+        private static readonly Dictionary<object, (Task, long)> s_tasks = new();
+
+        /// <summary>The maximum flight time for a queue of per-host serialized requests.</summary>
+        private static readonly TimeSpan s_maxQueueTime = TimeSpan.FromSeconds(1);
 
         /// <summary>Queue the function to be invoked asynchronously.</summary>
         /// <remarks>
@@ -655,50 +660,73 @@ namespace System.Net
 
             lock (s_tasks)
             {
-                // Get the previous task for this key, if there is one.
-                s_tasks.TryGetValue(key, out Task? prevTask);
-                prevTask ??= Task.CompletedTask;
+                Task prevTask = Task.CompletedTask;
+
+                // Use the previous task for this key, if there is one and if its' time in flight is shorter than s_maxQueueTime.
+                if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e) &&
+                    Stopwatch.GetElapsedTime(e.Timestamp, startingTimestamp) < s_maxQueueTime)
+                {
+                    prevTask = e.Task;
+                }
 
                 // Invoke the function in a queued work item when the previous task completes. Note that some callers expect the
                 // returned task to have the key as the task's AsyncState.
                 task = prevTask.ContinueWith(delegate
                 {
                     Debug.Assert(!Monitor.IsEntered(s_tasks));
+
+                    // If there is an entry for this key, update the timestamp.
+                    lock (s_tasks)
+                    {
+                        ref (Task Task, long Timestamp) e = ref CollectionsMarshal.GetValueRefOrNullRef(s_tasks, key);
+                        if (!Unsafe.IsNullRef(ref e))
+                        {
+                            e.Timestamp = Stopwatch.GetTimestamp();
+                        }
+                    }
+
                     try
                     {
                         return func(key, startingTimestamp);
                     }
                     finally
                     {
-                        // When the work is done, remove this key/task pair from the dictionary if this is still the current task.
-                        // Because the work item is created and stored into both the local and the dictionary while the lock is
-                        // held, and since we take the same lock here, inside this lock it's guaranteed to see the changes
-                        // made by the call site.
-                        lock (s_tasks)
-                        {
-                            ((ICollection<KeyValuePair<object, Task>>)s_tasks).Remove(new KeyValuePair<object, Task>(key!, task!));
-                        }
+                        RemoveEntryForTask(key!, task!);
                     }
                 }, key, cancellationToken, TaskContinuationOptions.DenyChildAttach, TaskScheduler.Default);
 
                 // If it's possible the task may end up getting canceled, it won't have a chance to remove itself from
-                // the dictionary if it is canceled, so use a separate continuation to do so.
+                // the dictionary and emit AfterResolution() if it is canceled, so use a separate continuation to do so.
                 if (cancellationToken.CanBeCanceled)
                 {
-                    task.ContinueWith((task, key) =>
+                    task.ContinueWith(delegate
                     {
-                        lock (s_tasks)
-                        {
-                            ((ICollection<KeyValuePair<object, Task>>)s_tasks).Remove(new KeyValuePair<object, Task>(key!, task));
-                        }
-                    }, key, CancellationToken.None, TaskContinuationOptions.OnlyOnCanceled | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                        NameResolutionTelemetry.Log.AfterResolution(key, startingTimestamp, false);
+                        RemoveEntryForTask(key, task);
+                    }, CancellationToken.None, TaskContinuationOptions.OnlyOnCanceled | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                 }
 
                 // Finally, store the task into the dictionary as the current task for this key.
-                s_tasks[key] = task;
+                // Keep the previous timestamp if there was an existing entry for this key.
+                s_tasks[key] = (task, e.Timestamp > 0 ? e.Timestamp : startingTimestamp);
             }
 
             return task;
+
+            static void RemoveEntryForTask(object key, Task task)
+            {
+                // When the work is done, remove this key/task pair from the dictionary if this is still the current task.
+                // Because the work item is created and stored into both the local and the dictionary while the lock is
+                // held, and since we take the same lock here, inside this lock it's guaranteed to see the changes
+                // made by the call site.
+                lock (s_tasks)
+                {
+                    if (s_tasks.TryGetValue(key, out (Task Task, long) e) && e.Task == task)
+                    {
+                        s_tasks.Remove(key);
+                    }
+                }
+            }
         }
 
         private static SocketException CreateException(SocketError error, int nativeError) =>
