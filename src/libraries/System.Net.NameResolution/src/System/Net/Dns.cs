@@ -664,15 +664,15 @@ namespace System.Net
 
                 // Use the previous task for this key, if there is one and if its' time in flight is shorter than s_maxQueueTime.
                 if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e) &&
-                    Stopwatch.GetElapsedTime(e.Timestamp, startingTimestamp) < s_maxQueueTime)
+                    Stopwatch.GetElapsedTime(e.Timestamp) < s_maxQueueTime)
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Used existing task");
+                    //if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Used existing task");
                     prevTask = e.Task;
                 }
-                else
-                {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Created new queue");
-                }
+                //else
+                //{
+                //    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Created new queue");
+                //}
 
                 // Invoke the function in a queued work item when the previous task completes. Note that some callers expect the
                 // returned task to have the key as the task's AsyncState.
@@ -713,7 +713,7 @@ namespace System.Net
 
                 // Finally, store the task into the dictionary as the current task for this key.
                 // Keep the previous timestamp if there was an existing entry for this key.
-                s_tasks[key] = (task, e.Timestamp > 0 ? e.Timestamp : startingTimestamp);
+                s_tasks[key] = (task, e.Timestamp > 0 ? e.Timestamp : Stopwatch.GetTimestamp());
             }
 
             return task;
@@ -728,13 +728,13 @@ namespace System.Net
                 {
                     if (s_tasks.TryGetValue(key, out (Task Task, long) e) && e.Task == task)
                     {
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Removed a task");
+                        //if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Removed a task");
                         s_tasks.Remove(key);
                     }
-                    else
-                    {
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Kept the task");
-                    }
+                    //else
+                    //{
+                    //    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Kept the task");
+                    //}
                 }
             }
         }
