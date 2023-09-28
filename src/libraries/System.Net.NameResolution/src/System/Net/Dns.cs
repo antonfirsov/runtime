@@ -666,13 +666,13 @@ namespace System.Net
                 if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e) &&
                     Stopwatch.GetElapsedTime(e.Timestamp) < s_maxQueueTime)
                 {
-                    //if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Used existing task");
+                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Used existing task dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
                     prevTask = e.Task;
                 }
-                //else
-                //{
-                //    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Created new queue");
-                //}
+                else
+                {
+                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Created new queue dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
+                }
 
                 // Invoke the function in a queued work item when the previous task completes. Note that some callers expect the
                 // returned task to have the key as the task's AsyncState.
@@ -728,13 +728,13 @@ namespace System.Net
                 {
                     if (s_tasks.TryGetValue(key, out (Task Task, long) e) && e.Task == task)
                     {
-                        //if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Removed a task");
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Removed a task");
                         s_tasks.Remove(key);
                     }
-                    //else
-                    //{
-                    //    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Kept the task");
-                    //}
+                    else
+                    {
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Kept the task");
+                    }
                 }
             }
         }
