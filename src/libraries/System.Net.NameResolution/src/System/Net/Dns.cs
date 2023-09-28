@@ -687,6 +687,7 @@ namespace System.Net
                         if (!Unsafe.IsNullRef(ref e))
                         {
                             e.Timestamp = Stopwatch.GetTimestamp();
+                            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Updated the timestamp. {e.Timestamp}");
                         }
                     }
 
@@ -696,7 +697,7 @@ namespace System.Net
                     }
                     finally
                     {
-                        RemoveEntryForTask(key!, task!);
+                        RemoveEntryForTask(key!, task!, false);
                     }
                 }, key, cancellationToken, TaskContinuationOptions.DenyChildAttach, TaskScheduler.Default);
 
@@ -707,7 +708,7 @@ namespace System.Net
                     task.ContinueWith(delegate
                     {
                         NameResolutionTelemetry.Log.AfterResolution(key, startingTimestamp, false);
-                        RemoveEntryForTask(key, task);
+                        RemoveEntryForTask(key, task, true);
                     }, CancellationToken.None, TaskContinuationOptions.OnlyOnCanceled | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
                 }
 
@@ -718,7 +719,7 @@ namespace System.Net
 
             return task;
 
-            static void RemoveEntryForTask(object key, Task task)
+            static void RemoveEntryForTask(object key, Task task, bool wasCancellation)
             {
                 // When the work is done, remove this key/task pair from the dictionary if this is still the current task.
                 // Because the work item is created and stored into both the local and the dictionary while the lock is
@@ -728,12 +729,12 @@ namespace System.Net
                 {
                     if (s_tasks.TryGetValue(key, out (Task Task, long) e) && e.Task == task)
                     {
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Removed a task");
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Removed a task | wasCancellation:{wasCancellation} | contained:{s_tasks.ContainsKey(key)}");
                         s_tasks.Remove(key);
                     }
                     else
                     {
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, "Kept the task");
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Kept the task | wasCancellation:{wasCancellation} | contained:{s_tasks.ContainsKey(key)}");
                     }
                 }
             }
