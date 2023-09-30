@@ -651,6 +651,7 @@ namespace System.Net
                 if (!s_wtf.TryGetValue(key, out Queue<long>? wtf))
                 {
                     wtf = new Queue<long>();
+                    s_wtf[key] = wtf;
                 }
                 action(wtf);
             }
