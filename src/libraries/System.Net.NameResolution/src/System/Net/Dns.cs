@@ -691,12 +691,15 @@ namespace System.Net
                         }
                     }
 
+                    long palLookupStart = Stopwatch.GetTimestamp();
                     try
                     {
                         return func(key, startingTimestamp);
                     }
                     finally
                     {
+                        TimeSpan palDt = Stopwatch.GetElapsedTime(palLookupStart);
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> PAL dt={palDt.TotalMilliseconds}ms");
                         RemoveEntryForTask(key!, task!, false);
                     }
                 }, key, cancellationToken, TaskContinuationOptions.DenyChildAttach, TaskScheduler.Default);
