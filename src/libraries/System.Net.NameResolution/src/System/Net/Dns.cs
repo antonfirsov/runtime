@@ -660,9 +660,15 @@ namespace System.Net
             CancellationTokenSource terminator = new CancellationTokenSource(s_maxQueueTime);
             terminator.Token.UnsafeRegister(key =>
             {
+                Debug.Assert(key != null);
                 lock (s_tasks)
                 {
-                    s_tasks.Remove(key!);
+                    if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e))
+                    {
+                        TimeSpan dt = Stopwatch.GetElapsedTime(e.Timestamp);
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> dt@removal={dt.TotalMilliseconds}ms");
+                    }
+                    s_tasks.Remove(key);
                 }
             }, key);
 
