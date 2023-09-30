@@ -674,6 +674,7 @@ namespace System.Net
 
             Task<TResult>? task = null;
             CancellationTokenSource terminator = new CancellationTokenSource(s_maxQueueTime);
+            long ctsStart = Stopwatch.GetTimestamp();
             terminator.Token.UnsafeRegister(key =>
             {
                 Debug.Assert(key != null);
@@ -691,7 +692,9 @@ namespace System.Net
                             }
                         });
 
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> dt@removal={dt.TotalMilliseconds}ms q: {bld}");
+                        TimeSpan ctsDt = Stopwatch.GetElapsedTime(ctsStart);
+
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> dt@removal={dt.TotalMilliseconds}ms ctsDt={ctsDt.TotalMilliseconds}ms q: {bld}");
                     }
                     s_tasks.Remove(key);
                     Wtf(key, q => q.Clear());
