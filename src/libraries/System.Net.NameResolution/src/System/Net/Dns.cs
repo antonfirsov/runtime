@@ -733,7 +733,8 @@ namespace System.Net
                 }
                 else
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Created new queue dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms garbage ts:{e.Timestamp}");
+                    e.Timestamp = ctsStart;
+                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Created new queue dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
                     Wtf(key, q =>
                     {
                         q.Clear();
@@ -743,7 +744,7 @@ namespace System.Net
 
                 // Invoke the function in a queued work item when the previous task completes. Note that some callers expect the
                 // returned task to have the key as the task's AsyncState.
-                task = prevTask.ContinueWith(delegate
+                e.Task = task = prevTask.ContinueWith(delegate
                 {
                     Debug.Assert(!Monitor.IsEntered(s_tasks));
 
@@ -789,7 +790,7 @@ namespace System.Net
                 // Finally, store the task into the dictionary as the current task for this key.
                 // Keep the previous timestamp if there was an existing entry for this key.
                 mfStart = Stopwatch.GetTimestamp();
-                s_tasks[key] = (task, e.Timestamp > 0 ? e.Timestamp : mfStart);
+                s_tasks[key] = e; // (task, e.Timestamp > 0 ? e.Timestamp : mfStart);
             }
 
             return task;
