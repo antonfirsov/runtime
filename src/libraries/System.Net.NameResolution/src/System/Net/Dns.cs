@@ -657,6 +657,14 @@ namespace System.Net
             long startingTimestamp = NameResolutionTelemetry.Log.BeforeResolution(key);
 
             Task<TResult>? task = null;
+            CancellationTokenSource terminator = new CancellationTokenSource(s_maxQueueTime);
+            terminator.Token.UnsafeRegister(key =>
+            {
+                lock (s_tasks)
+                {
+                    s_tasks.Remove(key!);
+                }
+            }, key);
 
             lock (s_tasks)
             {
