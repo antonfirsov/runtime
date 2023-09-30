@@ -767,7 +767,7 @@ namespace System.Net
                     finally
                     {
                         terminator.Dispose();
-                        Wtf(key, q => q.Dequeue());
+                        //Wtf(key, q => q.Dequeue());
 
                         TimeSpan palDt = Stopwatch.GetElapsedTime(palLookupStart);
                         if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> PAL dt={palDt.TotalMilliseconds}ms");
