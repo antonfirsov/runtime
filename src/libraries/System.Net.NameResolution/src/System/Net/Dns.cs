@@ -683,8 +683,7 @@ namespace System.Net
                 //    }
                 //}
 
-                if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e) &&
-                    Stopwatch.GetElapsedTime(e.Timestamp) < s_maxQueueTime)
+                if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e) /*&& Stopwatch.GetElapsedTime(e.Timestamp) < s_maxQueueTime*/)
                 {
                     if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Used existing task dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
                     prevTask = e.Task;
