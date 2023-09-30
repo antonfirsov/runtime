@@ -790,7 +790,7 @@ namespace System.Net
                 // Finally, store the task into the dictionary as the current task for this key.
                 // Keep the previous timestamp if there was an existing entry for this key.
                 mfStart = Stopwatch.GetTimestamp();
-                s_tasks[key] = e; // (task, e.Timestamp > 0 ? e.Timestamp : mfStart);
+                s_tasks[key] = (task, Math.Min(e.Timestamp, ctsStart));
             }
 
             return task;
