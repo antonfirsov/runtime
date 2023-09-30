@@ -733,7 +733,7 @@ namespace System.Net
                 }
                 else
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Created new queue dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
+                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Created new queue dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms garbage ts:{e.Timestamp}");
                     Wtf(key, q =>
                     {
                         q.Clear();
