@@ -675,6 +675,7 @@ namespace System.Net
             Task<TResult>? task = null;
             CancellationTokenSource terminator = new CancellationTokenSource(s_maxQueueTime);
             long ctsStart = Stopwatch.GetTimestamp();
+            long mfStart = 0;
             terminator.Token.UnsafeRegister(key =>
             {
                 Debug.Assert(key != null);
@@ -694,7 +695,9 @@ namespace System.Net
 
                         TimeSpan ctsDt = Stopwatch.GetElapsedTime(ctsStart);
 
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> dt@removal={dt.TotalMilliseconds}ms ctsDt={ctsDt.TotalMilliseconds}ms q: {bld}");
+                        string mfDtStr = mfStart > 0 ? $"{Stopwatch.GetElapsedTime(mfStart).TotalMilliseconds}ms" : "-";
+
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> dt@removal={dt.TotalMilliseconds}ms ctsDt={ctsDt.TotalMilliseconds}ms mf={mfDtStr} q: {bld}");
                     }
                     s_tasks.Remove(key);
                     Wtf(key, q => q.Clear());
@@ -785,7 +788,8 @@ namespace System.Net
 
                 // Finally, store the task into the dictionary as the current task for this key.
                 // Keep the previous timestamp if there was an existing entry for this key.
-                s_tasks[key] = (task, e.Timestamp > 0 ? e.Timestamp : Stopwatch.GetTimestamp());
+                mfStart = Stopwatch.GetTimestamp();
+                s_tasks[key] = (task, e.Timestamp > 0 ? e.Timestamp : mfStart);
             }
 
             return task;
