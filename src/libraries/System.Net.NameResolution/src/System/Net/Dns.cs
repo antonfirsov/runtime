@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -641,6 +642,20 @@ namespace System.Net
         /// <summary>The maximum flight time for a queue of per-host serialized requests.</summary>
         private static readonly TimeSpan s_maxQueueTime = TimeSpan.FromSeconds(1);
 
+        private static readonly Dictionary<object, Queue<long>> s_wtf = new();
+
+        private static void Wtf(object key, Action<Queue<long>> action)
+        {
+            lock (s_wtf)
+            {
+                if (!s_wtf.TryGetValue(key, out Queue<long>? wtf))
+                {
+                    wtf = new Queue<long>();
+                }
+                action(wtf);
+            }
+        }
+
         /// <summary>Queue the function to be invoked asynchronously.</summary>
         /// <remarks>
         /// Since this is doing synchronous work on a thread pool thread, we want to limit how many threads end up being
@@ -666,9 +681,19 @@ namespace System.Net
                     if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e))
                     {
                         TimeSpan dt = Stopwatch.GetElapsedTime(e.Timestamp);
-                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> dt@removal={dt.TotalMilliseconds}ms");
+                        StringBuilder bld = new StringBuilder();
+                        Wtf(key, q =>
+                        {
+                            foreach (long ts in q)
+                            {
+                                bld.AppendLine($"{Stopwatch.GetElapsedTime(ts).TotalMilliseconds}ms; ");
+                            }
+                        });
+
+                        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> dt@removal={dt.TotalMilliseconds}ms q: {bld}");
                     }
                     s_tasks.Remove(key);
+                    Wtf(key, q => q.Clear());
                 }
             }, key);
 
@@ -693,10 +718,20 @@ namespace System.Net
                 {
                     if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Used existing task dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
                     prevTask = e.Task;
+
+                    Wtf(key, q =>
+                    {
+                        q.Enqueue(Stopwatch.GetTimestamp());
+                    });
                 }
                 else
                 {
                     if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Created new queue dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
+                    Wtf(key, q =>
+                    {
+                        q.Clear();
+                        q.Enqueue(Stopwatch.GetTimestamp());
+                    });
                 }
 
                 // Invoke the function in a queued work item when the previous task completes. Note that some callers expect the
@@ -724,6 +759,8 @@ namespace System.Net
                     finally
                     {
                         terminator.Dispose();
+                        Wtf(key, q => q.Dequeue());
+
                         TimeSpan palDt = Stopwatch.GetElapsedTime(palLookupStart);
                         if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $">> PAL dt={palDt.TotalMilliseconds}ms");
                         RemoveEntryForTask(key!, task!, false);
