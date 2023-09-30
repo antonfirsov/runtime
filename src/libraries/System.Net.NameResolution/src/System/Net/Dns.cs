@@ -657,30 +657,42 @@ namespace System.Net
             long startingTimestamp = NameResolutionTelemetry.Log.BeforeResolution(key);
 
             Task<TResult>? task = null;
-            CancellationTokenSource terminator = new CancellationTokenSource(s_maxQueueTime);
-            terminator.Token.UnsafeRegister(key =>
-            {
-                lock (s_tasks)
-                {
-                    s_tasks.Remove(key!);
-                }
-            }, key);
+            //CancellationTokenSource terminator = new CancellationTokenSource(s_maxQueueTime);
+            //terminator.Token.UnsafeRegister(key =>
+            //{
+            //    lock (s_tasks)
+            //    {
+            //        s_tasks.Remove(key!);
+            //    }
+            //}, key);
 
             lock (s_tasks)
             {
                 Task prevTask = Task.CompletedTask;
 
                 // Use the previous task for this key, if there is one and if its' time in flight is shorter than s_maxQueueTime.
-                if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e) &&
-                    Stopwatch.GetElapsedTime(e.Timestamp) < s_maxQueueTime)
+                if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e))
                 {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Used existing task dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
-                    prevTask = e.Task;
+                    if (Stopwatch.GetElapsedTime(e.Timestamp) < s_maxQueueTime)
+                    {
+                        prevTask = e.Task;
+                    }
+                    else
+                    {
+                        s_tasks.Remove(key);
+                    }
                 }
-                else
-                {
-                    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Created new queue dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
-                }
+
+                //if (s_tasks.TryGetValue(key, out (Task Task, long Timestamp) e) &&
+                //    Stopwatch.GetElapsedTime(e.Timestamp) < s_maxQueueTime)
+                //{
+                //    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Used existing task dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
+                //    prevTask = e.Task;
+                //}
+                //else
+                //{
+                //    if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Created new queue dt={Stopwatch.GetElapsedTime(e.Timestamp).TotalMilliseconds}ms");
+                //}
 
                 // Invoke the function in a queued work item when the previous task completes. Note that some callers expect the
                 // returned task to have the key as the task's AsyncState.
