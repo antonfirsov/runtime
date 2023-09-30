@@ -681,15 +681,15 @@ namespace System.Net
                     Debug.Assert(!Monitor.IsEntered(s_tasks));
 
                     // If there is an entry for this key, update the timestamp.
-                    lock (s_tasks)
-                    {
-                        ref (Task Task, long Timestamp) e = ref CollectionsMarshal.GetValueRefOrNullRef(s_tasks, key);
-                        if (!Unsafe.IsNullRef(ref e))
-                        {
-                            e.Timestamp = Stopwatch.GetTimestamp();
-                            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Updated the timestamp. {e.Timestamp}");
-                        }
-                    }
+                    //lock (s_tasks)
+                    //{
+                    //    ref (Task Task, long Timestamp) e = ref CollectionsMarshal.GetValueRefOrNullRef(s_tasks, key);
+                    //    if (!Unsafe.IsNullRef(ref e))
+                    //    {
+                    //        e.Timestamp = Stopwatch.GetTimestamp();
+                    //        if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(key, $"Updated the timestamp. {e.Timestamp}");
+                    //    }
+                    //}
 
                     long palLookupStart = Stopwatch.GetTimestamp();
                     try
