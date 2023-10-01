@@ -707,7 +707,7 @@ namespace System.Net
                 {
                     task.ContinueWith(delegate
                     {
-                        NameResolutionTelemetry.Log.AfterResolution(key, startingTimestamp, false);
+                        NameResolutionTelemetry.Log.AfterResolution(startingTimestamp, false);
                         lock (s_tasks)
                         {
                             ((ICollection<KeyValuePair<object, Task>>)s_tasks).Remove(new KeyValuePair<object, Task>(key!, task));
