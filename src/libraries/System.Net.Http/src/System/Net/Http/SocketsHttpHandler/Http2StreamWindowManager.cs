@@ -129,6 +129,7 @@ namespace System.Net.Http
 
                 Task sendWindowUpdateTask = connection.SendWindowUpdateAsync(stream.StreamId, windowUpdateIncrement);
                 connection.LogExceptions(sendWindowUpdateTask);
+                connection._rttEstimator.SendScheduledRttPingIfNeeded(connection);
 
                 _lastWindowUpdate = currentTime;
             }
@@ -152,20 +153,21 @@ namespace System.Net.Http
         // Http2StreamWindowManager is reading MinRtt from another concurrent thread, therefore its value has to be changed atomically.
         private struct RttEstimator
         {
-            private enum State
+            private static class State
             {
-                Disabled,
-                Init,
-                Waiting,
-                PingSent,
-                TerminatingMayReceivePingAck
+                public const int Disabled = 0;
+                public const int Init = 1;
+                public const int Waiting = 2;
+                public const int PingScheduled = 3;
+                public const int PingSent = 4;
+                public const int TerminatingMayReceivePingAck = 5;
             }
 
             private const double PingIntervalInSeconds = 2;
             private const int InitialBurstCount = 4;
             private static readonly long PingIntervalInTicks = (long)(PingIntervalInSeconds * Stopwatch.Frequency);
 
-            private State _state;
+            private int _state;
             private long _pingSentTimestamp;
             private long _pingCounter;
             private int _initialBurst;
@@ -205,11 +207,30 @@ namespace System.Net.Http
                     if (initial) _initialBurst--;
 
                     // Send a PING
+                    if (initial)
+                    {
+                        _pingCounter--;
+                        if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Sending RTT PING with payload {_pingCounter}");
+                        connection.LogExceptions(connection.SendPingAsync(_pingCounter, isAck: false));
+                        _pingSentTimestamp = now;
+                        _state = State.PingSent;
+                    }
+                    else
+                    {
+                        if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Scheduling RTT PING");
+                        _state = State.PingScheduled;
+                    }
+                }
+            }
+
+            internal void SendScheduledRttPingIfNeeded(Http2Connection connection)
+            {
+                if (Interlocked.CompareExchange(ref _state, State.PingSent, State.PingScheduled) == State.PingScheduled)
+                {
                     _pingCounter--;
-                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Sending RTT PING with payload {_pingCounter}");
+                    _pingSentTimestamp = Stopwatch.GetTimestamp();
+                    if (NetEventSource.Log.IsEnabled()) connection.Trace($"[FlowControl] Sending scheduled RTT PING with payload {_pingCounter}");
                     connection.LogExceptions(connection.SendPingAsync(_pingCounter, isAck: false));
-                    _pingSentTimestamp = now;
-                    _state = State.PingSent;
                 }
             }
 

@@ -1284,6 +1284,8 @@ namespace System.Net.Http
                         (current, buffer) = SplitBuffer(buffer, sendSize);
 
                         await _connection.SendStreamDataAsync(StreamId, current, flush, _requestBodyCancellationSource.Token).ConfigureAwait(false);
+
+                        _connection._rttEstimator.SendScheduledRttPingIfNeeded(_connection);
                     }
                 }
                 catch (OperationCanceledException e) when (e.CancellationToken == _requestBodyCancellationSource.Token)
