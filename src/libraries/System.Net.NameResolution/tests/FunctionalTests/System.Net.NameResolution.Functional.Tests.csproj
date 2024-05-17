@@ -6,6 +6,7 @@
     <EventSourceSupport Condition="'$(TestNativeAot)' == 'true'">true</EventSourceSupport>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="ActivityTest.cs" />
     <Compile Include="AssemblyInfo.cs" />
     <Compile Include="GetHostByAddressTest.cs" />
     <Compile Include="GetHostByNameTest.cs" />
