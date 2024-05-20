@@ -25,7 +25,7 @@ namespace System.Net
             _activity = s_activitySource.StartActivity(ActivityName, ActivityKind.Client);
         }
 
-        public static bool IsEnabled() => s_activitySource.HasListeners();
+        public static bool IsTracingEnabled() => s_activitySource.HasListeners();
 
         // Returns true if either NameResolutionTelemetry or NameResolutionMetrics is enabled.
         public bool Stop(out TimeSpan duration)
@@ -91,7 +91,7 @@ namespace System.Net
         private void ResolutionFailed() => WriteEvent(ResolutionFailedEventId);
 
         [NonEvent]
-        public static bool AnyDiagnosticsEnabled() => Log.IsEnabled() || NameResolutionMetrics.IsEnabled() || NameResolutionActivity.IsEnabled();
+        public static bool AnyDiagnosticsEnabled() => Log.IsEnabled() || NameResolutionMetrics.IsEnabled() || NameResolutionActivity.IsTracingEnabled();
 
         [NonEvent]
         public NameResolutionActivity BeforeResolution(object hostNameOrAddress, long startingTimestamp = 0)

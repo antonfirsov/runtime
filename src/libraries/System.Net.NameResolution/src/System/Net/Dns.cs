@@ -653,7 +653,13 @@ namespace System.Net
         /// </remarks>
         private static Task<TResult> RunAsync<TResult>(Func<object, NameResolutionActivity, TResult> func, object key, CancellationToken cancellationToken)
         {
+            Activity? activityToRestore = NameResolutionActivity.IsTracingEnabled() ? Activity.Current : null;
             NameResolutionActivity activity = NameResolutionTelemetry.Log.BeforeResolution(key);
+            if (NameResolutionActivity.IsTracingEnabled())
+            {
+                // Do not overwrite Activity.Current in the caller's async context.
+                Activity.Current = activityToRestore;
+            }
 
             Task<TResult>? task = null;
 
