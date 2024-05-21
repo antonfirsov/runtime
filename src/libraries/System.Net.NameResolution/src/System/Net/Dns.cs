@@ -657,7 +657,7 @@ namespace System.Net
             NameResolutionActivity activity = NameResolutionTelemetry.Log.BeforeResolution(key);
             if (NameResolutionActivity.IsTracingEnabled())
             {
-                // Do not overwrite Activity.Current in the caller's async context.
+                // Do not overwrite Activity.Current in the caller's ExecutionContext.
                 Activity.Current = activityToRestore;
             }
 
