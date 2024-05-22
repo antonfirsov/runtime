@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Linq;
 using System.Threading;
@@ -102,6 +103,63 @@ namespace System.Net.Sockets.Tests
                 "Eap" => new SocketHelperEap(),
                 _ => throw new ArgumentException(socketMethod)
             };
+        }
+
+        [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
+        [MemberData(nameof(SocketMethods_MemberData))]
+        public void Connect_Success_ActivityRecorded(string connectMethod)
+        {
+            RemoteExecutor.Invoke(async connectMethod =>
+            {
+                using Socket server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                server.BindToAnonymousPort(IPAddress.Loopback);
+                server.Listen();
+
+                Activity parent = new Activity("parent").Start();
+
+                using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+                using ConnectActivityRecorder recorder = new ConnectActivityRecorder()
+                {
+                    ExpectedParent = parent
+                };
+
+                Task connectTask = GetHelperBase(connectMethod).ConnectAsync(client, server.LocalEndPoint);
+                await server.AcceptAsync();
+                await connectTask;
+
+                recorder.VerifyActivityRecorded(1);
+                Assert.Same(parent, Activity.Current);
+                parent.Stop();
+            }, connectMethod).Dispose();
+        }
+
+        // TODO: [OuterLoop("Connection failure takes long on Windows.")]
+        [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
+        [MemberData(nameof(SocketMethods_MemberData))]
+        public void Connect_Failure_ActivityRecorded(string connectMethod)
+        {
+            RemoteExecutor.Invoke(async connectMethod =>
+            {
+                using Socket notListening = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                notListening.BindToAnonymousPort(IPAddress.Loopback);
+
+                Activity parent = new Activity("parent").Start();
+
+                using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+                using ConnectActivityRecorder recorder = new ConnectActivityRecorder()
+                {
+                    ExpectedParent = parent
+                };
+
+                await Assert.ThrowsAsync<SocketException>(() =>GetHelperBase(connectMethod)
+                    .ConnectAsync(client, notListening.LocalEndPoint));
+
+                recorder.VerifyActivityRecorded(1);
+                Assert.Same(parent, Activity.Current);
+                parent.Stop();
+            }, connectMethod).Dispose();
         }
 
         [OuterLoop]
@@ -530,6 +588,51 @@ namespace System.Net.Sockets.Tests
             if (shouldHaveDatagrams)
             {
                 Assert.True(datagramsSent[^1] > 0);
+            }
+        }
+
+        private class ConnectActivityRecorder : IDisposable
+        {
+            private const string ActivitySourceName = "System.Net.Sockets";
+            private const string ActivityName = ActivitySourceName + ".Connect";
+
+            private readonly ActivityListener _listener;
+            private int _started;
+            private int _stopped;
+
+            public Activity ExpectedParent { get; set; }
+
+            public ConnectActivityRecorder()
+            {
+                _listener = new ActivityListener
+                {
+                    ShouldListenTo = (activitySource) => activitySource.Name == ActivitySourceName,
+                    Sample = (ref ActivityCreationOptions<ActivityContext> options) => ActivitySamplingResult.AllData,
+                    ActivityStarted = (activity) => {
+                        if (activity.OperationName == ActivityName)
+                        {
+                            Assert.Same(ExpectedParent, activity.Parent);
+                            _started++;
+                        }
+                    },
+                    ActivityStopped = (activity) => {
+                        if (activity.OperationName == ActivityName)
+                        {
+                            Assert.Same(ExpectedParent, activity.Parent);
+                            _stopped++;
+                        }
+                    }
+                };
+
+                ActivitySource.AddActivityListener(_listener);
+            }
+
+            public void Dispose() => _listener.Dispose();
+
+            public void VerifyActivityRecorded(int times)
+            {
+                Assert.Equal(times, _started);
+                Assert.Equal(times, _stopped);
             }
         }
     }
