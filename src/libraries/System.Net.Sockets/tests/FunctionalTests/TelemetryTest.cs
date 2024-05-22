@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Tracing;
 using System.Linq;
+using System.Net.Test.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.DotNet.RemoteExecutor;
@@ -17,6 +18,9 @@ namespace System.Net.Sockets.Tests
 {
     public class TelemetryTest
     {
+        private const string ActivitySourceName = "System.Net.Sockets";
+        private const string ActivityName = ActivitySourceName + ".Connect";
+
         private static readonly Lazy<Task<bool>> s_remoteServerIsReachable = new Lazy<Task<bool>>(() => Task.Run(async () =>
         {
             try
@@ -119,7 +123,7 @@ namespace System.Net.Sockets.Tests
 
                 using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
-                using ConnectActivityRecorder recorder = new ConnectActivityRecorder()
+                using ActivityRecorder recorder = new ActivityRecorder(ActivitySourceName, ActivityName)
                 {
                     ExpectedParent = parent
                 };
@@ -148,7 +152,7 @@ namespace System.Net.Sockets.Tests
 
                 using Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
 
-                using ConnectActivityRecorder recorder = new ConnectActivityRecorder()
+                using ActivityRecorder recorder = new ActivityRecorder(ActivitySourceName, ActivityName)
                 {
                     ExpectedParent = parent
                 };
@@ -588,51 +592,6 @@ namespace System.Net.Sockets.Tests
             if (shouldHaveDatagrams)
             {
                 Assert.True(datagramsSent[^1] > 0);
-            }
-        }
-
-        private class ConnectActivityRecorder : IDisposable
-        {
-            private const string ActivitySourceName = "System.Net.Sockets";
-            private const string ActivityName = ActivitySourceName + ".Connect";
-
-            private readonly ActivityListener _listener;
-            private int _started;
-            private int _stopped;
-
-            public Activity ExpectedParent { get; set; }
-
-            public ConnectActivityRecorder()
-            {
-                _listener = new ActivityListener
-                {
-                    ShouldListenTo = (activitySource) => activitySource.Name == ActivitySourceName,
-                    Sample = (ref ActivityCreationOptions<ActivityContext> options) => ActivitySamplingResult.AllData,
-                    ActivityStarted = (activity) => {
-                        if (activity.OperationName == ActivityName)
-                        {
-                            Assert.Same(ExpectedParent, activity.Parent);
-                            _started++;
-                        }
-                    },
-                    ActivityStopped = (activity) => {
-                        if (activity.OperationName == ActivityName)
-                        {
-                            Assert.Same(ExpectedParent, activity.Parent);
-                            _stopped++;
-                        }
-                    }
-                };
-
-                ActivitySource.AddActivityListener(_listener);
-            }
-
-            public void Dispose() => _listener.Dispose();
-
-            public void VerifyActivityRecorded(int times)
-            {
-                Assert.Equal(times, _started);
-                Assert.Equal(times, _stopped);
             }
         }
     }

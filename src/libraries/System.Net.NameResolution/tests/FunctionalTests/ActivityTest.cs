@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Net.Sockets;
+using System.Net.Test.Common;
 using System.Threading.Tasks;
 using Microsoft.DotNet.RemoteExecutor;
 using Xunit;
@@ -11,62 +12,20 @@ namespace System.Net.NameResolution.Tests
 {
     public class ActivityTest
     {
-        private class ActivityRecorder : IDisposable
-        {
-            private const string ActivitySourceName = "System.Net.NameResolution";
-            private const string ActivityName = ActivitySourceName + ".DsnLookup";
-
-            private readonly ActivityListener _listener;
-            private int _started;
-            private int _stopped;
-
-            public Activity ExpectedParent { get; set; }
-
-            public ActivityRecorder()
-            {
-                _listener = new ActivityListener
-                {
-                    ShouldListenTo = (activitySource) => activitySource.Name == ActivitySourceName,
-                    Sample = (ref ActivityCreationOptions<ActivityContext> options) => ActivitySamplingResult.AllData,
-                    ActivityStarted = (activity) => {
-                        if (activity.OperationName == ActivityName)
-                        {
-                            Assert.Same(ExpectedParent, activity.Parent);
-                            _started++;
-                        }
-                    },
-                    ActivityStopped = (activity) => {
-                        if (activity.OperationName == ActivityName)
-                        {
-                            Assert.Same(ExpectedParent, activity.Parent);
-                            _stopped++;
-                        }
-                    }
-                };
-
-                ActivitySource.AddActivityListener(_listener);
-            }
-
-            public void Dispose() => _listener.Dispose();
-
-            public void VerifyActivityRecorded(int times)
-            {
-                Assert.Equal(times, _started);
-                Assert.Equal(times, _stopped);
-            }
-        }
+        private const string ActivitySourceName = "System.Net.NameResolution";
+        private const string ActivityName = ActivitySourceName + ".DsnLookup";
 
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [InlineData(false)]
         [InlineData(true)]
-        public void ResolveValidHostName_ActivityRecorded(bool createParentActivity)
+        public async Task ResolveValidHostName_ActivityRecorded(bool createParentActivity)
         {
-            RemoteExecutor.Invoke(static async (createParentActivity) =>
-            {
+            //RemoteExecutor.Invoke(static async (createParentActivity) =>
+            //{
                 const string ValidHostName = "localhost";
-                using var recorder = new ActivityRecorder()
+                using var recorder = new ActivityRecorder(ActivitySourceName, ActivityName)
                 {
-                    ExpectedParent = bool.Parse(createParentActivity) ? new Activity("parent").Start() : null
+                    ExpectedParent = /*bool.Parse(createParentActivity)*/ createParentActivity ? new Activity("parent").Start() : null
                 };
                 
                 await Dns.GetHostEntryAsync(ValidHostName);
@@ -87,7 +46,7 @@ namespace System.Net.NameResolution.Tests
                 Dns.EndGetHostAddresses(Dns.BeginGetHostAddresses(ValidHostName, null, null));
                 recorder.VerifyActivityRecorded(times: 6);
 
-            }, createParentActivity.ToString()).Dispose();
+            //}, createParentActivity.ToString()).Dispose();
         }
 
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
@@ -99,7 +58,7 @@ namespace System.Net.NameResolution.Tests
 
             RemoteExecutor.Invoke(async (createParentActivity) =>
             {
-                using var recorder = new ActivityRecorder()
+                using var recorder = new ActivityRecorder(ActivitySourceName, ActivityName)
                 {
                     ExpectedParent = bool.Parse(createParentActivity) ? new Activity("parent").Start() : null
                 };
