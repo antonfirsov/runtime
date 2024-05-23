@@ -674,18 +674,14 @@ namespace System.Net.Http
                         if (async)
                         {
                             IPAddress[] addresses = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
-                            activity?.AddEvent(new ActivityEvent("Dns.Resolved"));
                             await socket.ConnectAsync(addresses, port, cancellationToken).ConfigureAwait(false);
-                            activity?.AddEvent(new ActivityEvent("Transport.Connected"));
                         }
                         else
                         {
                             IPAddress[] addresses = Dns.GetHostAddresses(host);
-                            activity?.AddEvent(new ActivityEvent("Dns.Resolved"));
                             using (cancellationToken.UnsafeRegister(static s => ((Socket)s!).Dispose(), socket))
                             {
                                 socket.Connect(addresses, port);
-                                activity?.AddEvent(new ActivityEvent("Transport.Connected"));
                             }
                         }
 

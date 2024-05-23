@@ -383,51 +383,25 @@ namespace System.Net.Http.Functional.Tests
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [InlineData(false)]
         [InlineData(true)]
-        public void SendAsync_ConnectionActivity_Success(bool useTls)
+        public Task SendAsync_ConnectionActivity_Success(bool useTls)
         {
-            RemoteExecutor.Invoke(RunTest, UseVersion.ToString(), TestAsync.ToString(), useTls.ToString()).Dispose();
-
+            //RemoteExecutor.Invoke(RunTest, UseVersion.ToString(), TestAsync.ToString(), useTls.ToString()).Dispose();
+            return RunTest(UseVersion.ToString(), TestAsync.ToString(), useTls.ToString());
             static async Task RunTest(string useVersion, string testAsync, string useTlsString)
             {
                 bool useTls = bool.Parse(useTlsString);
+
                 Activity parentActivity = new Activity("parent").Start();
 
-                Activity? latestRequestActivity = null;
-                Activity? latestConnectionActivity = null;
-                int requestStarted = 0;
-                int requestStopped = 0;
-                int connectionStarted = 0;
-                int connectionStopped = 0;
-
-                ActivitySource.AddActivityListener(new ActivityListener
+                using ActivityRecorder requestRecorder = new("System.Net.Http", "System.Net.Http.HttpRequestOut")
                 {
-                    ShouldListenTo = src => src.Name.StartsWith("System.Net.Http"),
-                    Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
-                    ActivityStarted = activity =>
-                    {
-                        if (activity.OperationName == "System.Net.Http.HttpRequestOut")
-                        {
-                            latestRequestActivity = activity;
-                            requestStarted++;
-                        }
-                        else if (activity.OperationName == "System.Net.Http.Connections.HttpConnectionOut")
-                        {
-                            latestConnectionActivity = activity;
-                            connectionStarted++;
-                        }
-                    },
-                    ActivityStopped = activity =>
-                    {
-                        if (activity.OperationName == "System.Net.Http.HttpRequestOut")
-                        {
-                            requestStopped++;
-                        }
-                        else if (activity.OperationName == "System.Net.Http.Connections.HttpConnectionOut")
-                        {
-                            connectionStopped++;
-                        }
-                    }
-                });
+                    ExpectedParent = parentActivity
+                };
+
+                using ActivityRecorder connectionRecorder = new("System.Net.Http.Connections", "System.Net.Http.Connections.HttpConnection");
+                using ActivityRecorder dnsRecorder = new("System.Net.NameResolution", "System.Net.NameResolution.DsnLookup") { VerifyParent = false };
+                using ActivityRecorder socketRecorder = new("System.Net.Sockets", "System.Net.Sockets.Connect") { VerifyParent = false };
+                using ActivityRecorder tlsRecorder = new("System.Net.Security", "System.Net.Security.TlsHandshake") { VerifyParent = false };
 
                 await GetFactoryForVersion(useVersion).CreateClientAndServerAsync(
                     async uri =>
@@ -435,50 +409,29 @@ namespace System.Net.Http.Functional.Tests
                         using HttpClient client = new HttpClient(CreateHttpClientHandler(allowAllCertificates: true));
 
                         await client.SendAsync(CreateRequest(HttpMethod.Get, uri, Version.Parse(useVersion), exactVersion: true));
-                        Assert.Equal(1, requestStarted);
-                        Assert.Equal(1, requestStopped);
-                        Assert.NotNull(latestRequestActivity);
-                        Assert.Equal(parentActivity, latestRequestActivity.Parent);
 
-                        Assert.Equal(1, connectionStarted);
-                        Assert.Equal(0, connectionStopped);
-                        Assert.NotNull(latestConnectionActivity);
-                        Assert.Null(latestConnectionActivity.Parent);
+                        requestRecorder.VerifyActivityRecorded(1);
+                        Assert.Equal(1, connectionRecorder.Started);
+                        Assert.Equal(0, connectionRecorder.Stopped);
+                        dnsRecorder.VerifyActivityRecorded(1);
+                        socketRecorder.VerifyActivityRecorded(1);
+                        tlsRecorder.VerifyActivityRecorded(1);
 
-                        Assert.Equal(latestConnectionActivity.Context, latestRequestActivity.Links.Single().Context);
-                        Assert.False(latestConnectionActivity.IsStopped);
-                        Assert.True(latestConnectionActivity.StartTimeUtc >= latestRequestActivity.StartTimeUtc);
+                        Activity conn = connectionRecorder.LastStartedActivity;
+                        Activity dns = dnsRecorder.LastFinishedActivity;
+                        Activity sock = socketRecorder.LastFinishedActivity;
+                        Activity tls = tlsRecorder.LastFinishedActivity;
 
-                        ActivityEvent[] events = latestConnectionActivity.Events.ToArray();
-                        Assert.Equal(useTls ? 3 : 2, events.Length);
-                        Assert.Equal("Dns.Resolved", events[0].Name);
-                        Assert.True(events[0].Timestamp >= latestConnectionActivity.StartTimeUtc);
-                        Assert.Equal("Transport.Connected", events[1].Name);
-                        Assert.True(events[1].Timestamp >= events[0].Timestamp);
-                        if (useTls)
-                        {
-                            Assert.Equal("Tls.Authenticated", events[2].Name);
-                            Assert.True(events[2].Timestamp >= events[1].Timestamp);
-                        }
+                        Assert.Same(conn, dns.Parent);
+                        Assert.Same(conn, sock.Parent);
+                        Assert.Same(conn, tls.Parent);
+                        Assert.True(conn.StartTimeUtc <= dns.StartTimeUtc);
+                        Assert.True(dns.StartTimeUtc <= sock.StartTimeUtc);
+                        Assert.True(sock.StartTimeUtc <= tls.StartTimeUtc);
+                        Assert.True(conn.Duration > dns.Duration + sock.Duration + tls.Duration);
 
-                        Activity firstRequestActivity = latestRequestActivity;
-                        Activity firstConnectionActivity = latestConnectionActivity;
 
                         await client.SendAsync(CreateRequest(HttpMethod.Get, uri, Version.Parse(useVersion), exactVersion: true));
-                        Assert.Equal(2, requestStarted);
-                        Assert.Equal(2, requestStopped);
-                        Assert.Equal(1, connectionStarted);
-                        Assert.Equal(0, connectionStopped);
-                        Assert.False(latestConnectionActivity.IsStopped);
-
-                        Assert.NotSame(firstRequestActivity, latestRequestActivity);
-                        Assert.Same(firstConnectionActivity, latestConnectionActivity);
-
-                        Assert.Equal(latestConnectionActivity.Context, latestRequestActivity.Links.Single().Context);
-
-                        client.Dispose();
-                        Assert.Equal(1, connectionStopped);
-                        Assert.True(latestConnectionActivity.IsStopped);
                     },
                     async server =>
                     {

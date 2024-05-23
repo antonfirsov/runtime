@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Threading;
 using Xunit;
 
 namespace System.Net.Test.Common
@@ -12,10 +16,14 @@ namespace System.Net.Test.Common
         private string _activityName;
 
         private readonly ActivityListener _listener;
-        private int _started;
-        private int _stopped;
 
+        public bool VerifyParent { get; set; } = true;
         public Activity ExpectedParent { get; set; }
+
+        public int Started { get; private set; }
+        public int Stopped { get; private set; }
+        public Activity LastStartedActivity { get; private set; }
+        public Activity LastFinishedActivity { get; private set; }
 
         public ActivityRecorder(string activitySourceName, string activityName)
         {
@@ -28,15 +36,25 @@ namespace System.Net.Test.Common
                 ActivityStarted = (activity) => {
                     if (activity.OperationName == _activityName)
                     {
-                        Assert.Same(ExpectedParent, activity.Parent);
-                        _started++;
+                        if (VerifyParent)
+                        {
+                            Assert.Same(ExpectedParent, activity.Parent);
+                        }
+
+                        Started++;
+                        LastStartedActivity = activity;
                     }
                 },
                 ActivityStopped = (activity) => {
                     if (activity.OperationName == _activityName)
                     {
-                        Assert.Same(ExpectedParent, activity.Parent);
-                        _stopped++;
+                        if (VerifyParent)
+                        {
+                            Assert.Same(ExpectedParent, activity.Parent);
+                        }
+
+                        Stopped++;
+                        LastFinishedActivity = activity;
                     }
                 }
             };
@@ -48,8 +66,8 @@ namespace System.Net.Test.Common
 
         public void VerifyActivityRecorded(int times)
         {
-            Assert.Equal(times, _started);
-            Assert.Equal(times, _stopped);
+            Assert.Equal(times, Started);
+            Assert.Equal(times, Stopped);
         }
     }
 }

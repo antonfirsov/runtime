@@ -74,7 +74,6 @@ namespace System.Net.Http
                         sslStream.AuthenticateAsClient(sslOptions);
                     }
                 }
-                activity?.AddEvent(new ActivityEvent("Tls.Authenticated"));
             }
             catch (Exception e)
             {
