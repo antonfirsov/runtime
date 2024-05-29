@@ -645,13 +645,13 @@ namespace System.Net.Http
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            var endPoint = new DnsEndPoint(host, port);
             Stream? stream = null;
             try
             {
                 // If a ConnectCallback was supplied, use that to establish the connection.
                 if (Settings._connectCallback != null)
                 {
-                    var endPoint = new DnsEndPoint(host, port);
                     ValueTask<Stream> streamTask = Settings._connectCallback(new SocketsHttpConnectionContext(endPoint, initialRequest), cancellationToken);
 
                     if (!async && !streamTask.IsCompleted)
@@ -673,8 +673,7 @@ namespace System.Net.Http
                     {
                         if (async)
                         {
-                            IPAddress[] addresses = await Dns.GetHostAddressesAsync(host, cancellationToken).ConfigureAwait(false);
-                            await socket.ConnectAsync(addresses, port, cancellationToken).ConfigureAwait(false);
+                            await socket.ConnectAsync(endPoint, cancellationToken).ConfigureAwait(false);
                         }
                         else
                         {

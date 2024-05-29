@@ -17,6 +17,7 @@ namespace System.Net.Test.Common
 
         private readonly ActivityListener _listener;
 
+        public Predicate<Activity> Filter { get; set; } = _ => true;
         public bool VerifyParent { get; set; } = true;
         public Activity ExpectedParent { get; set; }
 
@@ -34,7 +35,7 @@ namespace System.Net.Test.Common
                 ShouldListenTo = (activitySource) => activitySource.Name == _activitySourceName,
                 Sample = (ref ActivityCreationOptions<ActivityContext> options) => ActivitySamplingResult.AllData,
                 ActivityStarted = (activity) => {
-                    if (activity.OperationName == _activityName)
+                    if (activity.OperationName == _activityName && Filter(activity))
                     {
                         if (VerifyParent)
                         {
@@ -46,7 +47,7 @@ namespace System.Net.Test.Common
                     }
                 },
                 ActivityStopped = (activity) => {
-                    if (activity.OperationName == _activityName)
+                    if (activity.OperationName == _activityName && Filter(activity))
                     {
                         if (VerifyParent)
                         {
