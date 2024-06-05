@@ -47,6 +47,7 @@
     <Compile Include="System\Net\Http\Headers\KnownHeader.cs" />
     <Compile Include="System\Net\Http\Headers\HttpHeaderType.cs" />
     <Compile Include="System\Net\Http\Headers\KnownHeaders.cs" />
+    <Compile Include="System\Net\Http\HttpActivityEnrichmentContext.cs" />
     <Compile Include="System\Net\Http\HttpBaseStream.cs" />
     <Compile Include="System\Net\Http\HttpClient.cs" />
     <Compile Condition="'$(TargetPlatformIdentifier)' == 'android' or '$(TargetPlatformIdentifier)' == 'ios' or '$(TargetPlatformIdentifier)' == 'maccatalyst' or '$(TargetPlatformIdentifier)' == 'tvos'"
@@ -62,6 +63,7 @@
     <Compile Include="System\Net\Http\HttpMethod.cs" />
     <Compile Include="System\Net\Http\HttpParseResult.cs" />
     <Compile Include="System\Net\Http\HttpProtocolException.cs" />
+    <Compile Include="System\Net\Http\HttpRequestDiagnosticOptions.cs" />
     <Compile Include="System\Net\Http\HttpRequestException.cs" />
     <Compile Include="System\Net\Http\HttpRequestError.cs" />
     <Compile Include="System\Net\Http\HttpRequestMessage.cs" />

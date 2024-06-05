@@ -43,6 +43,14 @@ namespace System.Net.Http
         protected override System.Threading.Tasks.Task SerializeToStreamAsync(System.IO.Stream stream, System.Net.TransportContext? context, System.Threading.CancellationToken cancellationToken) { throw null; }
     }
     public delegate System.Text.Encoding? HeaderEncodingSelector<TContext>(string headerName, TContext context);
+    public sealed class HttpActivityEnrichmentContext
+    {
+        private HttpActivityEnrichmentContext() { }
+        public System.Diagnostics.Activity Activity { get { throw null; } }
+        public System.Net.Http.HttpRequestMessage Request { get { throw null; } }
+        public System.Net.Http.HttpResponseMessage? Response { get { throw null; } }
+        public System.Exception? Exception { get { throw null; } }
+    }
     public partial class HttpClient : System.Net.Http.HttpMessageInvoker
     {
         public HttpClient() : base (default(System.Net.Http.HttpMessageHandler)) { }
@@ -288,6 +296,7 @@ namespace System.Net.Http
         public System.Net.Http.HttpContent? Content { get { throw null; } set { } }
         public System.Net.Http.Headers.HttpRequestHeaders Headers { get { throw null; } }
         public System.Net.Http.HttpMethod Method { get { throw null; } set { } }
+        public System.Net.Http.HttpRequestDiagnosticOptions DiagnosticOptions { get { throw null; } }
         public System.Net.Http.HttpRequestOptions Options { get { throw null; } }
         [System.ObsoleteAttribute("HttpRequestMessage.Properties has been deprecated. Use Options instead.")]
         public System.Collections.Generic.IDictionary<string, object?> Properties { get { throw null; } }
@@ -297,6 +306,13 @@ namespace System.Net.Http
         public void Dispose() { }
         protected virtual void Dispose(bool disposing) { }
         public override string ToString() { throw null; }
+    }
+    public sealed class HttpRequestDiagnosticOptions
+    {
+        public System.Collections.Generic.IList<System.Predicate<System.Net.Http.HttpRequestMessage>> ActivityFilters { get { throw null; } }
+        public System.Collections.Generic.IList<System.Action<System.Net.Http.HttpActivityEnrichmentContext>> ActivityEnrichmentCallbacks { get { throw null; } }
+        public System.Collections.Generic.IList<System.Action<System.Net.Http.Metrics.HttpMetricsEnrichmentContext>> MetricsEnrichmentCallbacks { get { throw null; } }
+        public System.Func<HttpRequestMessage, string?>? UriRedactorCallback { get { throw null; } set { } }
     }
     public sealed partial class HttpRequestOptions : System.Collections.Generic.ICollection<System.Collections.Generic.KeyValuePair<string, object?>>, System.Collections.Generic.IDictionary<string, object?>, System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, object?>>, System.Collections.Generic.IReadOnlyCollection<System.Collections.Generic.KeyValuePair<string, object?>>, System.Collections.Generic.IReadOnlyDictionary<string, object?>, System.Collections.IEnumerable
     {

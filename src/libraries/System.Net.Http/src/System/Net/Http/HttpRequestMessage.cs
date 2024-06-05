@@ -30,6 +30,7 @@ namespace System.Net.Http
         private Version _version;
         private HttpVersionPolicy _versionPolicy;
         private HttpContent? _content;
+        private HttpRequestDiagnosticOptions? _diagnosticOptions;
         internal HttpRequestOptions? _options;
 
         public Version Version
@@ -115,6 +116,8 @@ namespace System.Net.Http
         /// Gets the collection of options to configure the HTTP request.
         /// </summary>
         public HttpRequestOptions Options => _options ??= new HttpRequestOptions();
+
+        public HttpRequestDiagnosticOptions DiagnosticOptions => _diagnosticOptions ??= new HttpRequestDiagnosticOptions();
 
         public HttpRequestMessage()
             : this(HttpMethod.Get, (Uri?)null)
