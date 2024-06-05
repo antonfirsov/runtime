@@ -183,6 +183,10 @@
              Link="ProductionCode\System\Net\Http\Headers\ViaHeaderValue.cs" />
     <Compile Include="..\..\src\System\Net\Http\Headers\WarningHeaderValue.cs"
              Link="ProductionCode\System\Net\Http\Headers\WarningHeaderValue.cs" />
+    <Compile Include="..\..\src\System\Net\Http\Metrics\HttpMetricsEnrichmentContext.cs"
+                 Link="ProductionCode\System\Net\Http\Metrics\HttpMetricsEnrichmentContext.cs" />
+    <Compile Include="..\..\src\System\Net\Http\HttpActivityEnrichmentContext.cs"
+                 Link="ProductionCode\System\Net\Http\HttpActivityEnrichmentContext.cs" />
     <Compile Include="..\..\src\System\Net\Http\HttpClient.cs"
              Link="ProductionCode\System\Net\Http\HttpClient.cs" />
     <Compile Include="..\..\src\System\Net\Http\HttpHandlerDefaults.cs"
@@ -209,6 +213,8 @@
              Link="ProductionCode\System\Net\Http\RequestRetryType.cs" />
     <Compile Include="..\..\src\System\Net\Http\HttpRequestMessage.cs"
              Link="ProductionCode\System\Net\Http\HttpRequestMessage.cs" />
+    <Compile Include="..\..\src\System\Net\Http\HttpRequestDiagnosticOptions.cs"
+             Link="ProductionCode\System\Net\Http\HttpRequestDiagnosticOptions.cs" />
     <Compile Include="..\..\src\System\Net\Http\HttpRequestOptions.cs"
               Link="ProductionCode\System\Net\Http\HttpRequestOptions.cs" />
     <Compile Include="..\..\src\System\Net\Http\HttpRequestOptionsKey.cs"
