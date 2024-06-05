@@ -109,7 +109,20 @@ namespace System.Net.Http
             DiagnosticListener diagnosticListener = s_diagnosticListener;
 
             Guid loggingRequestId = Guid.Empty;
-            Activity? activity = CreateActivity(request);
+
+            bool filtered = false;
+            if (request._diagnosticOptions?._activityFilters is List<Predicate<HttpRequestMessage>> filters)
+            {
+                foreach (Predicate<HttpRequestMessage> filter in filters)
+                {
+                    if (!filter(request))
+                    {
+                        filtered = true;
+                    }
+                }
+            }
+
+            Activity? activity = filtered ? null : CreateActivity(request);
 
             // Start activity anyway if it was created.
             if (activity is not null)
@@ -198,6 +211,15 @@ namespace System.Net.Http
                     if (DiagnosticsHelper.TryGetErrorType(response, exception, out string? errorType))
                     {
                         activity.SetTag("error.type", errorType);
+                    }
+
+                    if (request._diagnosticOptions?._activityEnrichmentCallbacks is List<Action<HttpActivityEnrichmentContext>> activityEnrichmentCallbacks)
+                    {
+                        HttpActivityEnrichmentContext ctx = new(activity, request, response, exception);
+                        foreach (Action<HttpActivityEnrichmentContext> callback in activityEnrichmentCallbacks)
+                        {
+                            callback(ctx);
+                        }
                     }
 
                     // Only send stop event to users who subscribed for it.

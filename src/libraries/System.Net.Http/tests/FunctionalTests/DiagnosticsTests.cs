@@ -384,7 +384,7 @@ namespace System.Net.Http.Functional.Tests
         [InlineData(404)]
         public void SendAsync_ExpectedTagsLogged(int statusCode)
         {
-            RemoteExecutor.Invoke(async (useVersion, testAsync, statusCodeStr) =>
+            RemoteExecutor.Invoke(static async (useVersion, testAsync, statusCodeStr) =>
             {
                 TaskCompletionSource activityStopTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -414,6 +414,7 @@ namespace System.Net.Http.Functional.Tests
                     {
                         VerifyTag(tags, "network.protocol.version", GetVersionString(Version.Parse(useVersion)));
                         VerifyTag(tags, "http.response.status_code", int.Parse(statusCodeStr));
+                        VerifyTag(tags, "foo", $"wow {statusCodeStr}");
 
                         if (statusCodeStr != "200")
                         {
@@ -437,7 +438,22 @@ namespace System.Net.Http.Functional.Tests
                         async uri =>
                         {
                             currentUri = uri;
-                            await GetAsync(useVersion, testAsync, uri);
+                            using HttpClient client = new(CreateHttpClientHandler(allowAllCertificates: true));
+                            using HttpRequestMessage request1 = CreateRequest(HttpMethod.Get, uri, Version.Parse(useVersion), exactVersion: true);
+
+                            // Enrich:
+                            request1.DiagnosticOptions.ActivityEnrichmentCallbacks.Add(ctx =>
+                            {
+                                Assert.Equal(request1, ctx.Request);
+                                ctx.Activity.AddTag("foo", $"wow {(int)ctx.Response.StatusCode}");
+                            });
+
+                            await client.SendAsync(bool.Parse(testAsync), request1);
+
+                            using HttpRequestMessage request2 = CreateRequest(HttpMethod.Get, uri, Version.Parse(useVersion), exactVersion: true);
+                            request2.DiagnosticOptions.ActivityFilters.Add(r => false); // filter out the second request
+                            await client.SendAsync(bool.Parse(testAsync), request2);
+
                             await activityStopTcs.Task;
                         },
                         async server =>
@@ -445,6 +461,8 @@ namespace System.Net.Http.Functional.Tests
                             HttpRequestData requestData = await server.AcceptConnectionSendResponseAndCloseAsync(
                                 statusCode: (HttpStatusCode)int.Parse(statusCodeStr));
                             AssertHeadersAreInjected(requestData, parentActivity);
+
+                            await server.AcceptConnectionSendResponseAndCloseAsync(statusCode: (HttpStatusCode)int.Parse(statusCodeStr));
                         });
                 }
             }, UseVersion.ToString(), TestAsync.ToString(), statusCode.ToString()).Dispose();
