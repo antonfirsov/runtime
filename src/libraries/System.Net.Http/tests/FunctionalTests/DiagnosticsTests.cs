@@ -439,21 +439,16 @@ namespace System.Net.Http.Functional.Tests
                         {
                             currentUri = uri;
                             using HttpClient client = new(CreateHttpClientHandler(allowAllCertificates: true));
-                            using HttpRequestMessage request1 = CreateRequest(HttpMethod.Get, uri, Version.Parse(useVersion), exactVersion: true);
+                            using HttpRequestMessage request = CreateRequest(HttpMethod.Get, uri, Version.Parse(useVersion), exactVersion: true);
 
                             // Enrich:
-                            request1.DiagnosticOptions.ActivityEnrichmentCallbacks.Add(ctx =>
+                            request.DiagnosticOptions.ActivityEnrichmentCallbacks.Add(ctx =>
                             {
-                                Assert.Equal(request1, ctx.Request);
+                                Assert.Equal(request, ctx.Request);
                                 ctx.Activity.AddTag("foo", $"wow {(int)ctx.Response.StatusCode}");
                             });
 
-                            await client.SendAsync(bool.Parse(testAsync), request1);
-
-                            using HttpRequestMessage request2 = CreateRequest(HttpMethod.Get, uri, Version.Parse(useVersion), exactVersion: true);
-                            request2.DiagnosticOptions.ActivityFilters.Add(r => false); // filter out the second request
-                            await client.SendAsync(bool.Parse(testAsync), request2);
-
+                            await client.SendAsync(bool.Parse(testAsync), request);
                             await activityStopTcs.Task;
                         },
                         async server =>
@@ -461,11 +456,77 @@ namespace System.Net.Http.Functional.Tests
                             HttpRequestData requestData = await server.AcceptConnectionSendResponseAndCloseAsync(
                                 statusCode: (HttpStatusCode)int.Parse(statusCodeStr));
                             AssertHeadersAreInjected(requestData, parentActivity);
-
-                            await server.AcceptConnectionSendResponseAndCloseAsync(statusCode: (HttpStatusCode)int.Parse(statusCodeStr));
                         });
                 }
             }, UseVersion.ToString(), TestAsync.ToString(), statusCode.ToString()).Dispose();
+        }
+
+        [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task SendAsync_UriRedaction(bool redact)
+        {
+            await RemoteExecutor.Invoke(RunTest, UseVersion.ToString(), TestAsync.ToString(), redact.ToString()).DisposeAsync();
+            //await RunTest(UseVersion.ToString(), TestAsync.ToString(), redact.ToString());
+
+            static async Task RunTest(string useVersion, string testAsync, string redactStr)
+            {
+                TaskCompletionSource activityStopTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                string? expectedUri = null;
+
+                var diagnosticListenerObserver = new FakeDiagnosticListenerObserver(kvp =>
+                {
+                    Assert.NotNull(expectedUri);
+
+                    if (!kvp.Key.StartsWith("System.Net.Http.HttpRequestOut"))
+                    {
+                        return;
+                    }
+                    Activity activity = Activity.Current;
+                    Assert.NotNull(activity);
+                    IEnumerable<KeyValuePair<string, object?>> tags = activity.TagObjects;
+
+                    VerifyTag(activity.TagObjects, "url.full", expectedUri);
+                    if (kvp.Key.EndsWith(".Stop"))
+                    {
+                        activityStopTcs.SetResult();
+                    }
+                });
+
+                using (DiagnosticListener.AllListeners.Subscribe(diagnosticListenerObserver))
+                {
+                    diagnosticListenerObserver.Enable(s => s.Contains("HttpRequestOut"));
+
+                    await GetFactoryForVersion(useVersion).CreateClientAndServerAsync(
+                        async uri =>
+                        {
+                            Uri uriWithQueryString = new Uri($"{uri}?a=1&b=2");
+
+                            expectedUri = uriWithQueryString.ToString();
+
+                            using HttpClient client = new(CreateHttpClientHandler(allowAllCertificates: true));
+                            using HttpRequestMessage request = CreateRequest(HttpMethod.Get, uriWithQueryString, Version.Parse(useVersion), exactVersion: true);
+
+                            if (bool.Parse(redactStr))
+                            {
+                                request.DiagnosticOptions.UriRedactorCallback = r => $"{r.RequestUri.Scheme}://{r.RequestUri.Authority}/REDACTED";
+                                expectedUri = $"{uri.Scheme}://{uri.Authority}/REDACTED";
+                            }
+                            else
+                            {
+                                expectedUri = $"{uri.Scheme}://{uri.Authority}/";
+                            }
+
+                            await client.SendAsync(bool.Parse(testAsync), request);
+
+                            await activityStopTcs.Task;
+                        },
+                        async server =>
+                        {
+                            await server.AcceptConnectionSendResponseAndCloseAsync();
+                        });
+                }
+            }
         }
 
         protected static void VerifyTag<T>(KeyValuePair<string, object?>[] tags, string name, T value)

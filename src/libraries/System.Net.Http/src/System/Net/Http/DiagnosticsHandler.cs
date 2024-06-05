@@ -134,6 +134,9 @@ namespace System.Net.Http
                 {
                     activity.SetTag("server.address", requestUri.Host);
                     activity.SetTag("server.port", requestUri.Port);
+
+                    string uriValue = (request._diagnosticOptions?.UriRedactorCallback as Func<HttpRequestMessage, string>)?.Invoke(request) ?? DefaultUriRedact(requestUri);
+                    activity.SetTag("url.full", uriValue);
                 }
 
                 KeyValuePair<string, object?> methodTag = DiagnosticsHelper.GetMethodTag(request.Method);
@@ -243,6 +246,8 @@ namespace System.Net.Http
                             taskStatus));
                 }
             }
+
+            static string DefaultUriRedact(Uri uri) => $"{uri.Scheme}://{uri.Authority}{uri.LocalPath}";
         }
 
         protected override void Dispose(bool disposing)
