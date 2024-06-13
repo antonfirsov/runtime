@@ -20,12 +20,12 @@ namespace System.Net.NameResolution.Tests
         [InlineData(true)]
         public async Task ResolveValidHostName_ActivityRecorded(bool createParentActivity)
         {
-            //RemoteExecutor.Invoke(static async (createParentActivity) =>
-            //{
+            await RemoteExecutor.Invoke(static async (createParentActivity) =>
+            {
                 const string ValidHostName = "localhost";
                 using var recorder = new ActivityRecorder(ActivitySourceName, ActivityName)
                 {
-                    ExpectedParent = /*bool.Parse(createParentActivity)*/ createParentActivity ? new Activity("parent").Start() : null
+                    ExpectedParent = bool.Parse(createParentActivity) ? new Activity("parent").Start() : null
                 };
                 
                 await Dns.GetHostEntryAsync(ValidHostName);
@@ -46,17 +46,17 @@ namespace System.Net.NameResolution.Tests
                 Dns.EndGetHostAddresses(Dns.BeginGetHostAddresses(ValidHostName, null, null));
                 recorder.VerifyActivityRecorded(times: 6);
 
-            //}, createParentActivity.ToString()).Dispose();
+            }, createParentActivity.ToString()).DisposeAsync();
         }
 
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [InlineData(false)]
         [InlineData(true)]
-        public static void ResolveInvalidHostName_ActivityRecorded(bool createParentActivity)
+        public static async Task ResolveInvalidHostName_ActivityRecorded(bool createParentActivity)
         {
             const string InvalidHostName = $"invalid...example.com...{nameof(ResolveInvalidHostName_ActivityRecorded)}";
 
-            RemoteExecutor.Invoke(async (createParentActivity) =>
+            await RemoteExecutor.Invoke(async (createParentActivity) =>
             {
                 using var recorder = new ActivityRecorder(ActivitySourceName, ActivityName)
                 {
@@ -73,7 +73,7 @@ namespace System.Net.NameResolution.Tests
                 Assert.ThrowsAny<SocketException>(() => Dns.EndGetHostAddresses(Dns.BeginGetHostAddresses(InvalidHostName, null, null)));
 
                 recorder.VerifyActivityRecorded(times: 6);
-            }, createParentActivity.ToString()).Dispose();
+            }, createParentActivity.ToString()).DisposeAsync();
         }
     }
 }
