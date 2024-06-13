@@ -169,9 +169,9 @@ namespace System.Net.Sockets.Tests
         [OuterLoop]
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [MemberData(nameof(SocketMethods_Matrix_MemberData))]
-        public void EventSource_SocketConnectsLoopback_LogsConnectAcceptStartStop(string connectMethod, string acceptMethod)
+        public async Task EventSource_SocketConnectsLoopback_LogsConnectAcceptStartStop(string connectMethod, string acceptMethod)
         {
-            RemoteExecutor.Invoke(async (connectMethod, acceptMethod) =>
+            await RemoteExecutor.Invoke(async (connectMethod, acceptMethod) =>
             {
                 using var listener = new TestEventListener("System.Net.Sockets", EventLevel.Verbose, 0.1);
                 listener.AddActivityTracking();
@@ -211,7 +211,7 @@ namespace System.Net.Sockets.Tests
                 VerifyEvents(events, connect: true, expectedCount: 1);
                 VerifyEvents(events, connect: false, expectedCount: 1);
                 VerifyEventCounters(events, connectCount: 1, hasCurrentConnectCounter: true);
-            }, connectMethod, acceptMethod).Dispose();
+            }, connectMethod, acceptMethod).DisposeAsync();
         }
 
         [OuterLoop]
@@ -224,7 +224,7 @@ namespace System.Net.Sockets.Tests
                 throw new SkipTestException("The remote server is not reachable");
             }
 
-            RemoteExecutor.Invoke(async (connectMethod, useDnsEndPointString) =>
+            await RemoteExecutor.Invoke(async (connectMethod, useDnsEndPointString) =>
             {
                 using var listener = new TestEventListener("System.Net.Sockets", EventLevel.Verbose, 0.1);
                 listener.AddActivityTracking();
@@ -246,14 +246,14 @@ namespace System.Net.Sockets.Tests
 
                 VerifyEvents(events, connect: true, expectedCount: 1);
                 VerifyEventCounters(events, connectCount: 1, connectOnly: true);
-            }, connectMethod, useDnsEndPoint.ToString()).Dispose();
+            }, connectMethod, useDnsEndPoint.ToString()).DisposeAsync();
         }
 
         [OuterLoop]
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [SkipOnPlatform(TestPlatforms.OSX | TestPlatforms.FreeBSD, "Same as Connect.ConnectGetsCanceledByDispose")]
         [MemberData(nameof(SocketMethods_WithBools_MemberData))]
-        public void EventSource_SocketConnectFailure_LogsConnectFailed(string connectMethod, bool useDnsEndPoint)
+        public async Task EventSource_SocketConnectFailure_LogsConnectFailed(string connectMethod, bool useDnsEndPoint)
         {
             // Skip test on Linux kernels that may have a regression that was fixed in 6.6.
             // See TcpReceiveSendGetsCanceledByDispose test for additional information.
@@ -262,7 +262,7 @@ namespace System.Net.Sockets.Tests
                 return;
             }
 
-            RemoteExecutor.Invoke(async (connectMethod, useDnsEndPointString) =>
+            await RemoteExecutor.Invoke(async (connectMethod, useDnsEndPointString) =>
             {
                 EndPoint endPoint = await GetRemoteEndPointAsync(useDnsEndPointString, port: 12345);
 
@@ -298,15 +298,15 @@ namespace System.Net.Sockets.Tests
                 int? expectedCount = bool.Parse(useDnsEndPointString) ? null : 1;
                 VerifyEvents(events, connect: true, expectedCount, shouldHaveFailures: true);
                 VerifyEventCounters(events, connectCount: 0);
-            }, connectMethod, useDnsEndPoint.ToString()).Dispose();
+            }, connectMethod, useDnsEndPoint.ToString()).DisposeAsync();
         }
 
         [OuterLoop]
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [MemberData(nameof(SocketMethods_MemberData))]
-        public void EventSource_SocketAcceptFailure_LogsAcceptFailed(string acceptMethod)
+        public async Task EventSource_SocketAcceptFailure_LogsAcceptFailed(string acceptMethod)
         {
-            RemoteExecutor.Invoke(async acceptMethod =>
+            await RemoteExecutor.Invoke(async acceptMethod =>
             {
                 using var listener = new TestEventListener("System.Net.Sockets", EventLevel.Verbose, 0.1);
                 listener.AddActivityTracking();
@@ -333,7 +333,7 @@ namespace System.Net.Sockets.Tests
 
                 VerifyEvents(events, connect: false, expectedCount: 1, shouldHaveFailures: true);
                 VerifyEventCounters(events, connectCount: 0);
-            }, acceptMethod).Dispose();
+            }, acceptMethod).DisposeAsync();
         }
 
         [OuterLoop]
@@ -342,9 +342,9 @@ namespace System.Net.Sockets.Tests
         [InlineData("Task", false)]
         [InlineData("Eap", true)]
         [InlineData("Eap", false)]
-        public void EventSource_ConnectAsyncCanceled_LogsConnectFailed(string connectMethod, bool useDnsEndPoint)
+        public async Task EventSource_ConnectAsyncCanceled_LogsConnectFailed(string connectMethod, bool useDnsEndPoint)
         {
-            RemoteExecutor.Invoke(async (connectMethod, useDnsEndPointString) =>
+            await RemoteExecutor.Invoke(async (connectMethod, useDnsEndPointString) =>
             {
                 EndPoint endPoint = await GetRemoteEndPointAsync(useDnsEndPointString, port: 12345);
 
@@ -398,14 +398,14 @@ namespace System.Net.Sockets.Tests
                 int? expectedCount = bool.Parse(useDnsEndPointString) ? null : 1;
                 VerifyEvents(events, connect: true, expectedCount, shouldHaveFailures: true);
                 VerifyEventCounters(events, connectCount: 0);
-            }, connectMethod, useDnsEndPoint.ToString()).Dispose();
+            }, connectMethod, useDnsEndPoint.ToString()).DisposeAsync();
         }
 
         [OuterLoop]
         [ConditionalFact(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
-        public void EventSource_EventsRaisedAsExpected()
+        public async Task EventSource_EventsRaisedAsExpected()
         {
-            RemoteExecutor.Invoke(async () =>
+            await RemoteExecutor.Invoke(async () =>
             {
                 using (var listener = new TestEventListener("System.Net.Sockets", EventLevel.Verbose, 0.1))
                 {
@@ -440,7 +440,7 @@ namespace System.Net.Sockets.Tests
                     VerifyEvents(events, connect: true, expectedCount: 10);
                     VerifyEventCounters(events, connectCount: 10, shouldHaveTransferredBytes: true, shouldHaveDatagrams: true);
                 }
-            }).Dispose();
+            }).DisposeAsync();
         }
 
         private static async Task WaitForEventAsync(ConcurrentQueue<(EventWrittenEventArgs Event, Guid ActivityId)> events, string name)

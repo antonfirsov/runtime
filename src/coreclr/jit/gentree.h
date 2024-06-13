@@ -5610,7 +5610,7 @@ struct GenTreeCall final : public GenTree
             return WellKnownArg::VirtualStubCell;
         }
 
-#if defined(TARGET_ARMARCH) || defined(TARGET_RISCV64)
+#if defined(TARGET_ARMARCH) || defined(TARGET_RISCV64) || defined(TARGET_LOONGARCH64)
         // For ARM architectures, we always use an indirection cell for R2R calls.
         if (IsR2RRelativeIndir() && !IsDelegateInvoke())
         {
@@ -5952,24 +5952,30 @@ struct GenTreeIntrinsic : public GenTreeOp
     NamedIntrinsic        gtIntrinsicName;
     CORINFO_METHOD_HANDLE gtMethodHandle; // Method handle of the method which is treated as an intrinsic.
 
-#ifdef FEATURE_READYTORUN
+#if defined(FEATURE_READYTORUN)
     // Call target lookup info for method call from a Ready To Run module
     CORINFO_CONST_LOOKUP gtEntryPoint;
-#endif
+#endif // FEATURE_READYTORUN
 
-    GenTreeIntrinsic(var_types type, GenTree* op1, NamedIntrinsic intrinsicName, CORINFO_METHOD_HANDLE methodHandle)
+    GenTreeIntrinsic(var_types                          type,
+                     GenTree*                           op1,
+                     NamedIntrinsic                     intrinsicName,
+                     CORINFO_METHOD_HANDLE methodHandle R2RARG(CORINFO_CONST_LOOKUP entryPoint))
         : GenTreeOp(GT_INTRINSIC, type, op1, nullptr)
         , gtIntrinsicName(intrinsicName)
-        , gtMethodHandle(methodHandle)
+        , gtMethodHandle(methodHandle) R2RARG(gtEntryPoint(entryPoint))
     {
         assert(intrinsicName != NI_Illegal);
     }
 
-    GenTreeIntrinsic(
-        var_types type, GenTree* op1, GenTree* op2, NamedIntrinsic intrinsicName, CORINFO_METHOD_HANDLE methodHandle)
+    GenTreeIntrinsic(var_types                          type,
+                     GenTree*                           op1,
+                     GenTree*                           op2,
+                     NamedIntrinsic                     intrinsicName,
+                     CORINFO_METHOD_HANDLE methodHandle R2RARG(CORINFO_CONST_LOOKUP entryPoint))
         : GenTreeOp(GT_INTRINSIC, type, op1, op2)
         , gtIntrinsicName(intrinsicName)
-        , gtMethodHandle(methodHandle)
+        , gtMethodHandle(methodHandle) R2RARG(gtEntryPoint(entryPoint))
     {
         assert(intrinsicName != NI_Illegal);
     }
@@ -6264,7 +6270,7 @@ public:
         return gtMethodHandle;
     }
 
-    void SetMethodHandle(Compiler* comp, CORINFO_METHOD_HANDLE methodHandle);
+    void SetMethodHandle(Compiler* comp, CORINFO_METHOD_HANDLE methodHandle R2RARG(CORINFO_CONST_LOOKUP entryPoint));
 
 #if defined(FEATURE_READYTORUN)
     CORINFO_CONST_LOOKUP GetEntryPoint() const
@@ -6272,8 +6278,6 @@ public:
         assert(IsUserCall());
         return *gtEntryPoint;
     }
-
-    void SetEntryPoint(Compiler* comp, CORINFO_CONST_LOOKUP entryPoint);
 #endif // FEATURE_READYTORUN
 
     //-----------------------------------------------------------
@@ -6501,6 +6505,8 @@ struct GenTreeHWIntrinsic : public GenTreeJitIntrinsic
     }
 #endif
 
+    static bool OperIsBitwiseHWIntrinsic(genTreeOps oper);
+
     bool OperIsMemoryLoad(GenTree** pAddr = nullptr) const;
     bool OperIsMemoryStore(GenTree** pAddr = nullptr) const;
     bool OperIsMemoryLoadOrStore() const;
@@ -6514,7 +6520,7 @@ struct GenTreeHWIntrinsic : public GenTreeJitIntrinsic
     bool OperIsConvertMaskToVector() const
     {
 #if defined(TARGET_XARCH)
-        return GetHWIntrinsicId() == NI_AVX512F_ConvertMaskToVector;
+        return GetHWIntrinsicId() == NI_EVEX_ConvertMaskToVector;
 #elif defined(TARGET_ARM64)
         return GetHWIntrinsicId() == NI_Sve_ConvertMaskToVector;
 #else
@@ -6525,7 +6531,7 @@ struct GenTreeHWIntrinsic : public GenTreeJitIntrinsic
     bool OperIsConvertVectorToMask() const
     {
 #if defined(TARGET_XARCH)
-        return GetHWIntrinsicId() == NI_AVX512F_ConvertVectorToMask;
+        return GetHWIntrinsicId() == NI_EVEX_ConvertVectorToMask;
 #elif defined(TARGET_ARM64)
         return GetHWIntrinsicId() == NI_Sve_ConvertVectorToMask;
 #else
