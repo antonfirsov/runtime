@@ -1113,8 +1113,7 @@ namespace System.Net.Http.Functional.Tests
         public async Task SendAsync_ActivityIsCreatedIfRequested(bool currentActivitySet, bool? diagnosticListenerActivityEnabled, bool? activitySourceCreatesActivity)
         {
             string parameters = $"{currentActivitySet},{diagnosticListenerActivityEnabled},{activitySourceCreatesActivity}";
-
-            await RemoteExecutor.Invoke(async (useVersion, testAsync, parametersString) =>
+            await RemoteExecutor.Invoke(static async (useVersion, testAsync, parametersString) =>
             {
                 bool?[] parameters = parametersString.Split(',').Select(p => p.Length == 0 ? (bool?)null : bool.Parse(p)).ToArray();
                 bool currentActivitySet = parameters[0].Value;
@@ -1126,7 +1125,7 @@ namespace System.Net.Http.Functional.Tests
                 {
                     ActivitySource.AddActivityListener(new ActivityListener
                     {
-                        ShouldListenTo = _ => true,
+                        ShouldListenTo = s => s.Name is "System.Net.Http" or "",
                         Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
                         {
                             madeASamplingDecision = true;
@@ -1155,7 +1154,7 @@ namespace System.Net.Http.Functional.Tests
                     // (when a DiagnosticListener forced one to be created)
                     ActivitySource.AddActivityListener(new ActivityListener
                     {
-                        ShouldListenTo = _ => true,
+                        ShouldListenTo = s => s.Name is "System.Net.Http" or "",
                         ActivityStarted = created =>
                         {
                             Assert.Null(parent);
@@ -1194,8 +1193,8 @@ namespace System.Net.Http.Functional.Tests
 
                 Assert.Equal(activitySourceCreatesActivity.HasValue, madeASamplingDecision);
                 Assert.Equal(diagnosticListenerActivityEnabled.HasValue, listenerCallbackWasCalled);
-            }, UseVersion.ToString(), TestAsync.ToString(), parameters).DisposeAsync();
-        }
+        }, UseVersion.ToString(), TestAsync.ToString(), parameters).DisposeAsync();
+    }
 
         private static T GetProperty<T>(object obj, string propertyName)
         {
