@@ -383,9 +383,9 @@ namespace System.Net.Http.Functional.Tests
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [InlineData(false)]
         [InlineData(true)]
-        public void SendAsync_Success_ConnectionActivityRecordedWithChildren(bool useTls)
+        public async Task SendAsync_Success_ConnectionActivityRecordedWithChildren(bool useTls)
         {
-            RemoteExecutor.Invoke(RunTest, UseVersion.ToString(), TestAsync.ToString(), useTls.ToString()).Dispose();
+            await RemoteExecutor.Invoke(RunTest, UseVersion.ToString(), TestAsync.ToString(), useTls.ToString()).DisposeAsync();
             static async Task RunTest(string useVersion, string testAsync, string useTlsString)
             {
                 bool useTls = bool.Parse(useTlsString);
@@ -482,9 +482,9 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [ConditionalFact(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
-        public void SendAsync_ConnectionFailure_ConnectionActivityRecorded()
+        public async Task SendAsync_ConnectionFailure_ConnectionActivityRecorded()
         {
-            RemoteExecutor.Invoke(RunTest, UseVersion.ToString(), TestAsync.ToString()).Dispose();
+            await RemoteExecutor.Invoke(RunTest, UseVersion.ToString(), TestAsync.ToString()).DisposeAsync();
             static async Task RunTest(string useVersion, string testAsync)
             {
                 using HttpClientHandler handler = CreateHttpClientHandler(allowAllCertificates: true);

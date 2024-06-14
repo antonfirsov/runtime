@@ -33,9 +33,9 @@ namespace System.Net.Security.Tests
 
         [ConditionalFact(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [SkipOnPlatform(TestPlatforms.iOS | TestPlatforms.tvOS, "X509 certificate store is not supported on iOS or tvOS.")] // Match SslStream_StreamToStream_Authentication_Success
-        public void SuccessfulHandshake_ActivityRecorded()
+        public async Task SuccessfulHandshake_ActivityRecorded()
         {
-            RemoteExecutor.Invoke(async () =>
+            await RemoteExecutor.Invoke(async () =>
             {
                 using ActivityRecorder recorder = new ActivityRecorder(ActivitySourceName, ActivityName);
 
@@ -43,13 +43,13 @@ namespace System.Net.Security.Tests
                 await test.SslStream_StreamToStream_Authentication_Success();
 
                 recorder.VerifyActivityRecorded(2); // client + server
-            }).Dispose();
+            }).DisposeAsync();
         }
 
         [ConditionalFact(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
-        public void FailingHandshake_ActivityRecorded()
+        public async Task FailingHandshake_ActivityRecorded()
         {
-            RemoteExecutor.Invoke(async () =>
+            await RemoteExecutor.Invoke(async () =>
             {
                 using ActivityRecorder recorder = new ActivityRecorder(ActivitySourceName, ActivityName);
 
@@ -57,7 +57,7 @@ namespace System.Net.Security.Tests
                 await test.SslStream_ServerLocalCertificateSelectionCallbackReturnsNull_Throw();
 
                 recorder.VerifyActivityRecorded(2); // client + server
-            }).Dispose();
+            }).DisposeAsync();
         }
 
         [OuterLoop]

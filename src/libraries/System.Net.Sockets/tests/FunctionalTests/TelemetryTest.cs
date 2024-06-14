@@ -111,9 +111,9 @@ namespace System.Net.Sockets.Tests
 
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [MemberData(nameof(SocketMethods_MemberData))]
-        public void Connect_Success_ActivityRecorded(string connectMethod)
+        public async Task Connect_Success_ActivityRecorded(string connectMethod)
         {
-            RemoteExecutor.Invoke(async connectMethod =>
+            await RemoteExecutor.Invoke(async connectMethod =>
             {
                 using Socket server = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 server.BindToAnonymousPort(IPAddress.Loopback);
@@ -135,15 +135,15 @@ namespace System.Net.Sockets.Tests
                 recorder.VerifyActivityRecorded(1);
                 Assert.Same(parent, Activity.Current);
                 parent.Stop();
-            }, connectMethod).Dispose();
+            }, connectMethod).DisposeAsync();
         }
 
-        // TODO: [OuterLoop("Connection failure takes long on Windows.")]
+        [OuterLoop("Connection failure takes long on Windows.")]
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [MemberData(nameof(SocketMethods_MemberData))]
-        public void Connect_Failure_ActivityRecorded(string connectMethod)
+        public async Task Connect_Failure_ActivityRecorded(string connectMethod)
         {
-            RemoteExecutor.Invoke(async connectMethod =>
+            await RemoteExecutor.Invoke(async connectMethod =>
             {
                 using Socket notListening = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
                 notListening.BindToAnonymousPort(IPAddress.Loopback);
@@ -163,7 +163,7 @@ namespace System.Net.Sockets.Tests
                 recorder.VerifyActivityRecorded(1);
                 Assert.Same(parent, Activity.Current);
                 parent.Stop();
-            }, connectMethod).Dispose();
+            }, connectMethod).DisposeAsync();
         }
 
         [OuterLoop]
