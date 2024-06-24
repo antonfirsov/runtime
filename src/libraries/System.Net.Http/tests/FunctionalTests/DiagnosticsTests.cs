@@ -475,7 +475,6 @@ namespace System.Net.Http.Functional.Tests
                         });
                     }, options: new GenericLoopbackOptions()
                     {
-                        Address = IPAddress.IPv6Loopback,
                         UseSsl = useTls
                     });
             }
