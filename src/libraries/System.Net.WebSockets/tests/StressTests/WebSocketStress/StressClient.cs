@@ -10,11 +10,13 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Net.WebSockets;
 
 namespace WebSocketStress;
 
 internal class StressClient
 {
+    private readonly WebSocketCreationOptions _options;
     private readonly StressResultAggregator _aggregator;
     private readonly Stopwatch _stopwatch = new Stopwatch();
 
@@ -22,6 +24,13 @@ internal class StressClient
 
     public StressClient(Configuration config)
     {
+        _options = new WebSocketCreationOptions()
+        {
+            IsServer = false,
+            SubProtocol = null,
+            KeepAliveInterval = config.KeepAliveInterval
+        };
+
         _aggregator = new StressResultAggregator(config.MaxConnections);
     }
 
