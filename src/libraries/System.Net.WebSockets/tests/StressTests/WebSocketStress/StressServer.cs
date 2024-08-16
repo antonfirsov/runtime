@@ -127,9 +127,9 @@ internal class StressServer
             try
             {
                 chunk = serializer.Deserialize(buffer);
-                await serializer.SerializeAsync(sslStream, chunk.Value, token: token);
-                sslStream.WriteByte((byte)'\n');
-                await sslStream.FlushAsync(token);
+                await serializer.SerializeAsync(wsStream, chunk.Value, token: token);
+                wsStream.WriteByte((byte)'\n');
+                await wsStream.FlushAsync(token);
             }
             catch (DataMismatchException e)
             {
