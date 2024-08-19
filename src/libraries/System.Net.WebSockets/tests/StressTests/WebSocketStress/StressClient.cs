@@ -84,6 +84,7 @@ internal class StressClient
                     using WebSocket clientWebSocket = WebSocket.CreateFromStream(stream, _options);
                     using WsStream wsStream = new WsStream(clientWebSocket);
                     await HandleConnection(workerId, jobId, wsStream, random, connectionLifetime, cts.Token);
+                    //Console.WriteLine("*** Client CONN DONE ***");
                     _aggregator.RecordSuccess(workerId);
                 }
                 catch (OperationCanceledException) when (cts.IsCancellationRequested)
@@ -128,6 +129,8 @@ internal class StressClient
         }
     }
 
+    private static readonly byte[] s_endLine = [(byte)'\n'];
+
     private async Task HandleConnection(int workerId, long jobId, WsStream stream,  Random random, TimeSpan duration, CancellationToken token)
     {
         // token used for signaling cooperative cancellation; do not pass this to SslStream methods
@@ -138,10 +141,11 @@ internal class StressClient
         DateTime lastRead = DateTime.Now;
 
         await Utils.WhenAllThrowOnFirstException(token, Sender, Receiver, Monitor);
+        //await stream.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", token);
+
 
         async Task Sender(CancellationToken token)
         {
-            byte[] endLine = [(byte)'\n'];
             var serializer = new DataSegmentSerializer();
 
             while (!token.IsCancellationRequested && !connectionLifetimeToken.IsCancellationRequested)
@@ -152,8 +156,8 @@ internal class StressClient
                 try
                 {
                     await serializer.SerializeAsync(stream, chunk, random, token);
-                    await stream.WriteAsync(endLine, token);
-                    await stream.FlushAsync(token);
+                    await stream.WriteAsync(s_endLine, token);
+                    //await stream.FlushAsync(token);
                     Interlocked.Increment(ref messagesInFlight);
                     lastWrite = DateTime.Now;
                 }
@@ -164,7 +168,8 @@ internal class StressClient
             }
 
             // write an empty line to signal completion to the server
-            await stream.WriteAsync(endLine, token);
+            await stream.WriteAsync(s_endLine, token);
+            //await stream.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "l0l", token);
             //await stream.FlushAsync(token);
 
             /// Polls until number of in-flight messages falls below threshold
@@ -214,6 +219,7 @@ internal class StressClient
                     // server echoed back empty buffer sent by client,
                     // signal cancellation and complete the connection.
                     cts.Cancel();
+                    //Console.WriteLine("************** Client CANCEEEEEEEL ******************");
                     return Task.CompletedTask;
                 }
 

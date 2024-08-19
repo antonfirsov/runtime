@@ -9,7 +9,7 @@ using System.Text;
 
 namespace WebSocketStress;
 
-public static class Utils
+internal static class Utils
 {
     public static Random NextRandom(this Random random) => new Random(Seed: random.Next());
 
@@ -22,7 +22,7 @@ public static class Utils
     }
 
     // Adapted from https://devblogs.microsoft.com/dotnet/system-io-pipelines-high-performance-io-in-net/
-    public static async Task ReadLinesUsingPipesAsync(this Stream stream, Func<ReadOnlySequence<byte>, Task> callback, CancellationToken token = default, char separator = '\n')
+    public static async Task ReadLinesUsingPipesAsync(this WsStream stream, Func<ReadOnlySequence<byte>, Task> callback, CancellationToken token = default, char separator = '\n')
     {
         var pipe = new Pipe();
 
@@ -112,7 +112,7 @@ public static class Utils
 
 internal sealed class WsStream : Stream
 {
-    private readonly WebSocket _webSocket;
+    public WebSocket WebSocket { get; }
 
     public bool EndOfMessageReceived { get; private set; }
 
@@ -126,16 +126,22 @@ internal sealed class WsStream : Stream
 
     public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
-    public WsStream(WebSocket webSocket) => _webSocket = webSocket;
+    public WsStream(WebSocket webSocket) => WebSocket = webSocket;
 
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
-        => _webSocket.SendAsync(buffer, WebSocketMessageType.Binary, endOfMessage: false, cancellationToken);
+        => WebSocket.SendAsync(buffer, WebSocketMessageType.Binary, endOfMessage: false, cancellationToken);
 
+    public ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, bool endOfMessage, CancellationToken cancellationToken = default)
+        => WebSocket.SendAsync(buffer, WebSocketMessageType.Binary, endOfMessage, cancellationToken);
 
     public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        ValueWebSocketReceiveResult res = await _webSocket.ReceiveAsync(buffer, cancellationToken);
+        ValueWebSocketReceiveResult res = await WebSocket.ReceiveAsync(buffer, cancellationToken);
         EndOfMessageReceived = res.EndOfMessage;
+        if (res.MessageType == WebSocketMessageType.Close)
+        {
+            return 0;
+        }
         return res.Count;
     }
 
@@ -201,17 +207,18 @@ public class DataSegmentSerializer
 
     private readonly byte[] _buffer = new byte[32];
     private readonly char[] _charBuffer = new char[32];
+    private static readonly byte[] s_comma = [(byte)','];
 
     public async Task SerializeAsync(Stream stream, DataSegment segment, Random? random = null, CancellationToken token = default)
     {
         // length
         int numsize = s_encoding.GetBytes(segment.Length.ToString(), _buffer);
         await stream.WriteAsync(_buffer.AsMemory(0, numsize), token);
-        stream.WriteByte((byte)',');
+        await stream.WriteAsync(s_comma, token);
         // checksum
         numsize = s_encoding.GetBytes(segment.Checksum.ToString(), _buffer);
         await stream.WriteAsync(_buffer.AsMemory(0, numsize), token);
-        stream.WriteByte((byte)',');
+        await stream.WriteAsync(s_comma, token);
         // payload
         Memory<byte> source = segment.AsMemory();
         // write the entire segment outright if not given random instance

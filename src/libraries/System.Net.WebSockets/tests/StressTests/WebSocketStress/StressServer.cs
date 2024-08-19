@@ -99,6 +99,8 @@ internal class StressServer
         }
     }
 
+    private static readonly byte[] s_endLine = [(byte)'\n'];
+
     private async Task HandleConnection(WebSocket webSocket, WsStream wsStream, CancellationToken token)
     {
         using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -108,6 +110,7 @@ internal class StressServer
 
         _ = Task.Run(Monitor);
         await wsStream.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
+        //await wsStream.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
 
         async Task Callback(ReadOnlySequence<byte> buffer)
         {
@@ -117,8 +120,9 @@ internal class StressServer
             {
                 // got an empty line, client is closing the connection
                 // echo back the empty line and tear down.
-                wsStream.WriteByte((byte)'\n');
-                await wsStream.FlushAsync(token);
+                await wsStream.WriteAsync(s_endLine, token);
+                //await wsStream.FlushAsync(cancellationToken);
+                //Console.WriteLine("*** SERVERCANCEEEEEL ***");
                 cts.Cancel();
                 return;
             }
@@ -128,8 +132,8 @@ internal class StressServer
             {
                 chunk = serializer.Deserialize(buffer);
                 await serializer.SerializeAsync(wsStream, chunk.Value, token: token);
-                wsStream.WriteByte((byte)'\n');
-                await wsStream.FlushAsync(token);
+                await wsStream.WriteAsync(s_endLine, token);
+                //await wsStream.FlushAsync(cancellationToken);
             }
             catch (DataMismatchException e)
             {
