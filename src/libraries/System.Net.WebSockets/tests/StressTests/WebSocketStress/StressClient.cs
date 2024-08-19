@@ -1,24 +1,23 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System;
 using System.Collections.Concurrent;
 using System.Collections;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Net.WebSockets;
-
+using System.Net.Sockets;
+using System.Buffers;
+using System.Net.Security;
 namespace WebSocketStress;
 
 internal class StressClient
 {
+    private readonly Configuration _config;
     private readonly WebSocketCreationOptions _options;
     private readonly StressResultAggregator _aggregator;
     private readonly Stopwatch _stopwatch = new Stopwatch();
+    private readonly CancellationTokenSource _cts = new CancellationTokenSource();
 
     public long TotalErrorCount { get; private set; }
 
@@ -32,17 +31,220 @@ internal class StressClient
         };
 
         _aggregator = new StressResultAggregator(config.MaxConnections);
+        _config = config;
     }
 
-    public void Start()
-    {
-        _stopwatch.Start();
-    }
+    public Task Start() => Task.Run(StartCore);
 
     public Task InitializeAsync() => Task.CompletedTask;
 
     public Task StopAsync() => Task.CompletedTask;
 
+    private Task StartCore()
+    {
+        _stopwatch.Start();
+
+        // Spin up a thread dedicated to outputting stats for each defined interval
+        new Thread(() =>
+        {
+            while (!_cts.IsCancellationRequested)
+            {
+                Thread.Sleep(_config.DisplayInterval);
+                lock (Console.Out) { _aggregator.PrintCurrentResults(_stopwatch.Elapsed, showAggregatesOnly: false); }
+            }
+        })
+        { IsBackground = true }.Start();
+
+        IEnumerable<Task> workers = CreateWorkerSeeds().Select(x => RunSingleWorker(x.workerId, x.random));
+        return Task.WhenAll(workers);
+
+        async Task RunSingleWorker(int workerId, Random random)
+        {
+            StreamCounter counter = _aggregator.GetCounters(workerId);
+
+            for (long jobId = 0; !_cts.IsCancellationRequested; jobId++)
+            {
+                TimeSpan connectionLifetime = _config.MinConnectionLifetime + random.NextDouble() * (_config.MaxConnectionLifetime - _config.MinConnectionLifetime);
+                TimeSpan cancellationDelay =
+                    (random.NextBoolean(probability: _config.CancellationProbability)) ?
+                    connectionLifetime * random.NextDouble() : // cancel in a random interval within the lifetime
+                    connectionLifetime + TimeSpan.FromSeconds(10); // otherwise trigger cancellation 10 seconds after expected expiry
+
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+                cts.CancelAfter(cancellationDelay);
+
+                bool isTestCompleted = false;
+                using CancellationTokenRegistration _ = cts.Token.Register(CheckForStalledConnection);
+
+                try
+                {
+                    using Socket client = new Socket(_config.ServerEndpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                    await client.ConnectAsync(_config.ServerEndpoint, cts.Token);
+                    Stream stream = new CountingStream(new NetworkStream(client, ownsSocket: true), counter);
+                    using WebSocket clientWebSocket = WebSocket.CreateFromStream(stream, _options);
+                    using WsStream wsStream = new WsStream(clientWebSocket);
+                    await HandleConnection(workerId, jobId, wsStream, random, connectionLifetime, cts.Token);
+                    _aggregator.RecordSuccess(workerId);
+                }
+                catch (OperationCanceledException) when (cts.IsCancellationRequested)
+                {
+                    _aggregator.RecordCancellation(workerId);
+                }
+                catch (Exception e)
+                {
+                    _aggregator.RecordFailure(workerId, e);
+                }
+                finally
+                {
+                    isTestCompleted = true;
+                }
+
+                async void CheckForStalledConnection()
+                {
+                    await Task.Delay(10_000);
+                    if (!isTestCompleted)
+                    {
+                        lock (Console.Out)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine($"Worker #{workerId} test #{jobId} has stalled, terminating the stress app.");
+                            Console.WriteLine();
+                            Console.ResetColor();
+                        }
+                        Environment.Exit(1);
+                    }
+                }
+            }
+        }
+
+        IEnumerable<(int workerId, Random random)> CreateWorkerSeeds()
+        {
+            // deterministically generate random instance for each individual worker
+            Random random = new Random(_config.RandomSeed);
+            for (int workerId = 0; workerId < _config.MaxConnections; workerId++)
+            {
+                yield return (workerId, random.NextRandom());
+            }
+        }
+    }
+
+    private async Task HandleConnection(int workerId, long jobId, WsStream stream,  Random random, TimeSpan duration, CancellationToken token)
+    {
+        // token used for signaling cooperative cancellation; do not pass this to SslStream methods
+        using var connectionLifetimeToken = new CancellationTokenSource(duration);
+
+        long messagesInFlight = 0;
+        DateTime lastWrite = DateTime.Now;
+        DateTime lastRead = DateTime.Now;
+
+        await Utils.WhenAllThrowOnFirstException(token, Sender, Receiver, Monitor);
+
+        async Task Sender(CancellationToken token)
+        {
+            byte[] endLine = [(byte)'\n'];
+            var serializer = new DataSegmentSerializer();
+
+            while (!token.IsCancellationRequested && !connectionLifetimeToken.IsCancellationRequested)
+            {
+                await ApplyBackpressure();
+
+                DataSegment chunk = DataSegment.CreateRandom(random, _config.MaxBufferLength);
+                try
+                {
+                    await serializer.SerializeAsync(stream, chunk, random, token);
+                    await stream.WriteAsync(endLine, token);
+                    await stream.FlushAsync(token);
+                    Interlocked.Increment(ref messagesInFlight);
+                    lastWrite = DateTime.Now;
+                }
+                finally
+                {
+                    chunk.Return();
+                }
+            }
+
+            // write an empty line to signal completion to the server
+            await stream.WriteAsync(endLine, token);
+            //await stream.FlushAsync(token);
+
+            /// Polls until number of in-flight messages falls below threshold
+            async Task ApplyBackpressure()
+            {
+                if (Volatile.Read(ref messagesInFlight) > 5000)
+                {
+                    Stopwatch stopwatch = Stopwatch.StartNew();
+                    bool isLogged = false;
+
+                    while (!token.IsCancellationRequested && !connectionLifetimeToken.IsCancellationRequested && Volatile.Read(ref messagesInFlight) > 2000)
+                    {
+                        // only log if tx has been suspended for a while
+                        if (!isLogged && stopwatch.ElapsedMilliseconds >= 1000)
+                        {
+                            isLogged = true;
+                            lock (Console.Out)
+                            {
+                                Console.ForegroundColor = ConsoleColor.Yellow;
+                                Console.WriteLine($"worker #{workerId}: applying backpressure");
+                                Console.WriteLine();
+                                Console.ResetColor();
+                            }
+                        }
+
+                        await Task.Delay(20);
+                    }
+
+                    if (isLogged)
+                    {
+                        Console.WriteLine($"worker #{workerId}: resumed tx after {stopwatch.Elapsed}");
+                    }
+                }
+            }
+        }
+
+        async Task Receiver(CancellationToken token)
+        {
+            var serializer = new DataSegmentSerializer();
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
+            await stream.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
+
+            Task Callback(ReadOnlySequence<byte> buffer)
+            {
+                if (buffer.Length == 0 && connectionLifetimeToken.IsCancellationRequested)
+                {
+                    // server echoed back empty buffer sent by client,
+                    // signal cancellation and complete the connection.
+                    cts.Cancel();
+                    return Task.CompletedTask;
+                }
+
+                // deserialize to validate the checksum, then discard
+                DataSegment chunk = serializer.Deserialize(buffer);
+                chunk.Return();
+                Interlocked.Decrement(ref messagesInFlight);
+                lastRead = DateTime.Now;
+                return Task.CompletedTask;
+            }
+        }
+
+        async Task Monitor(CancellationToken token)
+        {
+            do
+            {
+                await Task.Delay(500);
+
+                if ((DateTime.Now - lastWrite) >= TimeSpan.FromSeconds(10))
+                {
+                    throw new Exception($"worker #{workerId} job #{jobId} has stopped writing bytes to server");
+                }
+
+                if ((DateTime.Now - lastRead) >= TimeSpan.FromSeconds(10))
+                {
+                    throw new Exception($"worker #{workerId} job #{jobId} has stopped receiving bytes from server");
+                }
+            }
+            while (!token.IsCancellationRequested && !connectionLifetimeToken.IsCancellationRequested);
+        }
+    }
 
     public void PrintFinalReport()
     {
@@ -257,6 +459,69 @@ public class StreamCounter
     public StreamCounter Clone() => new StreamCounter() { BytesRead = BytesRead, BytesWritten = BytesWritten };
 }
 
+public class CountingStream : Stream
+{
+    private readonly Stream _stream;
+    private readonly StreamCounter _counter;
+
+    public CountingStream(Stream stream, StreamCounter counters)
+    {
+        _stream = stream;
+        _counter = counters;
+    }
+
+    public override void Write(byte[] buffer, int offset, int count)
+    {
+        _stream.Write(buffer, offset, count);
+        Interlocked.Add(ref _counter.BytesWritten, count);
+    }
+
+    public override int Read(byte[] buffer, int offset, int count)
+    {
+        int read = _stream.Read(buffer, offset, count);
+        Interlocked.Add(ref _counter.BytesRead, read);
+        return read;
+    }
+
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        await _stream.WriteAsync(buffer, cancellationToken);
+        Interlocked.Add(ref _counter.BytesWritten, buffer.Length);
+    }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        int read = await _stream.ReadAsync(buffer, cancellationToken);
+        Interlocked.Add(ref _counter.BytesRead, read);
+        return read;
+    }
+
+    public override void WriteByte(byte value)
+    {
+        _stream.WriteByte(value);
+        Interlocked.Increment(ref _counter.BytesRead);
+    }
+
+    // route everything else to the inner stream
+
+    public override bool CanRead => _stream.CanRead;
+
+    public override bool CanSeek => _stream.CanSeek;
+
+    public override bool CanWrite => _stream.CanWrite;
+
+    public override long Length => _stream.Length;
+
+    public override long Position { get => _stream.Position; set => _stream.Position = value; }
+
+    public override void Flush() => _stream.Flush();
+
+    public override long Seek(long offset, SeekOrigin origin) => _stream.Seek(offset, origin);
+
+    public override void SetLength(long value) => _stream.SetLength(value);
+
+    public override void Close() => _stream.Close();
+}
 
 public static class HumanReadableByteSizeFormatter
 {

@@ -18,11 +18,11 @@ namespace WebSocketStress;
 internal class StressServer
 {
     private readonly Configuration _config;
-    private readonly Lazy<Task> _serverTask;
     private readonly WebSocketCreationOptions _options;
     private readonly CancellationTokenSource _cts = new CancellationTokenSource();
     public IPEndPoint ServerEndpoint => (IPEndPoint)_listener.LocalEndPoint!;
 
+    private Task? _serverTask;
     private Socket _listener;
 
     public StressServer(Configuration config)
@@ -43,12 +43,12 @@ internal class StressServer
         IPEndPoint ep = config.ServerEndpoint;
         _listener = new Socket(ep.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
         _listener.Bind(ep);
-        _serverTask = new Lazy<Task>(Task.Run(StartCore));
     }
 
-    public void Start()
+    public Task Start()
     {
-        
+        _serverTask = Task.Run(StartCore);
+        return _serverTask;
     }
 
     public Task StopAsync() => Task.CompletedTask;

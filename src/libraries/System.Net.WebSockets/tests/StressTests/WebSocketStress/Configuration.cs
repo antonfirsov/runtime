@@ -21,6 +21,9 @@ public class Configuration
     public TimeSpan KeepAliveInterval { get; set; }
     public bool LogServer { get; set; }
 
+    public TimeSpan MinConnectionLifetime { get; set; }
+    public TimeSpan MaxConnectionLifetime { get; set; }
+
     public static bool TryParseCli(string[] args, [NotNullWhen(true)] out Configuration? config)
     {
         var cmd = new RootCommand();
@@ -34,8 +37,8 @@ public class Configuration
         cmd.AddOption(new Option(["--display-interval", "-i"], "Client stats display interval, in seconds. Defaults to 5 seconds.") { Argument = new Argument<double>("seconds", 5) });
         cmd.AddOption(new Option(["--log-server", "-S"], "Print server logs to stdout."));
         cmd.AddOption(new Option(["--seed", "-s"], "Seed for generating pseudo-random parameters. Also depends on the -n argument.") { Argument = new Argument<int>("seed", (new Random().Next())) });
-        cmd.AddOption(new Option(["--keep-alive-timeout", "-k", "Keep alive timeout in milliseconds."]) { Argument = new Argument<double?>("ms", null)} );
-        cmd.AddOption(new Option(["--keep-alive-interval", "-K", "Keep alive interval in milliseconds."]) { Argument = new Argument<double?>("ms", null) });
+        cmd.AddOption(new Option(["--keep-alive-timeout", "-k"], "Keep alive timeout in milliseconds.") { Argument = new Argument<double?>("ms", null)} );
+        cmd.AddOption(new Option(["--keep-alive-interval", "-K"], "Keep alive interval in milliseconds.") { Argument = new Argument<double?>("ms", null) });
 
         ParseResult parseResult = cmd.Parse(args);
         if (parseResult.Errors.Count > 0 || parseResult.HasOption("-h"))
@@ -62,6 +65,8 @@ public class Configuration
             RandomSeed = parseResult.ValueForOption<int>("-s"),
             KeepAliveTimeout = parseResult.ValueForOption<double?>("-k")?.Pipe(TimeSpan.FromMilliseconds),
             KeepAliveInterval = parseResult.ValueForOption<double>("-K").Pipe(TimeSpan.FromMilliseconds),
+            MinConnectionLifetime = TimeSpan.FromSeconds(parseResult.ValueForOption<double>("-l")),
+            MaxConnectionLifetime = TimeSpan.FromSeconds(parseResult.ValueForOption<double>("-L")),
         };
 
         return true;

@@ -4,6 +4,11 @@ using WebSocketStress;
 
 Console.WriteLine(typeof(object).Assembly.Location);
 
+if (Configuration.TryParseCli(args, out Configuration? config))
+{
+    await Run(config);
+}
+
 static async Task<ExitCode> Run(Configuration config)
 {
     if ((config.RunMode & RunMode.both) == 0)
@@ -14,22 +19,22 @@ static async Task<ExitCode> Run(Configuration config)
 
     static string GetAssemblyInfo(Assembly assembly) => $"{assembly.Location}, modified {new FileInfo(assembly.Location).LastWriteTime}";
 
-    Console.WriteLine("           .NET Core: " + GetAssemblyInfo(typeof(object).Assembly));
-    Console.WriteLine(" System.Net.Security: " + GetAssemblyInfo(typeof(System.Net.Security.SslStream).Assembly));
-    Console.WriteLine("     Server Endpoint: " + config.ServerEndpoint);
-    Console.WriteLine("         Concurrency: " + config.MaxConnections);
-    Console.WriteLine("  Max Execution Time: " + ((config.MaxExecutionTime != null) ? config.MaxExecutionTime.Value.ToString() : "infinite"));
-    Console.WriteLine("         Random Seed: " + config.RandomSeed);
-    Console.WriteLine("     Cancellation Pb: " + 100 * config.CancellationProbability + "%");
+    Console.WriteLine("             .NET Core: " + GetAssemblyInfo(typeof(object).Assembly));
+    Console.WriteLine(" System.Net.WebSockets: " + GetAssemblyInfo(typeof(System.Net.WebSockets.WebSocket).Assembly));
+    Console.WriteLine("       Server Endpoint: " + config.ServerEndpoint);
+    Console.WriteLine("           Concurrency: " + config.MaxConnections);
+    Console.WriteLine("    Max Execution Time: " + ((config.MaxExecutionTime != null) ? config.MaxExecutionTime.Value.ToString() : "infinite"));
+    Console.WriteLine("           Random Seed: " + config.RandomSeed);
+    Console.WriteLine("       Cancellation Pb: " + 100 * config.CancellationProbability + "%");
     Console.WriteLine();
 
     StressServer? server = null;
     if (config.RunMode.HasFlag(RunMode.server))
     {
         // Start the SSL web server in-proc.
-        Console.WriteLine($"Starting SSL server.");
+        Console.WriteLine($"Starting WebSocket server.");
         server = new StressServer(config);
-        server.Start();
+        _ = server.Start();
 
         Console.WriteLine($"Server listening to {server.ServerEndpoint}");
     }
@@ -44,7 +49,7 @@ static async Task<ExitCode> Run(Configuration config)
         client = new StressClient(config);
 
         await client.InitializeAsync();
-        client.Start();
+        _ = client.Start();
     }
 
     await WaitUntilMaxExecutionTimeElapsedOrKeyboardInterrupt(config.MaxExecutionTime);
