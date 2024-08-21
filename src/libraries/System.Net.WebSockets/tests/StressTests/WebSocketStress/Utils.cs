@@ -21,6 +21,9 @@ internal static class Utils
         return random.NextDouble() < probability;
     }
 
+    public static ValueTask WriteAsync(this WebSocket ws, Memory<byte> data, CancellationToken cancellationToken)
+        => ws.SendAsync(data, WebSocketMessageType.Binary, endOfMessage: false, cancellationToken);
+
     // Adapted from https://devblogs.microsoft.com/dotnet/system-io-pipelines-high-performance-io-in-net/
     public static async Task ReadLinesUsingPipesAsync(this WebSocket ws, Func<ReadOnlySequence<byte>, Task> callback, CancellationToken token = default, char separator = '\n')
     {
@@ -138,49 +141,6 @@ internal static class Utils
     }
 }
 
-
-internal sealed class WsStream : Stream
-{
-    public WebSocket WebSocket { get; }
-
-    public bool EndOfMessageReceived { get; private set; }
-
-    public override bool CanRead => true;
-
-    public override bool CanSeek => false;
-
-    public override bool CanWrite => true;
-
-    public override long Length => throw new NotSupportedException();
-
-    public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-
-    public WsStream(WebSocket webSocket) => WebSocket = webSocket;
-
-    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
-        => WebSocket.SendAsync(buffer, WebSocketMessageType.Binary, endOfMessage: false, cancellationToken);
-
-    public ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, bool endOfMessage, CancellationToken cancellationToken = default)
-        => WebSocket.SendAsync(buffer, WebSocketMessageType.Binary, endOfMessage, cancellationToken);
-
-    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-    {
-        ValueWebSocketReceiveResult res = await WebSocket.ReceiveAsync(buffer, cancellationToken);
-        EndOfMessageReceived = res.EndOfMessage;
-        if (res.MessageType == WebSocketMessageType.Close)
-        {
-            return 0;
-        }
-        return res.Count;
-    }
-
-    public override void Flush() => throw new NotImplementedException();
-    public override int Read(byte[] buffer, int offset, int count) => throw new NotImplementedException();
-    public override long Seek(long offset, SeekOrigin origin) => throw new NotImplementedException();
-    public override void SetLength(long value) => throw new NotImplementedException();
-    public override void Write(byte[] buffer, int offset, int count) => throw new NotImplementedException();
-}
-
 public struct DataSegment
 {
     private byte[] _buffer;
@@ -238,53 +198,32 @@ public class DataSegmentSerializer
     private readonly char[] _charBuffer = new char[32];
     private static readonly byte[] s_comma = [(byte)','];
 
-    public async Task SerializeAsync(Stream stream, DataSegment segment, Random? random = null, CancellationToken token = default)
+    public async Task SerializeAsync(WebSocket ws, DataSegment segment, Random? random = null, CancellationToken token = default)
     {
         // length
         int numsize = s_encoding.GetBytes(segment.Length.ToString(), _buffer);
-        await stream.WriteAsync(_buffer.AsMemory(0, numsize), token);
-        await stream.WriteAsync(s_comma, token);
+        await ws.WriteAsync(_buffer.AsMemory(0, numsize), token);
+        await ws.WriteAsync(s_comma, token);
         // checksum
         numsize = s_encoding.GetBytes(segment.Checksum.ToString(), _buffer);
-        await stream.WriteAsync(_buffer.AsMemory(0, numsize), token);
-        await stream.WriteAsync(s_comma, token);
+        await ws.WriteAsync(_buffer.AsMemory(0, numsize), token);
+        await ws.WriteAsync(s_comma, token);
         // payload
         Memory<byte> source = segment.AsMemory();
         // write the entire segment outright if not given random instance
         if (random == null)
         {
-            await stream.WriteAsync(source, token);
+            await ws.WriteAsync(source, token);
             return;
         }
+
         // randomize chunking otherwise
         while (source.Length > 0)
         {
-            if (random.NextBoolean(probability: 0.05))
-            {
-                stream.WriteByte(source.Span[0]);
-                source = source.Slice(1);
-            }
-            else
-            {
-                // TODO consider non-uniform distribution for chunk sizes
-                int chunkSize = random.Next(source.Length);
-                Memory<byte> chunk = source.Slice(0, chunkSize);
-                source = source.Slice(chunkSize);
-
-                if (random.NextBoolean(probability: 0.9))
-                {
-                    await stream.WriteAsync(chunk, token);
-                }
-                else
-                {
-                    stream.Write(chunk.Span);
-                }
-            }
-
-            if (random.NextBoolean(probability: 0.3))
-            {
-                await stream.FlushAsync(token);
-            }
+            int chunkSize = random.Next(source.Length);
+            Memory<byte> chunk = source.Slice(0, chunkSize);
+            source = source.Slice(chunkSize);
+            await ws.WriteAsync(chunk, token);
 
             // randomized delay
             if (random.NextBoolean(probability: 0.05))

@@ -75,8 +75,7 @@ internal class StressServer
                 {
                     using Socket handlerSocket = await _listener.AcceptAsync(_cts.Token);
                     using WebSocket serverWebSocket = WebSocket.CreateFromStream(new NetworkStream(handlerSocket, ownsSocket: true), _options);
-                    using WsStream wsStream = new WsStream(serverWebSocket);
-                    await HandleConnection(serverWebSocket, wsStream, _cts.Token);
+                    await HandleConnection(serverWebSocket, _cts.Token);
                 }
                 catch (OperationCanceledException) when (_cts.IsCancellationRequested)
                 {
@@ -101,7 +100,7 @@ internal class StressServer
 
     private static readonly byte[] s_endLine = [(byte)'\n'];
 
-    private async Task HandleConnection(WebSocket webSocket, WsStream wsStream, CancellationToken token)
+    private async Task HandleConnection(WebSocket ws, CancellationToken token)
     {
         using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token);
         DateTime lastReadTime = DateTime.Now;
@@ -109,7 +108,7 @@ internal class StressServer
         var serializer = new DataSegmentSerializer();
 
         _ = Task.Run(Monitor);
-        await wsStream.WebSocket.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
+        await ws.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
         //await wsStream.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
 
         async Task Callback(ReadOnlySequence<byte> buffer)
@@ -120,7 +119,7 @@ internal class StressServer
             {
                 // got an empty line, client is closing the connection
                 // echo back the empty line and tear down.
-                await wsStream.WriteAsync(s_endLine, token);
+                await ws.WriteAsync(s_endLine, token);
                 //await wsStream.FlushAsync(cancellationToken);
                 //Console.WriteLine("*** SERVERCANCEEEEEL ***");
                 //cts.Cancel();
@@ -131,8 +130,8 @@ internal class StressServer
             try
             {
                 chunk = serializer.Deserialize(buffer);
-                await serializer.SerializeAsync(wsStream, chunk.Value, token: token);
-                await wsStream.WriteAsync(s_endLine, token);
+                await serializer.SerializeAsync(ws, chunk.Value, token: token);
+                await ws.WriteAsync(s_endLine, token);
                 //await wsStream.FlushAsync(cancellationToken);
             }
             catch (DataMismatchException e)
