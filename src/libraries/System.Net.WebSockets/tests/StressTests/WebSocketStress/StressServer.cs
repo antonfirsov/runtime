@@ -123,7 +123,7 @@ internal class StressServer
                 await wsStream.WriteAsync(s_endLine, token);
                 //await wsStream.FlushAsync(cancellationToken);
                 //Console.WriteLine("*** SERVERCANCEEEEEL ***");
-                cts.Cancel();
+                //cts.Cancel();
                 return;
             }
 

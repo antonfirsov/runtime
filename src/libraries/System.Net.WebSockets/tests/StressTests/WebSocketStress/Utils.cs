@@ -39,7 +39,8 @@ internal static class Utils
         {
             try
             {
-                await stream.CopyToAsync(pipe.Writer, token);
+                //await stream.CopyToAsync(pipe.Writer, token);
+                await CopyToPipeWriterAsync(stream, pipe.Writer, token);
             }
             catch (Exception e)
             {
@@ -71,6 +72,34 @@ internal static class Utils
                 while (position != null);
 
                 pipe.Reader.AdvanceTo(buffer.Start, buffer.End);
+
+                if (result.IsCompleted)
+                {
+                    break;
+                }
+            }
+        }
+
+        static async Task CopyToPipeWriterAsync(Stream source, PipeWriter writer, CancellationToken cancellationToken = default)
+        {
+            while (true)
+            {
+                Memory<byte> buffer = writer.GetMemory();
+                int read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+
+                if (read == 0)
+                {
+                    break;
+                }
+
+                writer.Advance(read);
+
+                FlushResult result = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+
+                if (result.IsCanceled)
+                {
+                    throw new OperationCanceledException("Flush cancelled.");
+                }
 
                 if (result.IsCompleted)
                 {
