@@ -22,7 +22,7 @@ internal static class Utils
     }
 
     // Adapted from https://devblogs.microsoft.com/dotnet/system-io-pipelines-high-performance-io-in-net/
-    public static async Task ReadLinesUsingPipesAsync(this WsStream stream, Func<ReadOnlySequence<byte>, Task> callback, CancellationToken token = default, char separator = '\n')
+    public static async Task ReadLinesUsingPipesAsync(this WebSocket ws, Func<ReadOnlySequence<byte>, Task> callback, CancellationToken token = default, char separator = '\n')
     {
         var pipe = new Pipe();
 
@@ -40,7 +40,7 @@ internal static class Utils
             try
             {
                 //await stream.CopyToAsync(pipe.Writer, token);
-                await CopyToPipeWriterAsync(stream, pipe.Writer, token);
+                await CopyToPipeWriterAsync(ws, pipe.Writer, token);
             }
             catch (Exception e)
             {
@@ -80,28 +80,28 @@ internal static class Utils
             }
         }
 
-        static async Task CopyToPipeWriterAsync(Stream source, PipeWriter writer, CancellationToken cancellationToken = default)
+        static async ValueTask CopyToPipeWriterAsync(WebSocket ws, PipeWriter writer, CancellationToken cancellationToken = default)
         {
             while (true)
             {
                 Memory<byte> buffer = writer.GetMemory();
-                int read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                ValueWebSocketReceiveResult wsResult = await ws.ReceiveAsync(buffer, cancellationToken);
 
-                if (read == 0)
+                if (wsResult.MessageType == WebSocketMessageType.Close || wsResult.Count == 0)
                 {
                     break;
                 }
 
-                writer.Advance(read);
+                writer.Advance(wsResult.Count);
 
-                FlushResult result = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+                FlushResult flushResult = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
 
-                if (result.IsCanceled)
+                if (flushResult.IsCanceled)
                 {
                     throw new OperationCanceledException("Flush cancelled.");
                 }
 
-                if (result.IsCompleted)
+                if (flushResult.IsCompleted)
                 {
                     break;
                 }

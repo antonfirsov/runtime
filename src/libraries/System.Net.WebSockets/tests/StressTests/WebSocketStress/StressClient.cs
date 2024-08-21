@@ -210,7 +210,7 @@ internal class StressClient
         {
             var serializer = new DataSegmentSerializer();
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
-            await stream.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
+            await stream.WebSocket.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
 
             Task Callback(ReadOnlySequence<byte> buffer)
             {

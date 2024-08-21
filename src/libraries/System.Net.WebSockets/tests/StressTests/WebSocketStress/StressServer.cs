@@ -109,7 +109,7 @@ internal class StressServer
         var serializer = new DataSegmentSerializer();
 
         _ = Task.Run(Monitor);
-        await wsStream.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
+        await wsStream.WebSocket.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
         //await wsStream.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
 
         async Task Callback(ReadOnlySequence<byte> buffer)
