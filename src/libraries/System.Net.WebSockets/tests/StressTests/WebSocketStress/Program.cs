@@ -37,8 +37,8 @@ static async Task Test()
     await clientWs.WriteAsync(s_endLine, default);
 
 
-    Pipe pipe = new Pipe();
-    await Utils.ReadLinesUsingPipesAsync(serverWs, buffer =>
+    InputProcessor processor = new InputProcessor(serverWs);
+    await processor.RunAsync(buffer =>
     {
         DataSegment received = deserializer.Deserialize(buffer);
         Console.WriteLine($"Server Deserialized L={buffer.Length}");
@@ -46,8 +46,7 @@ static async Task Test()
         received.Return();
         return Task.CompletedTask;
     });
-
-
+    
     Console.WriteLine("yay?");
 }
 

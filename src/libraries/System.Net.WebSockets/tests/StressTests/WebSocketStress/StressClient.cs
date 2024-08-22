@@ -218,10 +218,12 @@ internal class StressClient
 
         async Task Receiver(CancellationToken token)
         {
-            var serializer = new DataSegmentSerializer();
+            DataSegmentSerializer serializer = new DataSegmentSerializer();
+            InputProcessor inputProcessor = new InputProcessor(ws);
+
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             Log.WriteLine("Client: ReadLinesUsingPipesAsync.");
-            await ws.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
+            await inputProcessor.RunAsync(Callback, cts.Token);
             Log.WriteLine("Client: ReadLinesUsingPipesAsync DONE. (Receiver done)");
 
             Task Callback(ReadOnlySequence<byte> buffer)
@@ -230,8 +232,10 @@ internal class StressClient
                 {
                     // server echoed back empty buffer sent by client,
                     // signal cancellation and complete the connection.
-                    Log.WriteLine($"Client cancellation: L={buffer.Length}, connectionLifetimeToken.IsCancellationRequested={connectionLifetimeToken.IsCancellationRequested}");
-                    cts.Cancel();
+                    Log.WriteLine($"Client termination: L={buffer.Length}, connectionLifetimeToken.IsCancellationRequested={connectionLifetimeToken.IsCancellationRequested}");
+                    //cts.Cancel();
+                    inputProcessor.MarkCompleted();
+
                     //Console.WriteLine("************** Client CANCEEEEEEEL ******************");
                     return Task.CompletedTask;
                 }

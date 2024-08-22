@@ -105,12 +105,13 @@ internal class StressServer
         using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token);
         DateTime lastReadTime = DateTime.Now;
 
-        var serializer = new DataSegmentSerializer();
+        DataSegmentSerializer serializer = new DataSegmentSerializer();
+        InputProcessor inputProcessor = new InputProcessor(ws);
 
         _ = Task.Run(Monitor);
 
         Log.WriteLine("Server: ReadLinesUsingPipesAsync.");
-        await ws.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
+        await inputProcessor.RunAsync(Callback, cts.Token);
         Log.WriteLine("Server: ReadLinesUsingPipesAsync DONE.");
         //await wsStream.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
 
@@ -127,6 +128,7 @@ internal class StressServer
                 //await wsStream.FlushAsync(cancellationToken);
                 //Log.WriteLine("*** SERVERCANCEEEEEL ***");
                 //cts.Cancel();
+                inputProcessor.MarkCompleted();
                 return;
             }
 
