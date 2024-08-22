@@ -39,6 +39,8 @@ public class Configuration
         cmd.AddOption(new Option(["--seed", "-s"], "Seed for generating pseudo-random parameters. Also depends on the -n argument.") { Argument = new Argument<int>("seed", (new Random().Next())) });
         cmd.AddOption(new Option(["--keep-alive-timeout", "-k"], "Keep alive timeout in milliseconds.") { Argument = new Argument<double?>("ms", null)} );
         cmd.AddOption(new Option(["--keep-alive-interval", "-K"], "Keep alive interval in milliseconds.") { Argument = new Argument<double?>("ms", null) });
+        cmd.AddOption(new Option(["--min-connection-lifetime", "-l"], "Minimum duration for a single connection, in seconds. Defaults to 5 seconds.") { Argument = new Argument<double>("seconds", 5) });
+        cmd.AddOption(new Option(["--max-connection-lifetime", "-L"], "Maximum duration for a single connection, in seconds. Defaults to 120 seconds.") { Argument = new Argument<double>("seconds", 120) });
 
         ParseResult parseResult = cmd.Parse(args);
         if (parseResult.Errors.Count > 0 || parseResult.HasOption("-h"))

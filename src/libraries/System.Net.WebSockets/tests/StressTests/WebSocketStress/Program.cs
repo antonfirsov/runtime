@@ -1,8 +1,58 @@
 ﻿// See https://aka.ms/new-console-template for more information
+using System.IO.Pipelines;
+using System.Net;
+using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Reflection;
 using WebSocketStress;
 
-Console.WriteLine(typeof(object).Assembly.Location);
+static async Task Test()
+{
+    byte[] s_endLine = [(byte)'\n'];
+
+    Console.WriteLine(typeof(object).Assembly.Location);
+
+    using Socket listenerSock = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+    listenerSock.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+    listenerSock.Listen();
+    using Socket clientSock = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+    Task<Socket> acceptTask = listenerSock.AcceptAsync();
+    await clientSock.ConnectAsync(listenerSock.LocalEndPoint!);
+    using Socket handlerSock = await acceptTask;
+
+    using WebSocket serverWs = WebSocket.CreateFromStream(new NetworkStream(handlerSock, ownsSocket: true), isServer: true, null, TimeSpan.Zero);
+    using WebSocket clientWs = WebSocket.CreateFromStream(new NetworkStream(clientSock, ownsSocket: true), isServer: false, null, TimeSpan.Zero);
+
+    DataSegment sent = DataSegment.CreateRandom(Random.Shared, 10);
+    Console.WriteLine(sent);
+    DataSegmentSerializer serializer = new DataSegmentSerializer();
+    DataSegmentSerializer deserializer = new DataSegmentSerializer();
+
+    await serializer.SerializeAsync(clientWs, sent);
+    await clientWs.WriteAsync(s_endLine, default);
+
+    Console.WriteLine("----");
+
+    await serializer.SerializeAsync(clientWs, DataSegment.CreateRandom(Random.Shared, 50));
+    await clientWs.WriteAsync(s_endLine, default);
+
+
+    Pipe pipe = new Pipe();
+    await Utils.ReadLinesUsingPipesAsync(serverWs, buffer =>
+    {
+        DataSegment received = deserializer.Deserialize(buffer);
+        Console.WriteLine($"Server Deserialized L={buffer.Length}");
+        Console.WriteLine(received);
+        received.Return();
+        return Task.CompletedTask;
+    });
+
+
+    Console.WriteLine("yay?");
+}
+
+//await Test();
+//return;
 
 if (Configuration.TryParseCli(args, out Configuration? config))
 {

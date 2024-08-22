@@ -77,9 +77,8 @@ internal class StressServer
                     using WebSocket serverWebSocket = WebSocket.CreateFromStream(new NetworkStream(handlerSocket, ownsSocket: true), _options);
                     await HandleConnection(serverWebSocket, _cts.Token);
                 }
-                catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+                catch (OperationCanceledException c) when (_cts.IsCancellationRequested)
                 {
-
                 }
                 catch (Exception e)
                 {
@@ -87,13 +86,14 @@ internal class StressServer
                     {
                         lock (Console.Out)
                         {
-                            Console.ForegroundColor = ConsoleColor.DarkRed;
+                            //Console.ForegroundColor = ConsoleColor.DarkRed;
                             Console.WriteLine($"Server: unhandled exception: {e}");
                             Console.WriteLine();
                             Console.ResetColor();
                         }
                     }
                 }
+                Log.WriteLine("Server: HandleConnection DONE.");
             }
         }
     }
@@ -108,11 +108,15 @@ internal class StressServer
         var serializer = new DataSegmentSerializer();
 
         _ = Task.Run(Monitor);
+
+        Log.WriteLine("Server: ReadLinesUsingPipesAsync.");
         await ws.ReadLinesUsingPipesAsync(Callback, cts.Token, separator: '\n');
+        Log.WriteLine("Server: ReadLinesUsingPipesAsync DONE.");
         //await wsStream.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
 
         async Task Callback(ReadOnlySequence<byte> buffer)
         {
+            //Log.WriteLine($"Server: Callback start bL={buffer.Length}");
             lastReadTime = DateTime.Now;
 
             if (buffer.Length == 0)
@@ -121,7 +125,7 @@ internal class StressServer
                 // echo back the empty line and tear down.
                 await ws.WriteAsync(s_endLine, token);
                 //await wsStream.FlushAsync(cancellationToken);
-                //Console.WriteLine("*** SERVERCANCEEEEEL ***");
+                //Log.WriteLine("*** SERVERCANCEEEEEL ***");
                 //cts.Cancel();
                 return;
             }
@@ -130,7 +134,9 @@ internal class StressServer
             try
             {
                 chunk = serializer.Deserialize(buffer);
+                //Log.WriteLine($"Server Deserialized L={chunk.Value.Length} C={chunk.Value.Checksum}");
                 await serializer.SerializeAsync(ws, chunk.Value, token: token);
+                //Log.WriteLine($"Server Serialized L={chunk.Value.Length} C={chunk.Value.Checksum}");
                 await ws.WriteAsync(s_endLine, token);
                 //await wsStream.FlushAsync(cancellationToken);
             }
@@ -142,7 +148,7 @@ internal class StressServer
                     {
                         Console.ForegroundColor = ConsoleColor.Yellow;
                         Console.WriteLine($"Server: {e.Message}");
-                        Console.ResetColor();
+                        Console.ResetColor();;
                     }
                 }
             }

@@ -22,7 +22,13 @@ internal static class Utils
     }
 
     public static ValueTask WriteAsync(this WebSocket ws, Memory<byte> data, CancellationToken cancellationToken)
-        => ws.SendAsync(data, WebSocketMessageType.Binary, endOfMessage: false, cancellationToken);
+    {
+        if (data.Length == 0)
+        {
+            Log.WriteLine("!Writing 0 bytes to ws!");
+        }
+        return ws.SendAsync(data, WebSocketMessageType.Binary, endOfMessage: false, cancellationToken);
+    }
 
     // Adapted from https://devblogs.microsoft.com/dotnet/system-io-pipelines-high-performance-io-in-net/
     public static async Task ReadLinesUsingPipesAsync(this WebSocket ws, Func<ReadOnlySequence<byte>, Task> callback, CancellationToken token = default, char separator = '\n')
@@ -47,6 +53,7 @@ internal static class Utils
             }
             catch (Exception e)
             {
+                Log.WriteLine($"CopyToPipeWriterAsync thrown: {e}");
                 pipe.Writer.Complete(e);
                 throw;
             }
@@ -82,32 +89,33 @@ internal static class Utils
                 }
             }
         }
+    }
 
-        static async ValueTask CopyToPipeWriterAsync(WebSocket ws, PipeWriter writer, CancellationToken cancellationToken = default)
+    public static async ValueTask CopyToPipeWriterAsync(WebSocket ws, PipeWriter writer, CancellationToken cancellationToken = default)
+    {
+        while (true)
         {
-            while (true)
+            Memory<byte> buffer = writer.GetMemory();
+            ValueWebSocketReceiveResult wsResult = await ws.ReceiveAsync(buffer, cancellationToken);
+
+            if (wsResult.MessageType == WebSocketMessageType.Close /*|| wsResult.Count == 0*/)
             {
-                Memory<byte> buffer = writer.GetMemory();
-                ValueWebSocketReceiveResult wsResult = await ws.ReceiveAsync(buffer, cancellationToken);
+                Log.WriteLine($"CopyToPipeWriterAsync break. MessageType={wsResult.MessageType}, Count={wsResult.Count}");
+                break;
+            }
 
-                if (wsResult.MessageType == WebSocketMessageType.Close || wsResult.Count == 0)
-                {
-                    break;
-                }
+            writer.Advance(wsResult.Count);
 
-                writer.Advance(wsResult.Count);
+            FlushResult flushResult = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
 
-                FlushResult flushResult = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+            if (flushResult.IsCanceled)
+            {
+                throw new OperationCanceledException("Flush cancelled.");
+            }
 
-                if (flushResult.IsCanceled)
-                {
-                    throw new OperationCanceledException("Flush cancelled.");
-                }
-
-                if (flushResult.IsCompleted)
-                {
-                    break;
-                }
+            if (flushResult.IsCompleted)
+            {
+                break;
             }
         }
     }
@@ -172,7 +180,6 @@ public struct DataSegment
         {
             b = s_bytePool[random.Next(255)];
         }
-
         return chunk;
     }
 
@@ -182,6 +189,16 @@ public struct DataSegment
             .Select(i => (byte)i)
             .Where(b => b != (byte)'\n')
             .ToArray();
+
+    public override string ToString()
+    {
+        StringBuilder bld = new StringBuilder();
+        foreach (byte b in AsSpan())
+        {
+            bld.Append($"{b}|");
+        }
+        return bld.ToString(); 
+    }
 }
 
 public class DataMismatchException : Exception
@@ -210,6 +227,7 @@ public class DataSegmentSerializer
         await ws.WriteAsync(s_comma, token);
         // payload
         Memory<byte> source = segment.AsMemory();
+
         // write the entire segment outright if not given random instance
         if (random == null)
         {
@@ -220,23 +238,23 @@ public class DataSegmentSerializer
         // randomize chunking otherwise
         while (source.Length > 0)
         {
-            int chunkSize = random.Next(source.Length);
+            int chunkSize = random.Next(source.Length) + 1;
             Memory<byte> chunk = source.Slice(0, chunkSize);
             source = source.Slice(chunkSize);
             await ws.WriteAsync(chunk, token);
 
             // randomized delay
-            if (random.NextBoolean(probability: 0.05))
-            {
-                if (random.NextBoolean(probability: 0.7))
-                {
-                    await Task.Delay(random.Next(60));
-                }
-                else
-                {
-                    Thread.SpinWait(random.Next(1000));
-                }
-            }
+            //if (random.NextBoolean(probability: 0.05))
+            //{
+            //    if (random.NextBoolean(probability: 0.7))
+            //    {
+            //        await Task.Delay(random.Next(60));
+            //    }
+            //    else
+            //    {
+            //        Thread.SpinWait(random.Next(1000));
+            //    }
+            //}
         }
     }
 
@@ -246,7 +264,7 @@ public class DataSegmentSerializer
         SequencePosition? pos = buffer.PositionOf((byte)',');
         if (pos == null)
         {
-            throw new DataMismatchException("should contain comma-separated values");
+            throw new DataMismatchException("should contain comma-separated values (length)");
         }
 
         ReadOnlySequence<byte> lengthBytes = buffer.Slice(0, pos.Value);
@@ -258,7 +276,7 @@ public class DataSegmentSerializer
         pos = buffer.PositionOf((byte)',');
         if (pos == null)
         {
-            throw new DataMismatchException("should contain comma-separated values");
+            throw new DataMismatchException("should contain CreateRandomcomma-separated values (checksum)");
         }
 
         ReadOnlySequence<byte> checksumBytes = buffer.Slice(0, pos.Value);
@@ -269,7 +287,7 @@ public class DataSegmentSerializer
         // payload
         if (length != (int)buffer.Length)
         {
-            throw new DataMismatchException("declared length does not match payload length");
+            throw new DataMismatchException($"declared length does not match payload length: length={length}, buffer.Length={buffer.Length}, C={checksum}");
         }
 
         var chunk = new DataSegment((int)buffer.Length);
@@ -282,5 +300,18 @@ public class DataSegmentSerializer
         }
 
         return chunk;
+    }
+}
+
+internal static class Log
+{
+    public static void WriteLine(FormattableString s)
+    {
+        Console.WriteLine(s);
+    }
+
+    public static void WriteLine(string s)
+    {
+        Console.WriteLine(s);
     }
 }
