@@ -112,6 +112,7 @@ internal class StressServer
 
         Log.WriteLine("Server: ReadLinesUsingPipesAsync.");
         await inputProcessor.RunAsync(Callback, cts.Token);
+        await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
         Log.WriteLine("Server: ReadLinesUsingPipesAsync DONE.");
         //await wsStream.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
 

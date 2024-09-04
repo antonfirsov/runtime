@@ -145,9 +145,10 @@ internal class StressClient
         DateTime lastWrite = DateTime.Now;
         DateTime lastRead = DateTime.Now;
 
+        InputProcessor inputProcessor = new InputProcessor(ws);
+
         await Utils.WhenAllThrowOnFirstException(token, Sender, Receiver, Monitor);
         //await stream.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", token);
-
 
         async Task Sender(CancellationToken token)
         {   
@@ -176,8 +177,8 @@ internal class StressClient
             }
 
             // write an empty line to signal completion to the server
-            await ws.WriteAsync(s_endLine, token);
-            //await stream.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "l0l", token);
+            //await ws.WriteAsync(s_endLine, token);
+            await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", token);
             //await stream.FlushAsync(token);
 
             /// Polls until number of in-flight messages falls below threshold
@@ -219,7 +220,7 @@ internal class StressClient
         async Task Receiver(CancellationToken token)
         {
             DataSegmentSerializer serializer = new DataSegmentSerializer();
-            InputProcessor inputProcessor = new InputProcessor(ws);
+            
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
             Log.WriteLine("Client: ReadLinesUsingPipesAsync.");
