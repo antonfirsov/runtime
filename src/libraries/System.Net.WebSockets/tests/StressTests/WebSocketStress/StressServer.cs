@@ -71,11 +71,12 @@ internal class StressServer
         {
             while (!_cts.IsCancellationRequested)
             {
+                Log? log = null;
                 try
                 {
                     using Socket handlerSocket = await _listener.AcceptAsync(_cts.Token);
                     using WebSocket serverWebSocket = WebSocket.CreateFromStream(new NetworkStream(handlerSocket, ownsSocket: true), _options);
-                    await HandleConnection(serverWebSocket, _cts.Token);
+                    log = await HandleConnection(serverWebSocket, _cts.Token);
                 }
                 catch (OperationCanceledException c) when (_cts.IsCancellationRequested)
                 {
@@ -93,45 +94,41 @@ internal class StressServer
                         }
                     }
                 }
-                Log.WriteLine("Server: HandleConnection DONE.");
+                log?.WriteLine("HandleConnection DONE.");
             }
         }
     }
 
     private static readonly byte[] s_endLine = [(byte)'\n'];
 
-    private async Task HandleConnection(WebSocket ws, CancellationToken token)
+    private async Task<Log> HandleConnection(WebSocket ws, CancellationToken token)
     {
         using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(token);
         DateTime lastReadTime = DateTime.Now;
 
-        DataSegmentSerializer serializer = new DataSegmentSerializer();
-        InputProcessor inputProcessor = new InputProcessor(ws);
+        byte[] khem = new byte[8];
+        if ((await ws.ReceiveAsync(khem, token)).MessageType != WebSocketMessageType.Binary)
+        {
+            throw new Exception("Server failed receiving connectionId.");
+        }
+        Log log = new Log("Server", BitConverter.ToInt64(khem));
+
+        DataSegmentSerializer serializer = new DataSegmentSerializer(log);
+        InputProcessor inputProcessor = new InputProcessor(ws, log, "Server");
 
         _ = Task.Run(Monitor);
 
-        Log.WriteLine("Server: ReadLinesUsingPipesAsync.");
         await inputProcessor.RunAsync(Callback, cts.Token);
+        log.WriteLine("CloseOutputAsync...");
         await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
-        Log.WriteLine("Server: ReadLinesUsingPipesAsync DONE.");
-        //await wsStream.WebSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
+        log.WriteLine("CloseOutputAsync DONE.");
+
+        return log;
 
         async Task Callback(ReadOnlySequence<byte> buffer)
         {
-            //Log.WriteLine($"Server: Callback start bL={buffer.Length}");
+            //Log.WriteLine($"Callback start bL={buffer.Length}");
             lastReadTime = DateTime.Now;
-
-            if (buffer.Length == 0)
-            {
-                // got an empty line, client is closing the connection
-                // echo back the empty line and tear down.
-                await ws.WriteAsync(s_endLine, token);
-                //await wsStream.FlushAsync(cancellationToken);
-                //Log.WriteLine("*** SERVERCANCEEEEEL ***");
-                //cts.Cancel();
-                inputProcessor.MarkCompleted();
-                return;
-            }
 
             DataSegment? chunk = null;
             try

@@ -10,6 +10,7 @@ using System.Net.Sockets;
 using System.Buffers;
 using System.Net.Security;
 using System;
+using System.Runtime.InteropServices;
 namespace WebSocketStress;
 
 internal class StressClient
@@ -75,6 +76,7 @@ internal class StressClient
                 cts.CancelAfter(cancellationDelay);
 
                 bool isTestCompleted = false;
+                Log log = new Log("Client", (workerId + 1) * jobId);
                 using CancellationTokenRegistration _ = cts.Token.Register(CheckForStalledConnection);
 
                 try
@@ -83,18 +85,19 @@ internal class StressClient
                     await client.ConnectAsync(_config.ServerEndpoint, cts.Token);
                     Stream stream = new CountingStream(new NetworkStream(client, ownsSocket: true), counter);
                     using WebSocket clientWebSocket = WebSocket.CreateFromStream(stream, _options);
-                    await HandleConnection(workerId, jobId, clientWebSocket, random, connectionLifetime, cts.Token);
-                    Log.WriteLine("Client: HandleConnection succeeded");
+                    
+                    await HandleConnection(workerId, jobId, log, clientWebSocket, random, connectionLifetime, cts.Token);
+                    log.WriteLine("HandleConnection succeeded");
                     _aggregator.RecordSuccess(workerId);
                 }
                 catch (OperationCanceledException) when (cts.IsCancellationRequested)
                 {
-                    Log.WriteLine("Client: Cancellation");
+                    log.WriteLine("Cancellation");
                     _aggregator.RecordCancellation(workerId);
                 }
                 catch (Exception e)
                 {
-                    Log.WriteLine($"Client exception: {e}");
+                    log.WriteLine($"Got Exception {e.GetType().Name}");
                     _aggregator.RecordFailure(workerId, e);
                 }
                 finally
@@ -102,7 +105,7 @@ internal class StressClient
                     isTestCompleted = true;
                 }
 
-                Log.WriteLine("Client: HandleConnection DONE.");
+                log.WriteLine("HandleConnection DONE.");
 
                 async void CheckForStalledConnection()
                 {
@@ -112,7 +115,7 @@ internal class StressClient
                         lock (Console.Out)
                         {
                             Console.ForegroundColor = ConsoleColor.Red;
-                            Console.WriteLine($"Worker #{workerId} test #{jobId} has stalled, terminating the stress app.");
+                            Console.WriteLine($"%{log.ConnectionId} Worker #{workerId} test #{jobId} has stalled, terminating the stress app.");
                             Console.WriteLine();
                             Console.ResetColor();
                         }
@@ -135,26 +138,30 @@ internal class StressClient
 
     private static readonly byte[] s_endLine = [(byte)'\n'];
 
-    private async Task HandleConnection(int workerId, long jobId, WebSocket ws, Random random, TimeSpan duration, CancellationToken token)
+    private async Task HandleConnection(int workerId, long jobId, Log log, WebSocket ws, Random random, TimeSpan duration, CancellationToken token)
     {
         // token used for signaling cooperative cancellation; do not pass this to SslStream methods
-        Log.WriteLine($"Duration: {duration}");
+        log.WriteLine($"Duration: {duration}");
         using var connectionLifetimeToken = new CancellationTokenSource(duration);
 
         long messagesInFlight = 0;
+        
         DateTime lastWrite = DateTime.Now;
         DateTime lastRead = DateTime.Now;
 
-        InputProcessor inputProcessor = new InputProcessor(ws);
+        InputProcessor inputProcessor = new InputProcessor(ws, log, "Client");
 
         await Utils.WhenAllThrowOnFirstException(token, Sender, Receiver, Monitor);
-        //await stream.WebSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", token);
 
         async Task Sender(CancellationToken token)
-        {   
-            var serializer = new DataSegmentSerializer();
+        {
+            byte[] khem = new byte[8];
+            BitConverter.TryWriteBytes(khem, log.ConnectionId);
+            await ws.WriteAsync(khem, token);
 
-            Log.WriteLine($"Client Sender: token.IsCancellationRequested: {token.IsCancellationRequested}, connectionLifetimeToken.IsCancellationRequested: {connectionLifetimeToken.IsCancellationRequested}");
+            var serializer = new DataSegmentSerializer(log);
+
+            log.WriteLine($"Client Sender: token.IsCancellationRequested: {token.IsCancellationRequested}, connectionLifetimeToken.IsCancellationRequested: {connectionLifetimeToken.IsCancellationRequested}");
 
             while (!token.IsCancellationRequested && !connectionLifetimeToken.IsCancellationRequested)
             {
@@ -178,7 +185,9 @@ internal class StressClient
 
             // write an empty line to signal completion to the server
             //await ws.WriteAsync(s_endLine, token);
+            log.WriteLine("CloseAsync...");
             await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", token);
+            log.WriteLine("CloseAsync DONE.");
             //await stream.FlushAsync(token);
 
             /// Polls until number of in-flight messages falls below threshold
@@ -198,7 +207,7 @@ internal class StressClient
                             lock (Console.Out)
                             {
                                 Console.ForegroundColor = ConsoleColor.Yellow;
-                                Console.WriteLine($"worker #{workerId}: applying backpressure");
+                                Console.WriteLine($"%{log.ConnectionId} worker #{workerId}: applying backpressure");
                                 Console.WriteLine();
                                 Console.ResetColor();
                             }
@@ -209,38 +218,25 @@ internal class StressClient
 
                     if (isLogged)
                     {
-                        Console.WriteLine($"worker #{workerId}: resumed tx after {stopwatch.Elapsed}");
+                        Console.WriteLine($"%{log.ConnectionId} worker #{workerId}: resumed tx after {stopwatch.Elapsed}");
                     }
                 }
             }
 
-            Log.WriteLine("Client: Sender done.");
+            log.WriteLine("Sender done.");
         }
 
         async Task Receiver(CancellationToken token)
         {
-            DataSegmentSerializer serializer = new DataSegmentSerializer();
+            DataSegmentSerializer serializer = new DataSegmentSerializer(log);
             
 
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
-            Log.WriteLine("Client: ReadLinesUsingPipesAsync.");
             await inputProcessor.RunAsync(Callback, cts.Token);
-            Log.WriteLine("Client: ReadLinesUsingPipesAsync DONE. (Receiver done)");
+            log.WriteLine("Client Receiver: inputProcessor.RunAsync DONE.");
 
             Task Callback(ReadOnlySequence<byte> buffer)
             {
-                if (buffer.Length == 0 && connectionLifetimeToken.IsCancellationRequested)
-                {
-                    // server echoed back empty buffer sent by client,
-                    // signal cancellation and complete the connection.
-                    Log.WriteLine($"Client termination: L={buffer.Length}, connectionLifetimeToken.IsCancellationRequested={connectionLifetimeToken.IsCancellationRequested}");
-                    //cts.Cancel();
-                    inputProcessor.MarkCompleted();
-
-                    //Console.WriteLine("************** Client CANCEEEEEEEL ******************");
-                    return Task.CompletedTask;
-                }
-
                 // deserialize to validate the checksum, then discard
                 DataSegment chunk = serializer.Deserialize(buffer);
                 //Log.WriteLine($"Client Deserialized bL={buffer.Length} L={chunk.Length} ");
@@ -259,15 +255,15 @@ internal class StressClient
 
                 if ((DateTime.Now - lastWrite) >= TimeSpan.FromSeconds(10))
                 {
-                    throw new Exception($"worker #{workerId} job #{jobId} has stopped writing bytes to server");
+                    throw new Exception($"%{log.ConnectionId} worker #{workerId} job #{jobId} has stopped writing bytes to server");
                 }
 
                 if ((DateTime.Now - lastRead) >= TimeSpan.FromSeconds(10))
                 {
-                    throw new Exception($"worker #{workerId} job #{jobId} has stopped receiving bytes from server");
+                    throw new Exception($"%{log.ConnectionId} worker #{workerId} job #{jobId} has stopped receiving bytes from server");
                 }
 
-                Log.WriteLine($"Client Monitor: token.IsCancellationRequested: {token.IsCancellationRequested}, connectionLifetimeToken.IsCancellationRequested: {connectionLifetimeToken.IsCancellationRequested}");
+                //Log.WriteLine($"Client Monitor: token.IsCancellationRequested: {token.IsCancellationRequested}, connectionLifetimeToken.IsCancellationRequested: {connectionLifetimeToken.IsCancellationRequested}");
             }
             while (!token.IsCancellationRequested && !connectionLifetimeToken.IsCancellationRequested);
         }

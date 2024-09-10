@@ -11,20 +11,20 @@ internal class InputProcessor
 {
     private const byte Separator = (byte)'\n';
     private readonly WebSocket _webSocket;
-    private volatile bool _completed;
 
-    public InputProcessor(WebSocket webSocket)
+    private readonly Log _log;
+
+    public InputProcessor(WebSocket webSocket, Log log)
     {
         _webSocket = webSocket;
+        _log = log;
     }
-
-    public void MarkCompleted() => _completed = true;
 
     // Adapted from https://devblogs.microsoft.com/dotnet/system-io-pipelines-high-performance-io-in-net/
     public async Task RunAsync(Func<ReadOnlySequence<byte>, Task> callback, CancellationToken token = default)
     {
+        bool completed = false;
         var pipe = new Pipe();
-
         try
         {
             await Utils.WhenAllThrowOnFirstException(token, FillPipeAsync, ReadPipeAsync);
@@ -37,12 +37,12 @@ internal class InputProcessor
         {
             try
             {
-                //await stream.CopyToAsync(pipe.Writer, token);
                 await CopyToPipeWriterAsync(_webSocket, pipe.Writer, token);
+                Volatile.Write(ref completed, true);
             }
             catch (Exception e)
             {
-                Log.WriteLine($"CopyToPipeWriterAsync thrown: {e}");
+                _log.WriteLine($"CopyToPipeWriterAsync thrown: {e}");
                 pipe.Writer.Complete(e);
                 throw;
             }
@@ -52,7 +52,7 @@ internal class InputProcessor
 
         async Task ReadPipeAsync(CancellationToken token)
         {
-            while (!token.IsCancellationRequested && !_completed)
+            while (!token.IsCancellationRequested)
             {
                 ReadResult result = await pipe.Reader.ReadAsync(token);
                 ReadOnlySequence<byte> buffer = result.Buffer;
@@ -64,12 +64,12 @@ internal class InputProcessor
 
                     if (position != null)
                     {
-                        await callback(buffer.Slice(0, position.Value));
-                        if (_completed)
+                        if (result.IsCompleted)
                         {
-                            break;
+
                         }
 
+                        await callback(buffer.Slice(0, position.Value));
                         buffer = buffer.Slice(buffer.GetPosition(1, position.Value));
                     }
                 }
@@ -87,15 +87,15 @@ internal class InputProcessor
 
     private async ValueTask CopyToPipeWriterAsync(WebSocket ws, PipeWriter writer, CancellationToken cancellationToken = default)
     {
-        while (!_completed)
+        while (true)
         {
             Memory<byte> buffer = writer.GetMemory();
             ValueWebSocketReceiveResult wsResult = await ws.ReceiveAsync(buffer, cancellationToken);
 
             if (wsResult.MessageType == WebSocketMessageType.Close)
             {
-                Log.WriteLine($"CopyToPipeWriterAsync break. MessageType={wsResult.MessageType}, Count={wsResult.Count}");
-                break;
+                _log.WriteLine($"detected WebSocket closure.");
+                return;
             }
 
             writer.Advance(wsResult.Count);
@@ -109,7 +109,7 @@ internal class InputProcessor
 
             if (flushResult.IsCompleted)
             {
-                break;
+                return;
             }
         }
     }

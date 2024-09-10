@@ -23,10 +23,12 @@ static async Task Test()
     using WebSocket serverWs = WebSocket.CreateFromStream(new NetworkStream(handlerSock, ownsSocket: true), isServer: true, null, TimeSpan.Zero);
     using WebSocket clientWs = WebSocket.CreateFromStream(new NetworkStream(clientSock, ownsSocket: true), isServer: false, null, TimeSpan.Zero);
 
+    Log log = new Log("Test", 42);
+
     DataSegment sent = DataSegment.CreateRandom(Random.Shared, 10);
     Console.WriteLine(sent);
-    DataSegmentSerializer serializer = new DataSegmentSerializer();
-    DataSegmentSerializer deserializer = new DataSegmentSerializer();
+    DataSegmentSerializer serializer = new DataSegmentSerializer(log);
+    DataSegmentSerializer deserializer = new DataSegmentSerializer(log);
 
     await serializer.SerializeAsync(clientWs, sent);
     await clientWs.WriteAsync(s_endLine, default);
@@ -37,7 +39,7 @@ static async Task Test()
     await clientWs.WriteAsync(s_endLine, default);
 
 
-    InputProcessor processor = new InputProcessor(serverWs);
+    InputProcessor processor = new InputProcessor(serverWs, log, "server");
     await processor.RunAsync(buffer =>
     {
         DataSegment received = deserializer.Deserialize(buffer);
@@ -102,6 +104,8 @@ static async Task<ExitCode> Run(Configuration config)
     }
 
     await WaitUntilMaxExecutionTimeElapsedOrKeyboardInterrupt(config.MaxExecutionTime);
+
+    Log.Close();
 
     try
     {
