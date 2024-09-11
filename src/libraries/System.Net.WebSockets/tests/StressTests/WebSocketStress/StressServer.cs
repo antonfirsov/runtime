@@ -78,7 +78,7 @@ internal class StressServer
                     using WebSocket serverWebSocket = WebSocket.CreateFromStream(new NetworkStream(handlerSocket, ownsSocket: true), _options);
                     log = await HandleConnection(serverWebSocket, _cts.Token);
                 }
-                catch (OperationCanceledException c) when (_cts.IsCancellationRequested)
+                catch (OperationCanceledException) when (_cts.IsCancellationRequested)
                 {
                 }
                 catch (Exception e)
@@ -87,8 +87,15 @@ internal class StressServer
                     {
                         lock (Console.Out)
                         {
-                            //Console.ForegroundColor = ConsoleColor.DarkRed;
-                            Console.WriteLine($"Server: unhandled exception: {e}");
+                            Console.ForegroundColor = ConsoleColor.DarkRed;
+                            if (e is WebSocketException wex)
+                            {
+                                Console.WriteLine($"Server: unhandled WebSocketException({wex.WebSocketErrorCode}): {e}");
+                            }
+                            else
+                            {
+                                Console.WriteLine($"Server: unhandled exception: {e}");
+                            }
                             Console.WriteLine();
                             Console.ResetColor();
                         }
@@ -118,11 +125,27 @@ internal class StressServer
 
         _ = Task.Run(Monitor);
 
-        await inputProcessor.RunAsync(Callback, cts.Token);
+        try
+        {
+            await inputProcessor.RunAsync(Callback, cts.Token);
+        }
+        catch (OperationCanceledException) when (inputProcessor.Aborted)
+        {
+        }
 
-        log.WriteLine("inputProcessor.RunAsync DONE.  CloseOutputAsync...");
-        await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
-        log.WriteLine("CloseOutputAsync DONE.");
+        if (!inputProcessor.Aborted)
+        {
+            log.WriteLine("inputProcessor.RunAsync DONE.  CloseOutputAsync...");
+            try
+            {
+                await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
+            }
+            catch (WebSocketException e) when (e.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely || ws.State == WebSocketState.Aborted)
+            {
+            }
+            
+            log.WriteLine("CloseOutputAsync DONE.");
+        }
 
         return log;
 
@@ -130,22 +153,31 @@ internal class StressServer
         {
             lastReadTime = DateTime.Now;
 
-            if (buffer.Length == 0)
-            {
-                log.WriteLine("buffer.Length == 0, server terminating???");
-                // got an empty line, client is closing the connection
-                // echo back the empty line and return 'true' to signal completion.
-                await ws.WriteAsync(s_endLine, token);
-                return true;
-            }
-
             DataSegment? chunk = null;
             try
             {
+                if (buffer.Length == 0)
+                {
+                    log.WriteLine("buffer.Length == 0, server terminating???");
+                    // got an empty line, client is closing the connection
+                    // echo back the empty line and return 'true' to signal completion.
+                    await ws.WriteAsync(s_endLine, token);
+                    return true;
+                }
+
                 chunk = serializer.Deserialize(buffer);
                 await serializer.SerializeAsync(ws, chunk.Value, token: token);
                 await ws.WriteAsync(s_endLine, token);
                 return false;
+            }
+            catch (WebSocketException e)
+            {
+                if (ws.State == WebSocketState.Aborted || e.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely)
+                {
+                    return true;
+                }
+                log.WriteLine($"Unexpected WebSocketException? ws.State: {ws.State}, e.WebSocketErrorCode: {e.WebSocketErrorCode}");
+                throw;
             }
             catch (DataMismatchException e)
             {

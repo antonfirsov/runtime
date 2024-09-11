@@ -12,6 +12,9 @@ internal class InputProcessor
     private const byte Separator = (byte)'\n';
     private readonly WebSocket _webSocket;
     private readonly Log _log;
+    public bool _aborted;
+
+    public bool Aborted => _aborted;
 
     public InputProcessor(WebSocket webSocket, Log log)
     {
@@ -27,7 +30,7 @@ internal class InputProcessor
         {
             await Utils.WhenAllThrowOnFirstException(token, FillPipeAsync, ReadPipeAsync);
         }
-        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        catch (OperationCanceledException) when (token.IsCancellationRequested || _aborted)
         {
         }
 
@@ -39,7 +42,7 @@ internal class InputProcessor
             }
             catch (Exception e)
             {
-                _log.WriteLine($"CopyToPipeWriterAsync thrown: {e}");
+                //_log.WriteLine($"CopyToPipeWriterAsync thrown: {e}");
                 pipe.Writer.Complete(e);
                 throw;
             }
@@ -66,6 +69,11 @@ internal class InputProcessor
                         finished = await callback(buffer.Slice(0, position.Value));
                         if (finished)
                         {
+                            if (_webSocket.State == WebSocketState.Aborted)
+                            {
+                                _aborted = true;
+                                throw new OperationCanceledException("WebSocket aborted.");
+                            }
                             break;
                         }
                         buffer = buffer.Slice(buffer.GetPosition(1, position.Value));
@@ -91,15 +99,32 @@ internal class InputProcessor
         while (true)
         {
             Memory<byte> buffer = writer.GetMemory();
-            ValueWebSocketReceiveResult wsResult = await ws.ReceiveAsync(buffer, cancellationToken);
 
-            if (wsResult.MessageType == WebSocketMessageType.Close)
+            try
             {
-                _log.WriteLine("Received Close.");
-                return;
-            }
+                ValueWebSocketReceiveResult wsResult = await ws.ReceiveAsync(buffer, cancellationToken);
 
-            writer.Advance(wsResult.Count);
+                if (wsResult.MessageType == WebSocketMessageType.Close)
+                {
+                    _log.WriteLine("Received Close.");
+                    return;
+                }
+
+                writer.Advance(wsResult.Count);
+            }
+            catch (WebSocketException e)
+            {
+                if (ws.State == WebSocketState.Aborted)
+                {
+                    // Cancellation.
+                    _aborted = true;
+                    throw new OperationCanceledException("WebSocket aborted");
+                }
+
+                _log.WriteLine($"WebSocketErrorCode: {e.WebSocketErrorCode}, State: {ws.State}");
+
+                throw;
+            }
 
             FlushResult flushResult = await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
 

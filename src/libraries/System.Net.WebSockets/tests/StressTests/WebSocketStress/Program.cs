@@ -52,8 +52,42 @@ static async Task Test()
     Console.WriteLine("yay?");
 }
 
-//await Test();
-//return;
+async Task Test2()
+{
+    byte[] s_endLine = [(byte)'\n'];
+
+    Console.WriteLine(typeof(object).Assembly.Location);
+
+    using Socket listenerSock = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+    listenerSock.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+    listenerSock.Listen();
+    using Socket clientSock = new(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+    Task<Socket> acceptTask = listenerSock.AcceptAsync();
+    await clientSock.ConnectAsync(listenerSock.LocalEndPoint!);
+    using Socket handlerSock = await acceptTask;
+
+    using WebSocket serverWs = WebSocket.CreateFromStream(new NetworkStream(handlerSock, ownsSocket: true), isServer: true, null, TimeSpan.Zero);
+    using WebSocket clientWs = WebSocket.CreateFromStream(new NetworkStream(clientSock, ownsSocket: true), isServer: false, null, TimeSpan.Zero);
+
+    CancellationToken precancelled = new CancellationToken(true);
+
+    try
+    {
+        await clientWs.SendAsync(new byte[12345], WebSocketMessageType.Binary, false, precancelled);
+    }
+    catch (OperationCanceledException)
+    {
+        Console.WriteLine("yay!");
+    }
+    try
+    {
+        var res = await serverWs.ReceiveAsync(new byte[43252], default);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"{ex.Message} | {serverWs.State}");
+    }
+}
 
 if (Configuration.TryParseCli(args, out Configuration? config))
 {

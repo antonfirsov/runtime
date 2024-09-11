@@ -146,34 +146,33 @@ internal class DataSegmentSerializer
         Memory<byte> source = segment.AsMemory();
 
         // write the entire segment outright if not given random instance
-        await ws.WriteAsync(source, token);
-        //if (random == null)
-        //{
-        //    await ws.WriteAsync(source, token);
-        //    return;
-        //}
+        if (random == null)
+        {
+            await ws.WriteAsync(source, token);
+            return;
+        }
 
         //// randomize chunking otherwise
-        //while (source.Length > 0)
-        //{
-        //    int chunkSize = random.Next(source.Length) + 1;
-        //    Memory<byte> chunk = source.Slice(0, chunkSize);
-        //    source = source.Slice(chunkSize);
-        //    await ws.WriteAsync(chunk, token);
+        while (source.Length > 0)
+        {
+            int chunkSize = random.Next(source.Length) + 1;
+            Memory<byte> chunk = source.Slice(0, chunkSize);
+            source = source.Slice(chunkSize);
+            await ws.WriteAsync(chunk, token);
 
-        //    // randomized delay
-        //    //if (random.NextBoolean(probability: 0.05))
-        //    //{
-        //    //    if (random.NextBoolean(probability: 0.7))
-        //    //    {
-        //    //        await Task.Delay(random.Next(60));
-        //    //    }
-        //    //    else
-        //    //    {
-        //    //        Thread.SpinWait(random.Next(1000));
-        //    //    }
-        //    //}
-        //}
+            // randomized delay
+            //if (random.NextBoolean(probability: 0.05))
+            //{
+            //    if (random.NextBoolean(probability: 0.7))
+            //    {
+            //        await Task.Delay(random.Next(60));
+            //    }
+            //    else
+            //    {
+            //        Thread.SpinWait(random.Next(1000));
+            //    }
+            //}
+        }
 
         _log.Verbose($"serialized L={segment.Length}|{source.Length} C={segment.Checksum}");
     }
@@ -258,15 +257,15 @@ internal record class Log(string Type, long ConnectionId)
 
     public void WriteLine(string s)
     {
-        string m = GetMessage(s);
-        Console.WriteLine(m);
-        _ = s_messagesChannel.Writer.WriteAsync(m);
+        //string m = GetMessage(s);
+        //Console.WriteLine(m);
+        //_ = s_messagesChannel.Writer.WriteAsync(m);
     }
 
     public void Verbose(string s)
     {
-        string m = GetMessage(s);
-        _ = s_messagesChannel.Writer.WriteAsync(m);
+        //string m = GetMessage(s);
+        //_ = s_messagesChannel.Writer.WriteAsync(m);
     }
 
     private string GetMessage(object s) => $"[{Type}] %{ConnectionId} {s}";

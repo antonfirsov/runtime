@@ -79,6 +79,11 @@ internal class StressClient
                 Log log = new Log("Client", (workerId + 1) * jobId);
                 using CancellationTokenRegistration _ = cts.Token.Register(CheckForStalledConnection);
 
+                cts.Token.Register(() =>
+                {
+                    log.WriteLine("CANCELLING!!!! ....");
+                });
+
                 try
                 {
                     using Socket client = new Socket(_config.ServerEndpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
@@ -92,7 +97,7 @@ internal class StressClient
                 }
                 catch (OperationCanceledException) when (cts.IsCancellationRequested)
                 {
-                    log.WriteLine("Cancellation");
+                    log.WriteLine("Cancelled.");
                     _aggregator.RecordCancellation(workerId);
                 }
                 catch (Exception e)
@@ -181,6 +186,10 @@ internal class StressClient
                     Interlocked.Increment(ref messagesInFlight);
                     lastWrite = DateTime.Now;
                 }
+                catch (WebSocketException) when (ws.State == WebSocketState.Aborted && token.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException(token);
+                }
                 finally
                 {
                     chunk.Return();
@@ -188,7 +197,14 @@ internal class StressClient
             }
 
             // write an empty line to signal completion to the server
-            await ws.WriteAsync(s_endLine, token);
+            try
+            {
+                await ws.WriteAsync(s_endLine, token);
+            }
+            catch (WebSocketException) when (ws.State == WebSocketState.Aborted && token.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(token);
+            }
 
             // Wait until the server echoes back the empty line, then initiate closure.
 
