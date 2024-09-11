@@ -39,14 +39,14 @@ static async Task Test()
     await clientWs.WriteAsync(s_endLine, default);
 
 
-    InputProcessor processor = new InputProcessor(serverWs, log, "server");
+    InputProcessor processor = new InputProcessor(serverWs, log);
     await processor.RunAsync(buffer =>
     {
         DataSegment received = deserializer.Deserialize(buffer);
         Console.WriteLine($"Server Deserialized L={buffer.Length}");
         Console.WriteLine(received);
         received.Return();
-        return Task.CompletedTask;
+        return Task.FromResult(false);
     });
     
     Console.WriteLine("yay?");

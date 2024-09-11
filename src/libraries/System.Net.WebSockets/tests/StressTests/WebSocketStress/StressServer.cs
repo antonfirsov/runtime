@@ -114,31 +114,38 @@ internal class StressServer
         Log log = new Log("Server", BitConverter.ToInt64(khem));
 
         DataSegmentSerializer serializer = new DataSegmentSerializer(log);
-        InputProcessor inputProcessor = new InputProcessor(ws, log, "Server");
+        InputProcessor inputProcessor = new InputProcessor(ws, log);
 
         _ = Task.Run(Monitor);
 
         await inputProcessor.RunAsync(Callback, cts.Token);
-        log.WriteLine("CloseOutputAsync...");
+
+        log.WriteLine("inputProcessor.RunAsync DONE.  CloseOutputAsync...");
         await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", token);
         log.WriteLine("CloseOutputAsync DONE.");
 
         return log;
 
-        async Task Callback(ReadOnlySequence<byte> buffer)
+        async Task<bool> Callback(ReadOnlySequence<byte> buffer)
         {
-            //Log.WriteLine($"Callback start bL={buffer.Length}");
             lastReadTime = DateTime.Now;
+
+            if (buffer.Length == 0)
+            {
+                log.WriteLine("buffer.Length == 0, server terminating???");
+                // got an empty line, client is closing the connection
+                // echo back the empty line and return 'true' to signal completion.
+                await ws.WriteAsync(s_endLine, token);
+                return true;
+            }
 
             DataSegment? chunk = null;
             try
             {
                 chunk = serializer.Deserialize(buffer);
-                //Log.WriteLine($"Server Deserialized L={chunk.Value.Length} C={chunk.Value.Checksum}");
                 await serializer.SerializeAsync(ws, chunk.Value, token: token);
-                //Log.WriteLine($"Server Serialized L={chunk.Value.Length} C={chunk.Value.Checksum}");
                 await ws.WriteAsync(s_endLine, token);
-                //await wsStream.FlushAsync(cancellationToken);
+                return false;
             }
             catch (DataMismatchException e)
             {
@@ -151,6 +158,7 @@ internal class StressServer
                         Console.ResetColor();;
                     }
                 }
+                return true;
             }
             finally
             {

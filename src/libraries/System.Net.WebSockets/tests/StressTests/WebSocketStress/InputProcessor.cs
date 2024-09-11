@@ -11,7 +11,6 @@ internal class InputProcessor
 {
     private const byte Separator = (byte)'\n';
     private readonly WebSocket _webSocket;
-
     private readonly Log _log;
 
     public InputProcessor(WebSocket webSocket, Log log)
@@ -21,9 +20,8 @@ internal class InputProcessor
     }
 
     // Adapted from https://devblogs.microsoft.com/dotnet/system-io-pipelines-high-performance-io-in-net/
-    public async Task RunAsync(Func<ReadOnlySequence<byte>, Task> callback, CancellationToken token = default)
+    public async Task RunAsync(Func<ReadOnlySequence<byte>, Task<bool>> callback, CancellationToken token = default)
     {
-        bool completed = false;
         var pipe = new Pipe();
         try
         {
@@ -38,7 +36,6 @@ internal class InputProcessor
             try
             {
                 await CopyToPipeWriterAsync(_webSocket, pipe.Writer, token);
-                Volatile.Write(ref completed, true);
             }
             catch (Exception e)
             {
@@ -48,6 +45,7 @@ internal class InputProcessor
             }
 
             pipe.Writer.Complete();
+            _log.WriteLine("FillPipeAsync exiting");
         }
 
         async Task ReadPipeAsync(CancellationToken token)
@@ -57,6 +55,7 @@ internal class InputProcessor
                 ReadResult result = await pipe.Reader.ReadAsync(token);
                 ReadOnlySequence<byte> buffer = result.Buffer;
                 SequencePosition? position;
+                bool finished = false;
 
                 do
                 {
@@ -64,12 +63,11 @@ internal class InputProcessor
 
                     if (position != null)
                     {
-                        if (result.IsCompleted)
+                        finished = await callback(buffer.Slice(0, position.Value));
+                        if (finished)
                         {
-
+                            break;
                         }
-
-                        await callback(buffer.Slice(0, position.Value));
                         buffer = buffer.Slice(buffer.GetPosition(1, position.Value));
                     }
                 }
@@ -77,11 +75,14 @@ internal class InputProcessor
 
                 pipe.Reader.AdvanceTo(buffer.Start, buffer.End);
 
-                if (result.IsCompleted)
+                if (finished || result.IsCompleted)
                 {
+                    _log.WriteLine($"finished({finished}) || result.IsCompleted({result.IsCompleted}) == true");
                     break;
                 }
             }
+
+            _log.WriteLine("ReadPipeAsync exiting");
         }
     }
 
@@ -94,7 +95,7 @@ internal class InputProcessor
 
             if (wsResult.MessageType == WebSocketMessageType.Close)
             {
-                _log.WriteLine($"detected WebSocket closure.");
+                _log.WriteLine("Received Close.");
                 return;
             }
 
@@ -104,11 +105,13 @@ internal class InputProcessor
 
             if (flushResult.IsCanceled)
             {
+                _log.WriteLine("flushResult.IsCanceled");
                 throw new OperationCanceledException("Flush cancelled.");
             }
 
             if (flushResult.IsCompleted)
             {
+                _log.WriteLine("flushResult.IsCompleted");
                 return;
             }
         }

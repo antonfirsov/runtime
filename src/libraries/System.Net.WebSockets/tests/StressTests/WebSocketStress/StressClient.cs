@@ -149,9 +149,13 @@ internal class StressClient
         DateTime lastWrite = DateTime.Now;
         DateTime lastRead = DateTime.Now;
 
-        InputProcessor inputProcessor = new InputProcessor(ws, log, "Client");
+        InputProcessor inputProcessor = new InputProcessor(ws, log);
+
+        SemaphoreSlim readySemaphore = new SemaphoreSlim(0, 1);
 
         await Utils.WhenAllThrowOnFirstException(token, Sender, Receiver, Monitor);
+
+        log.WriteLine("Received close from the server, yay.");
 
         async Task Sender(CancellationToken token)
         {
@@ -168,11 +172,11 @@ internal class StressClient
                 await ApplyBackpressure();
 
                 DataSegment chunk = DataSegment.CreateRandom(random, _config.MaxBufferLength);
+                Debug.Assert(chunk.Length > 0);
 
                 try
                 {
                     await serializer.SerializeAsync(ws, chunk, random, token);
-                    //Log.WriteLine($"Client Serialized L={chunk.Length}, C={chunk.Checksum}");
                     await ws.WriteAsync(s_endLine, token);
                     Interlocked.Increment(ref messagesInFlight);
                     lastWrite = DateTime.Now;
@@ -184,11 +188,15 @@ internal class StressClient
             }
 
             // write an empty line to signal completion to the server
-            //await ws.WriteAsync(s_endLine, token);
+            await ws.WriteAsync(s_endLine, token);
+
+            // Wait until the server echoes back the empty line, then initiate closure.
+
+            log.WriteLine("Waiting for empty line ...");
+            await readySemaphore.WaitAsync(token);
             log.WriteLine("CloseAsync...");
             await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "", token);
-            log.WriteLine("CloseAsync DONE.");
-            //await stream.FlushAsync(token);
+            log.WriteLine("CloseAsync sent.");
 
             /// Polls until number of in-flight messages falls below threshold
             async Task ApplyBackpressure()
@@ -229,21 +237,27 @@ internal class StressClient
         async Task Receiver(CancellationToken token)
         {
             DataSegmentSerializer serializer = new DataSegmentSerializer(log);
-            
-
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(token);
-            await inputProcessor.RunAsync(Callback, cts.Token);
+            await inputProcessor.RunAsync(Callback, token);
             log.WriteLine("Client Receiver: inputProcessor.RunAsync DONE.");
 
-            Task Callback(ReadOnlySequence<byte> buffer)
+            Task<bool> Callback(ReadOnlySequence<byte> buffer)
             {
+                if (buffer.Length == 0)
+                {
+                    log.WriteLine("server echoed back empty line, initiating closure ...");
+                    readySemaphore.Release(); // Signal the sender to initiate close handshake.
+
+                    // The server echoed back empty buffer sent by client,
+                    // return 'true' to signal completion.
+                    return Task.FromResult(true);
+                }
+
                 // deserialize to validate the checksum, then discard
                 DataSegment chunk = serializer.Deserialize(buffer);
-                //Log.WriteLine($"Client Deserialized bL={buffer.Length} L={chunk.Length} ");
                 chunk.Return();
                 Interlocked.Decrement(ref messagesInFlight);
                 lastRead = DateTime.Now;
-                return Task.CompletedTask;
+                return Task.FromResult(false);
             }
         }
 
