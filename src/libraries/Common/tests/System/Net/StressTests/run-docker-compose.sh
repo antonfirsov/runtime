@@ -93,8 +93,10 @@ fi
 
 compose_file="$projectdir/docker-compose.yml"
 
-if ! docker-compose --file "$compose_file" build $build_args; then
-    exit $?
+if [[ "$runonly" -eq 0 ]]; then
+  if ! docker-compose --file "$compose_file" build $build_args; then
+      exit $?
+  fi
 fi
 
 if [[ "$buildonly" -eq 0 ]]; then

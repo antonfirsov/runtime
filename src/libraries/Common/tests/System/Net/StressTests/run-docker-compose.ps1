@@ -9,6 +9,7 @@ Param(
     [switch][Alias('b')]$buildCurrentLibraries, # Drives the stress test using libraries built from current source
     [switch][Alias('pa')]$privateAspNetCore, # Drive the stress test using a private Asp.Net Core package, requires -b to be set
     [switch][Alias('o')]$buildOnly, # Build, but do not run the stress app
+    [switch][Alias('r')]$runOnly, # Run an existing container pair without building it
     [string][Alias('t')]$sdkImageName = "dotnet-sdk-libs-current", # Name of the sdk image name, if built from source.
     [string]$clientStressArgs = "",
     [string]$serverStressArgs = "",
@@ -23,7 +24,7 @@ $VERSION = "$($xml.Project.PropertyGroup.MajorVersion[0]).$($xml.Project.Propert
 # This is a workaround for an issue with 1es-windows-2022-open, which should be eventually removed.
 # See comments in <repo>/eng/pipelines/libraries/stress/ssl.yml for more info.
 $dockerComposeCmd = $env:DOCKER_COMPOSE_CMD
-if (!(Test-Path $dockerComposeCmd -ErrorAction SilentlyContinue)) {
+if (!$dockerComposeCmd -or !(Test-Path $dockerComposeCmd)) {
     $dockerComposeCmd = "docker-compose"
 }
 
@@ -56,43 +57,45 @@ elseif ($privateAspNetCore) {
 }
 
 # Dockerize the stress app using docker-compose
-$BuildArgs = @(
-    "--build-arg", "VERSION=$Version",
-    "--build-arg", "CONFIGURATION=$configuration"
-)
-if (![string]::IsNullOrEmpty($sdkImageName)) {
-    $BuildArgs += "--build-arg", "SDK_BASE_IMAGE=$sdkImageName"
-}
+
 if ($useWindowsContainers) {
     $env:DOCKERFILE = "windows.Dockerfile"
 }
 
-$originalErrorPreference = $ErrorActionPreference
-$ErrorActionPreference = 'Continue'
-try {
-    write-output "$dockerComposeCmd --log-level DEBUG --file $COMPOSE_FILE build $buildArgs"
-    & $dockerComposeCmd --log-level DEBUG --file $COMPOSE_FILE build @buildArgs 2>&1 | ForEach-Object { "$_" }
-    if ($LASTEXITCODE -ne 0) {
-        throw "docker-compose exited with error code $LASTEXITCODE"
+if (!$runOnly){
+    $BuildArgs = @(
+        "--build-arg", "VERSION=$Version",
+        "--build-arg", "CONFIGURATION=$configuration"
+    )
+    if (![string]::IsNullOrEmpty($sdkImageName)) {
+        $BuildArgs += "--build-arg", "SDK_BASE_IMAGE=$sdkImageName"
+    }
+    $originalErrorPreference = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        write-output "$dockerComposeCmd --log-level DEBUG --file $COMPOSE_FILE build $buildArgs"
+        & $dockerComposeCmd --log-level DEBUG --file $COMPOSE_FILE build @buildArgs 2>&1 | ForEach-Object { "$_" }
+        if ($LASTEXITCODE -ne 0) {
+            throw "docker-compose exited with error code $LASTEXITCODE"
+        }
+    }
+    finally {
+        $ErrorActionPreference = $originalErrorPreference
     }
 }
-finally {
-    $ErrorActionPreference = $originalErrorPreference
-}
+
 
 # Run the stress app
 if (!$buildOnly) {
-    if ($dumpsSharePath) {
-        if ($useWindowsContainers) {
-            $env:DUMPS_SHARE_MOUNT_ROOT = "C:/dumps-share"
-        }
-        else {
-            $env:DUMPS_SHARE_MOUNT_ROOT = "/dumps-share"
-        }
-
-        $env:DUMPS_SHARE = $dumpsSharePath
-        New-Item -Force $env:DUMPS_SHARE -ItemType Directory
+    if ($useWindowsContainers) {
+        $env:DUMPS_SHARE_MOUNT_ROOT = "C:/dumps-share"
     }
+    else {
+        $env:DUMPS_SHARE_MOUNT_ROOT = "/dumps-share"
+    }
+
+    $env:DUMPS_SHARE = $dumpsSharePath
+    New-Item -Force $env:DUMPS_SHARE -ItemType Directory
 
     $env:STRESS_CLIENT_ARGS = $clientStressArgs
     $env:STRESS_SERVER_ARGS = $serverStressArgs
