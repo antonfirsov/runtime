@@ -259,7 +259,7 @@ namespace System.Net.Sockets.Tests
             // While most Unix environments are configured to resolve 'localhost' only to the ipv4 loopback address, on some CI machines it resolves to both ::1 and 127.0.0.1.
             // In such environments this test stresses the socket option tracking feature implemented in the Unix PAL by forcing the first connect attempt to fail.
             bool testFailingConnect = addresses.Length > 1;
-            _output.WriteLine($"'loopback' resolved to {string.Join(',', addresses)}. testFailingConnect={testFailingConnect}");
+            _output.WriteLine($"dnsConnect={dnsConnect}, testFailingConnect={testFailingConnect}, 'loopback' resolved to {string.Join(',', addresses)}.");
             
             IPAddress a0 = addresses[0];
             using Socket s0 = new Socket(a0.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
