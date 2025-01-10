@@ -9,6 +9,7 @@ using Xunit;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 using System.Linq;
+using Microsoft.DotNet.XUnitExtensions;
 
 namespace System.Net.Sockets.Tests
 {
@@ -240,6 +241,68 @@ namespace System.Net.Sockets.Tests
             // According to the OSX man page, it's enough connecting to an invalid address to dissolve the connection. (0 port connection returns error on OSX)
             await ConnectAsync(s, new IPEndPoint(secondConnection, PlatformDetection.IsApplePlatform ? 1 : 0));
             Assert.True(s.Connected);
+        }
+
+        [ConditionalTheory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task MultiConnect_KeepAliveOptionsPreserved(bool dnsConnect)
+        {
+            if (UsesEap && !dnsConnect)
+            {
+                throw new SkipTestException("EAP does not support IPAddress[] connect");
+            }
+
+            IPAddress[] addresses = await Dns.GetHostAddressesAsync("localhost");
+            Assert.NotEmpty(addresses);
+
+            // While most Unix environments are configured to resolve 'localhost' only to the ipv4 loopback address, on some CI machines it resolves to both ::1 and 127.0.0.1.
+            // In such environments this test stresses the socket option tracking feature implemented in the Unix PAL by forcing the first connect attempt to fail.
+            bool testFailingConnect = addresses.Length > 1;
+            _output.WriteLine($"'loopback' resolved to {string.Join(',', addresses)}. testFailingConnect={testFailingConnect}");
+            
+            IPAddress a0 = addresses[0];
+            using Socket s0 = new Socket(a0.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            s0.Bind(new IPEndPoint(a0, 0));
+            int port = ((IPEndPoint)s0.LocalEndPoint!).Port;
+
+            Socket listeningSocket;
+            if (testFailingConnect)
+            {
+                IPAddress a1 = addresses[1];
+                Assert.NotEqual(a0.AddressFamily, a1.AddressFamily);
+
+                Socket s1 = new Socket(a1.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                s1.Bind(new IPEndPoint(a1, port));
+                listeningSocket = s1;
+            }
+            else
+            {
+                listeningSocket = s0;
+            }
+
+            listeningSocket.Listen();
+            _ = listeningSocket.AcceptAsync();
+
+            using Socket c = new Socket(SocketType.Stream, ProtocolType.Tcp);
+            c.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+            c.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 5);
+            c.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 4);
+            c.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
+            
+            await (dnsConnect ? ConnectAsync(c, new DnsEndPoint("localhost", port)) : MultiConnectAsync(c, addresses, port));
+
+            int keepAlive = (int)c.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive)!;
+            int keepAliveTime = (int)c.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime)!;
+            int keepAliveInterval = (int)c.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval)!;
+            int keepAliveRetryCount = (int)c.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount)!;
+
+            Assert.Equal(1, keepAlive);
+            Assert.Equal(5, keepAliveTime);
+            Assert.Equal(4, keepAliveInterval);
+            Assert.Equal(3, keepAliveRetryCount);
+
+            listeningSocket.Dispose();
         }
     }
 
