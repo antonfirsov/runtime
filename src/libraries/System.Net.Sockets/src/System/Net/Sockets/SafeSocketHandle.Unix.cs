@@ -64,6 +64,9 @@ namespace System.Net.Sockets
                     switch (name)
                     {
                         case SocketOptionName.NoDelay: _trackedOptions |= TrackedSocketOptions.NoDelay; return;
+                        case SocketOptionName.TcpKeepAliveTime: _trackedOptions |= TrackedSocketOptions.TcpKeepAliveTime; return;
+                        case SocketOptionName.TcpKeepAliveInterval: _trackedOptions |= TrackedSocketOptions.TcpKeepAliveInterval; return;
+                        case SocketOptionName.TcpKeepAliveRetryCount: _trackedOptions |= TrackedSocketOptions.TcpKeepAliveRetryCount; return;
                     }
                     break;
 
@@ -92,6 +95,7 @@ namespace System.Net.Sockets
                         case SocketOptionName.ReceiveTimeout: _trackedOptions |= TrackedSocketOptions.ReceiveTimeout; return;
                         case SocketOptionName.SendBuffer: _trackedOptions |= TrackedSocketOptions.SendBufferSize; return;
                         case SocketOptionName.SendTimeout: _trackedOptions |= TrackedSocketOptions.SendTimeout; return;
+                        case SocketOptionName.KeepAlive: _trackedOptions |= TrackedSocketOptions.KeepAlive; return;
                     }
                     break;
             }
@@ -328,15 +332,20 @@ namespace System.Net.Sockets
     [Flags]
     internal enum TrackedSocketOptions : short
     {
-        DontFragment = 0x1,
-        DualMode = 0x2,
-        EnableBroadcast = 0x4,
-        LingerState = 0x8,
-        NoDelay = 0x10,
-        ReceiveBufferSize = 0x20,
-        ReceiveTimeout = 0x40,
-        SendBufferSize = 0x80,
-        SendTimeout = 0x100,
-        Ttl = 0x200,
+        DontFragment           = 1 << 0,
+        DualMode               = 1 << 1,
+        EnableBroadcast        = 1 << 2,
+        LingerState            = 1 << 3,
+        NoDelay                = 1 << 4,
+        ReceiveBufferSize      = 1 << 5,
+        ReceiveTimeout         = 1 << 6,
+        SendBufferSize         = 1 << 7,
+        SendTimeout            = 1 << 8,
+        Ttl                    = 1 << 9,
+
+        KeepAlive              = 1 << 10,
+        TcpKeepAliveTime       = 1 << 11,
+        TcpKeepAliveInterval   = 1 << 12,
+        TcpKeepAliveRetryCount = 1 << 13
     }
 }

@@ -137,6 +137,7 @@ namespace System.Net.Sockets
             // values back out to the new underlying socket.
             bool broadcast = false, dontFragment = false, noDelay = false;
             int receiveSize = -1, receiveTimeout = -1, sendSize = -1, sendTimeout = -1;
+            int keepAlive = -1, tcpKeepAliveTime = -1, tcpKeepAliveInterval = -1, tcpKeepAliveRetryCount = -1;
             short ttl = -1;
             LingerOption? linger = null;
             if (_handle.IsTrackedOption(TrackedSocketOptions.DontFragment)) dontFragment = DontFragment;
@@ -148,6 +149,11 @@ namespace System.Net.Sockets
             if (_handle.IsTrackedOption(TrackedSocketOptions.SendBufferSize)) sendSize = SendBufferSize;
             if (_handle.IsTrackedOption(TrackedSocketOptions.SendTimeout)) sendTimeout = SendTimeout;
             if (_handle.IsTrackedOption(TrackedSocketOptions.Ttl)) ttl = Ttl;
+
+            if (_handle.IsTrackedOption(TrackedSocketOptions.KeepAlive)) SocketPal.GetSockOpt(_handle, SocketOptionLevel.Socket, SocketOptionName.KeepAlive, out keepAlive);
+            if (_handle.IsTrackedOption(TrackedSocketOptions.TcpKeepAliveTime)) SocketPal.GetSockOpt(_handle, SocketOptionLevel.Tcp, SocketOptionName.KeepAlive, out tcpKeepAliveTime);
+            if (_handle.IsTrackedOption(TrackedSocketOptions.TcpKeepAliveInterval)) SocketPal.GetSockOpt(_handle, SocketOptionLevel.Tcp, SocketOptionName.KeepAlive, out tcpKeepAliveInterval);
+            if (_handle.IsTrackedOption(TrackedSocketOptions.TcpKeepAliveRetryCount)) SocketPal.GetSockOpt(_handle, SocketOptionLevel.Tcp, SocketOptionName.KeepAlive, out tcpKeepAliveRetryCount);
 
             // Then replace the handle with a new one
             SafeSocketHandle oldHandle = _handle;
@@ -180,6 +186,11 @@ namespace System.Net.Sockets
             if (_handle.IsTrackedOption(TrackedSocketOptions.SendBufferSize)) SendBufferSize = sendSize;
             if (_handle.IsTrackedOption(TrackedSocketOptions.SendTimeout)) SendTimeout = sendTimeout;
             if (_handle.IsTrackedOption(TrackedSocketOptions.Ttl)) Ttl = ttl;
+
+            if (_handle.IsTrackedOption(TrackedSocketOptions.KeepAlive)) SocketPal.SetSockOpt(_handle, SocketOptionLevel.Socket, SocketOptionName.KeepAlive, keepAlive);
+            if (_handle.IsTrackedOption(TrackedSocketOptions.TcpKeepAliveTime)) SocketPal.SetSockOpt(_handle, SocketOptionLevel.Tcp, SocketOptionName.KeepAlive, tcpKeepAliveTime);
+            if (_handle.IsTrackedOption(TrackedSocketOptions.TcpKeepAliveInterval)) SocketPal.SetSockOpt(_handle, SocketOptionLevel.Tcp, SocketOptionName.KeepAlive, tcpKeepAliveInterval);
+            if (_handle.IsTrackedOption(TrackedSocketOptions.TcpKeepAliveRetryCount)) SocketPal.SetSockOpt(_handle, SocketOptionLevel.Tcp, SocketOptionName.KeepAlive, tcpKeepAliveRetryCount);
 
             return SocketError.Success;
         }
