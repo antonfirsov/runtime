@@ -17,7 +17,7 @@ namespace System.Net.Sockets
         private bool _nonBlocking;
         private SocketAsyncContext? _asyncContext;
 
-        private TrackedSocketOptions _trackedOptions;
+        private TrackedSocketOptions_ _trackedOptions_Old;
         internal bool LastConnectFailed { get; set; }
         internal bool DualMode { get; set; }
         internal bool ExposedHandleOrUntrackedConfiguration { get; private set; }
@@ -41,7 +41,7 @@ namespace System.Net.Sockets
 
         internal void TransferTrackedState(SafeSocketHandle target)
         {
-            target._trackedOptions = _trackedOptions;
+            target._trackedOptions_Old = _trackedOptions_Old;
             target.LastConnectFailed = LastConnectFailed;
             target.DualMode = DualMode;
             target.ExposedHandleOrUntrackedConfiguration = ExposedHandleOrUntrackedConfiguration;
@@ -53,9 +53,9 @@ namespace System.Net.Sockets
 
         internal void SetExposed() => ExposedHandleOrUntrackedConfiguration = true;
 
-        internal bool IsTrackedOption(TrackedSocketOptions option) => (_trackedOptions & option) != 0;
+        internal bool IsTrackedOption(TrackedSocketOptions_ option) => (_trackedOptions_Old & option) != 0;
 
-        internal void TrackOption(SocketOptionLevel level, SocketOptionName name)
+        internal void TrackOption_(SocketOptionLevel level, SocketOptionName name)
         {
             // As long as only these options are set, we can support Connect{Async}(IPAddress[], ...).
             switch (level)
@@ -63,39 +63,39 @@ namespace System.Net.Sockets
                 case SocketOptionLevel.Tcp:
                     switch (name)
                     {
-                        case SocketOptionName.NoDelay: _trackedOptions |= TrackedSocketOptions.NoDelay; return;
-                        case SocketOptionName.TcpKeepAliveTime: _trackedOptions |= TrackedSocketOptions.TcpKeepAliveTime; return;
-                        case SocketOptionName.TcpKeepAliveInterval: _trackedOptions |= TrackedSocketOptions.TcpKeepAliveInterval; return;
-                        case SocketOptionName.TcpKeepAliveRetryCount: _trackedOptions |= TrackedSocketOptions.TcpKeepAliveRetryCount; return;
+                        case SocketOptionName.NoDelay: _trackedOptions_Old |= TrackedSocketOptions_.NoDelay; return;
+                        case SocketOptionName.TcpKeepAliveTime: _trackedOptions_Old |= TrackedSocketOptions_.TcpKeepAliveTime; return;
+                        case SocketOptionName.TcpKeepAliveInterval: _trackedOptions_Old |= TrackedSocketOptions_.TcpKeepAliveInterval; return;
+                        case SocketOptionName.TcpKeepAliveRetryCount: _trackedOptions_Old |= TrackedSocketOptions_.TcpKeepAliveRetryCount; return;
                     }
                     break;
 
                 case SocketOptionLevel.IP:
                     switch (name)
                     {
-                        case SocketOptionName.DontFragment: _trackedOptions |= TrackedSocketOptions.DontFragment; return;
-                        case SocketOptionName.IpTimeToLive: _trackedOptions |= TrackedSocketOptions.Ttl; return;
+                        case SocketOptionName.DontFragment: _trackedOptions_Old |= TrackedSocketOptions_.DontFragment; return;
+                        case SocketOptionName.IpTimeToLive: _trackedOptions_Old |= TrackedSocketOptions_.Ttl; return;
                     }
                     break;
 
                 case SocketOptionLevel.IPv6:
                     switch (name)
                     {
-                        case SocketOptionName.IPv6Only: _trackedOptions |= TrackedSocketOptions.DualMode; return;
-                        case SocketOptionName.IpTimeToLive: _trackedOptions |= TrackedSocketOptions.Ttl; return;
+                        case SocketOptionName.IPv6Only: _trackedOptions_Old |= TrackedSocketOptions_.DualMode; return;
+                        case SocketOptionName.IpTimeToLive: _trackedOptions_Old |= TrackedSocketOptions_.Ttl; return;
                     }
                     break;
 
                 case SocketOptionLevel.Socket:
                     switch (name)
                     {
-                        case SocketOptionName.Broadcast: _trackedOptions |= TrackedSocketOptions.EnableBroadcast; return;
-                        case SocketOptionName.Linger: _trackedOptions |= TrackedSocketOptions.LingerState; return;
-                        case SocketOptionName.ReceiveBuffer: _trackedOptions |= TrackedSocketOptions.ReceiveBufferSize; return;
-                        case SocketOptionName.ReceiveTimeout: _trackedOptions |= TrackedSocketOptions.ReceiveTimeout; return;
-                        case SocketOptionName.SendBuffer: _trackedOptions |= TrackedSocketOptions.SendBufferSize; return;
-                        case SocketOptionName.SendTimeout: _trackedOptions |= TrackedSocketOptions.SendTimeout; return;
-                        case SocketOptionName.KeepAlive: _trackedOptions |= TrackedSocketOptions.KeepAlive; return;
+                        case SocketOptionName.Broadcast: _trackedOptions_Old |= TrackedSocketOptions_.EnableBroadcast; return;
+                        case SocketOptionName.Linger: _trackedOptions_Old |= TrackedSocketOptions_.LingerState; return;
+                        case SocketOptionName.ReceiveBuffer: _trackedOptions_Old |= TrackedSocketOptions_.ReceiveBufferSize; return;
+                        case SocketOptionName.ReceiveTimeout: _trackedOptions_Old |= TrackedSocketOptions_.ReceiveTimeout; return;
+                        case SocketOptionName.SendBuffer: _trackedOptions_Old |= TrackedSocketOptions_.SendBufferSize; return;
+                        case SocketOptionName.SendTimeout: _trackedOptions_Old |= TrackedSocketOptions_.SendTimeout; return;
+                        case SocketOptionName.KeepAlive: _trackedOptions_Old |= TrackedSocketOptions_.KeepAlive; return;
                     }
                     break;
             }
@@ -330,7 +330,7 @@ namespace System.Net.Sockets
 
     /// <summary>Flags that correspond to exposed options on Socket.</summary>
     [Flags]
-    internal enum TrackedSocketOptions : short
+    internal enum TrackedSocketOptions_ : short
     {
         DontFragment           = 1 << 0,
         DualMode               = 1 << 1,
