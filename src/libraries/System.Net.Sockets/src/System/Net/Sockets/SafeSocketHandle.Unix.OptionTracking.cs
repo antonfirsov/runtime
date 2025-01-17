@@ -20,23 +20,55 @@ namespace System.Net.Sockets
             }
         }
 
-        public void GetTrackedOptionValues(Span<int> values)
+        public int GetTrackedOptions(Span<int> values, out LingerOption? lingerOption)
         {
-            Debug.Assert(values.Length == TrackedSocketOptionCount);
+            Debug.Assert(values.Length == LastTrackedSocketOptionIndex + 1);
+
+            // SO_LINGER is the only tracked socket option with a non-int value.
+            lingerOption = null;
+            int lingerMask = 1 << (int)TrackedSocketOptions.SO_LINGER;
+            int trackedOptions = _trackedOptions;
+            if ((trackedOptions & lingerMask) == lingerMask)
+            {
+                SocketError errorCode = SocketPal.GetLingerOption(this, out lingerOption);
+                if (NetEventSource.Log.IsEnabled() && errorCode != SocketError.Success) NetEventSource.Info(this, $"GetLingerOption returned errorCode:{errorCode}");
+                trackedOptions &= ~lingerMask;
+            }
 
             for (int i = 0; i < values.Length; i++)
             {
                 int mask = 1 << i;
-                if ((_trackedOptions & mask) == mask)
+                if ((trackedOptions & mask) == mask)
                 {
                     TrackedSocketOptions tracked = (TrackedSocketOptions)(i + 1);
                     (SocketOptionName name, SocketOptionLevel level) = ToSocketOptions(tracked);
-                    SocketPal.GetSockOpt(this, level, name, out values[i]); // ignore any SocketError
+                    SocketError errorCode = SocketPal.GetSockOpt(this, level, name, out values[i]);
+                    if (NetEventSource.Log.IsEnabled() && errorCode != SocketError.Success) NetEventSource.Info(this, $"GetSockOpt({level},{name}) returned errorCode:{errorCode}");
+                }
+            }
+            return trackedOptions;
+        }
+
+        public void SetTrackedOptions(int trackedOptions, ReadOnlySpan<int> values, LingerOption? lingerOption)
+        {
+            if (lingerOption is not null)
+            {
+                SocketError errorCode = SocketPal.SetLingerOption(this, lingerOption);
+                if (NetEventSource.Log.IsEnabled() && errorCode != SocketError.Success) NetEventSource.Info(this, $"SetLingerOption returned errorCode:{errorCode}");
+            }
+
+            for (int i = 0; i < values.Length; i++)
+            {
+                int mask = 1 << i;
+                if ((trackedOptions & mask) == mask)
+                {
+                    TrackedSocketOptions tracked = (TrackedSocketOptions)(i + 1);
+                    (SocketOptionName name, SocketOptionLevel level) = ToSocketOptions(tracked);
+                    SocketError errorCode = SocketPal.SetSockOpt(this, level, name, values[i]);
+                    if (NetEventSource.Log.IsEnabled() && errorCode != SocketError.Success) NetEventSource.Info(this, $"GetSockOpt({level},{name}) returned errorCode:{errorCode}");
                 }
             }
         }
-
-        internal const int TrackedSocketOptionCount = 21;
 
         private enum TrackedSocketOptions
         {
@@ -68,6 +100,8 @@ namespace System.Net.Sockets
             SO_SNDTIMEO,
             SO_RCVTIMEO,
         }
+
+        internal static int LastTrackedSocketOptionIndex => (int)TrackedSocketOptions.SO_RCVTIMEO;
 
         private static TrackedSocketOptions ToTrackedSocketOptions(SocketOptionName name, SocketOptionLevel level)
             => ((int)name, level) switch
