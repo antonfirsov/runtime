@@ -17,7 +17,6 @@ namespace System.Net.Sockets
         private bool _nonBlocking;
         private SocketAsyncContext? _asyncContext;
 
-        private TrackedSocketOptions_ _trackedOptions_Old;
         internal bool LastConnectFailed { get; set; }
         internal bool DualMode { get; set; }
         internal bool ExposedHandleOrUntrackedConfiguration { get; private set; }
@@ -41,7 +40,7 @@ namespace System.Net.Sockets
 
         internal void TransferTrackedState(SafeSocketHandle target)
         {
-            target._trackedOptions_Old = _trackedOptions_Old;
+            target._trackedOptions = _trackedOptions;
             target.LastConnectFailed = LastConnectFailed;
             target.DualMode = DualMode;
             target.ExposedHandleOrUntrackedConfiguration = ExposedHandleOrUntrackedConfiguration;
@@ -52,58 +51,6 @@ namespace System.Net.Sockets
         }
 
         internal void SetExposed() => ExposedHandleOrUntrackedConfiguration = true;
-
-        internal bool IsTrackedOption(TrackedSocketOptions_ option) => (_trackedOptions_Old & option) != 0;
-
-        internal void TrackOption_(SocketOptionLevel level, SocketOptionName name)
-        {
-            // As long as only these options are set, we can support Connect{Async}(IPAddress[], ...).
-            switch (level)
-            {
-                case SocketOptionLevel.Tcp:
-                    switch (name)
-                    {
-                        case SocketOptionName.NoDelay: _trackedOptions_Old |= TrackedSocketOptions_.NoDelay; return;
-                        case SocketOptionName.TcpKeepAliveTime: _trackedOptions_Old |= TrackedSocketOptions_.TcpKeepAliveTime; return;
-                        case SocketOptionName.TcpKeepAliveInterval: _trackedOptions_Old |= TrackedSocketOptions_.TcpKeepAliveInterval; return;
-                        case SocketOptionName.TcpKeepAliveRetryCount: _trackedOptions_Old |= TrackedSocketOptions_.TcpKeepAliveRetryCount; return;
-                    }
-                    break;
-
-                case SocketOptionLevel.IP:
-                    switch (name)
-                    {
-                        case SocketOptionName.DontFragment: _trackedOptions_Old |= TrackedSocketOptions_.DontFragment; return;
-                        case SocketOptionName.IpTimeToLive: _trackedOptions_Old |= TrackedSocketOptions_.Ttl; return;
-                    }
-                    break;
-
-                case SocketOptionLevel.IPv6:
-                    switch (name)
-                    {
-                        case SocketOptionName.IPv6Only: _trackedOptions_Old |= TrackedSocketOptions_.DualMode; return;
-                        case SocketOptionName.IpTimeToLive: _trackedOptions_Old |= TrackedSocketOptions_.Ttl; return;
-                    }
-                    break;
-
-                case SocketOptionLevel.Socket:
-                    switch (name)
-                    {
-                        case SocketOptionName.Broadcast: _trackedOptions_Old |= TrackedSocketOptions_.EnableBroadcast; return;
-                        case SocketOptionName.Linger: _trackedOptions_Old |= TrackedSocketOptions_.LingerState; return;
-                        case SocketOptionName.ReceiveBuffer: _trackedOptions_Old |= TrackedSocketOptions_.ReceiveBufferSize; return;
-                        case SocketOptionName.ReceiveTimeout: _trackedOptions_Old |= TrackedSocketOptions_.ReceiveTimeout; return;
-                        case SocketOptionName.SendBuffer: _trackedOptions_Old |= TrackedSocketOptions_.SendBufferSize; return;
-                        case SocketOptionName.SendTimeout: _trackedOptions_Old |= TrackedSocketOptions_.SendTimeout; return;
-                        case SocketOptionName.KeepAlive: _trackedOptions_Old |= TrackedSocketOptions_.KeepAlive; return;
-                    }
-                    break;
-            }
-
-            // For any other settings, we need to track that they were used so that we can error out
-            // if a Connect{Async}(IPAddress[],...) attempt is made.
-            ExposedHandleOrUntrackedConfiguration = true;
-        }
 
         internal SocketAsyncContext AsyncContext =>
             _asyncContext ??
@@ -326,26 +273,5 @@ namespace System.Net.Sockets
 
             return errorCode;
         }
-    }
-
-    /// <summary>Flags that correspond to exposed options on Socket.</summary>
-    [Flags]
-    internal enum TrackedSocketOptions_ : short
-    {
-        DontFragment           = 1 << 0,
-        DualMode               = 1 << 1,
-        EnableBroadcast        = 1 << 2,
-        LingerState            = 1 << 3,
-        NoDelay                = 1 << 4,
-        ReceiveBufferSize      = 1 << 5,
-        ReceiveTimeout         = 1 << 6,
-        SendBufferSize         = 1 << 7,
-        SendTimeout            = 1 << 8,
-        Ttl                    = 1 << 9,
-
-        KeepAlive              = 1 << 10,
-        TcpKeepAliveTime       = 1 << 11,
-        TcpKeepAliveInterval   = 1 << 12,
-        TcpKeepAliveRetryCount = 1 << 13
     }
 }
