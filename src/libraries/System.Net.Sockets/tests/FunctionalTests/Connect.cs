@@ -270,19 +270,30 @@ namespace System.Net.Sockets.Tests
         [ConditionalTheory]
         [InlineData(false)]
         [InlineData(true)]
-        public Task MultiConnect_PropertiesPreserved(bool dnsConnect) => MultiConnectTestImpl(dnsConnect,
+        public Task MultiConnect_LingerState_Preserved(bool dnsConnect) => MultiConnectTestImpl(dnsConnect,
             c =>
             {
                 c.LingerState = new LingerOption(true, 42);
-                c.SendBufferSize = 12345;
-                c.ReceiveTimeout = 4321;
             },
             c =>
             {
                 Assert.True(c.LingerState.Enabled);
                 Assert.Equal(42, c.LingerState.LingerTime);
-                Assert.Equal(12345, c.SendBufferSize);
+            });
+
+        [ConditionalTheory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public Task MultiConnect_MiscProperties_Preserved(bool dnsConnect) => MultiConnectTestImpl(dnsConnect,
+            c =>
+            {
+                c.ReceiveTimeout = 4321;
+                c.NoDelay = true;
+            },
+            c =>
+            {
                 Assert.Equal(4321, c.ReceiveTimeout);
+                Assert.True(c.NoDelay);
             });
 
         private async Task MultiConnectTestImpl(bool dnsConnect, Action<Socket> setupSocket, Action<Socket> validateSocket)
