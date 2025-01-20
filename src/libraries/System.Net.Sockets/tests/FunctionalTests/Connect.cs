@@ -246,7 +246,46 @@ namespace System.Net.Sockets.Tests
         [ConditionalTheory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task MultiConnect_KeepAliveOptionsPreserved(bool dnsConnect)
+        public Task MultiConnect_KeepAliveOptionsPreserved(bool dnsConnect) => MultiConnectTestImpl(dnsConnect,
+            c =>
+            {
+                c.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+                c.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 5);
+                c.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 4);
+                c.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
+            },
+            c =>
+            {
+                int keepAlive = (int)c.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive)!;
+                int keepAliveTime = (int)c.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime)!;
+                int keepAliveInterval = (int)c.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval)!;
+                int keepAliveRetryCount = (int)c.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount)!;
+
+                Assert.Equal(1, keepAlive);
+                Assert.Equal(5, keepAliveTime);
+                Assert.Equal(4, keepAliveInterval);
+                Assert.Equal(3, keepAliveRetryCount);
+            });
+
+        [ConditionalTheory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public Task MultiConnect_PropertiesPreserved(bool dnsConnect) => MultiConnectTestImpl(dnsConnect,
+            c =>
+            {
+                c.LingerState = new LingerOption(true, 42);
+                c.SendBufferSize = 12345;
+                c.ReceiveTimeout = 4321;
+            },
+            c =>
+            {
+                Assert.True(c.LingerState.Enabled);
+                Assert.Equal(42, c.LingerState.LingerTime);
+                Assert.Equal(12345, c.SendBufferSize);
+                Assert.Equal(4321, c.ReceiveTimeout);
+            });
+
+        private async Task MultiConnectTestImpl(bool dnsConnect, Action<Socket> setupSocket, Action<Socket> validateSocket)
         {
             if (UsesEap && !dnsConnect)
             {
@@ -260,9 +299,12 @@ namespace System.Net.Sockets.Tests
             // In such environments this test stresses the socket option tracking feature implemented in the Unix PAL by forcing the first connect attempt to fail.
             bool testFailingConnect = addresses.Length > 1;
             _output.WriteLine($"dnsConnect={dnsConnect}, testFailingConnect={testFailingConnect}, 'loopback' resolved to {string.Join(',', addresses)}.");
-            
+
             IPAddress a0 = addresses[0];
-            using Socket s0 = new Socket(a0.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            using Socket s0 = testFailingConnect ?
+                new Socket(SocketType.Stream, ProtocolType.Tcp) : // DualMode socket
+                new Socket(a0.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+
             s0.Bind(new IPEndPoint(a0, 0));
             int port = ((IPEndPoint)s0.LocalEndPoint!).Port;
 
@@ -285,22 +327,11 @@ namespace System.Net.Sockets.Tests
             _ = listeningSocket.AcceptAsync();
 
             using Socket c = new Socket(SocketType.Stream, ProtocolType.Tcp);
-            c.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
-            c.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 5);
-            c.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 4);
-            c.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
-            
+            setupSocket(c);
+
             await (dnsConnect ? ConnectAsync(c, new DnsEndPoint("localhost", port)) : MultiConnectAsync(c, addresses, port));
 
-            int keepAlive = (int)c.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive)!;
-            int keepAliveTime = (int)c.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime)!;
-            int keepAliveInterval = (int)c.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval)!;
-            int keepAliveRetryCount = (int)c.GetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount)!;
-
-            Assert.Equal(1, keepAlive);
-            Assert.Equal(5, keepAliveTime);
-            Assert.Equal(4, keepAliveInterval);
-            Assert.Equal(3, keepAliveRetryCount);
+            validateSocket(c);
 
             listeningSocket.Dispose();
         }
