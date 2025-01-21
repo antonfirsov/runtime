@@ -296,6 +296,25 @@ namespace System.Net.Sockets.Tests
                 Assert.True(c.NoDelay);
             });
 
+        [ConditionalFact]
+        public async Task MultiConnect_DualMode_Preserved()
+        {
+            if (UsesEap) throw new SkipTestException("EAP does not support IPAddress[] connect");
+
+            using Socket l = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+            int port = l.BindToAnonymousPort(IPAddress.IPv6Loopback);
+            l.Listen();
+            _ = l.AcceptAsync();
+
+            using Socket c = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp)
+            {
+                DualMode = false
+            };
+
+            IPAddress[] addresses = [IPAddress.Parse("1.2.3.4")];
+            await c.ConnectAsync(addresses, port);
+        }
+
         private async Task MultiConnectTestImpl(bool dnsConnect, Action<Socket> setupSocket, Action<Socket> validateSocket)
         {
             if (UsesEap && !dnsConnect)
@@ -316,8 +335,7 @@ namespace System.Net.Sockets.Tests
                 new Socket(SocketType.Stream, ProtocolType.Tcp) : // DualMode socket
                 new Socket(a0.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
-            s0.Bind(new IPEndPoint(a0, 0));
-            int port = ((IPEndPoint)s0.LocalEndPoint!).Port;
+            int port = s0.BindToAnonymousPort(a0);
 
             Socket listeningSocket;
             if (testFailingConnect)
@@ -326,7 +344,7 @@ namespace System.Net.Sockets.Tests
                 Assert.NotEqual(a0.AddressFamily, a1.AddressFamily);
 
                 Socket s1 = new Socket(a1.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                s1.Bind(new IPEndPoint(a1, port));
+                s1.BindToAnonymousPort(a1);
                 listeningSocket = s1;
             }
             else
