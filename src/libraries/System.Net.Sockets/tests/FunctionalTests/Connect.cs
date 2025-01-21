@@ -302,8 +302,15 @@ namespace System.Net.Sockets.Tests
         {
             if (UsesEap) throw new SkipTestException("EAP does not support IPAddress[] connect");
 
-            using Socket l = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
-            int port = l.BindToAnonymousPort(IPAddress.IPv6Loopback);
+            int port = -1;
+            using PortBlocker portBlocker = new PortBlocker(() =>
+            {
+                Socket l = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp);
+                port = l.BindToAnonymousPort(IPAddress.IPv6Loopback);
+                return l;
+            });
+
+            Socket l = portBlocker.MainSocket;
             l.Listen();
             _ = l.AcceptAsync();
 
@@ -332,27 +339,17 @@ namespace System.Net.Sockets.Tests
             bool testFailingConnect = addresses.Length > 1;
             _output.WriteLine($"dnsConnect={dnsConnect}, testFailingConnect={testFailingConnect}, 'loopback' resolved to {string.Join(',', addresses)}.");
 
-            IPAddress a0 = addresses[0];
-            using Socket s0 = testFailingConnect ?
-                new Socket(SocketType.Stream, ProtocolType.Tcp) : // DualMode socket
-                new Socket(a0.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-
-            int port = s0.BindToAnonymousPort(a0);
-
-            Socket listeningSocket;
-            if (testFailingConnect)
+            // In case testFailingConnect == true, PortBlocker's "shadow socket" will be the one addresses[0] is pointing to.
+            // The test will fail to connect to that socket.
+            IPAddress successAddress = testFailingConnect ? addresses[1] : addresses[0];
+            int port = -1;
+            using PortBlocker portBlocker = new PortBlocker(() =>
             {
-                IPAddress a1 = addresses[1];
-                Assert.NotEqual(a0.AddressFamily, a1.AddressFamily);
-
-                Socket s1 = new Socket(a1.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-                s1.BindToAnonymousPort(a1);
-                listeningSocket = s1;
-            }
-            else
-            {
-                listeningSocket = s0;
-            }
+                Socket s = new Socket(successAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                port = s.BindToAnonymousPort(successAddress);
+                return s;
+            });
+            Socket listeningSocket = portBlocker.MainSocket;
 
             listeningSocket.Listen();
             _ = listeningSocket.AcceptAsync();
