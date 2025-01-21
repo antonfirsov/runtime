@@ -13,14 +13,16 @@ namespace System.Net.Sockets
         internal void TrackSocketOption(SocketOptionLevel level, SocketOptionName name)
         {
             TrackableSocketOptions tracked = ToTrackableSocketOptions(name, level);
-            _trackedOptions |= 1 << ((int)tracked - 1);
 
             // For untracked socket options, we need to remember that they were used
             // so that we can error out if a multi-connect attempt is made.
             if (tracked == TrackableSocketOptions.None)
             {
                 ExposedHandleOrUntrackedConfiguration = true;
+                return;
             }
+
+            _trackedOptions |= GetMask(tracked);
         }
 
         internal void GetTrackedSocketOptions(Span<int> values, out LingerOption? lingerOption)
@@ -30,7 +32,7 @@ namespace System.Net.Sockets
 
             // SO_LINGER is the only tracked socket option with a non-int value.
             lingerOption = null;
-            int lingerMask = 1 << (int)TrackableSocketOptions.SO_LINGER;
+            int lingerMask = GetMask(TrackableSocketOptions.SO_LINGER);
             if ((trackedOptions & lingerMask) == lingerMask)
             {
                 SocketError errorCode = SocketPal.GetLingerOption(this, out lingerOption);
@@ -42,7 +44,7 @@ namespace System.Net.Sockets
 
             // For DualMode, we use the value stored in the handle rather than querying the socket itself,
             // as on Unix stacks binding a dual-mode socket to an IPv6 address may cause IPV6_V6ONLY to revert to true.
-            int ipv6OnlyMask = 1 << (int)TrackableSocketOptions.IPV6_V6ONLY;
+            int ipv6OnlyMask = GetMask(TrackableSocketOptions.IPV6_V6ONLY);
             if ((trackedOptions & ipv6OnlyMask) == ipv6OnlyMask)
             {
                 values[(int)TrackableSocketOptions.IPV6_V6ONLY - 1] = DualMode ? 0 : 1;
@@ -64,7 +66,7 @@ namespace System.Net.Sockets
 
         internal void SetTrackedSocketOptions(ReadOnlySpan<int> values, LingerOption? lingerOption)
         {
-            int lingerMask = 1 << (int)TrackableSocketOptions.SO_LINGER;
+            int lingerMask = GetMask(TrackableSocketOptions.SO_LINGER);
             if (lingerOption is not null)
             {
                 Debug.Assert((_trackedOptions & lingerMask) == lingerMask);
@@ -86,6 +88,8 @@ namespace System.Net.Sockets
                 }
             }
         }
+
+        private static int GetMask(TrackableSocketOptions tracked) => 1 << ((int)tracked - 1);
 
         private enum TrackableSocketOptions
         {
