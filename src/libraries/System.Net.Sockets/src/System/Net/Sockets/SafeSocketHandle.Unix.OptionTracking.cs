@@ -5,7 +5,11 @@ using System.Diagnostics;
 
 namespace System.Net.Sockets
 {
-    // TODO: Reorganize comments, provide a good summary.
+    // On Unix it is not possible to use a socket FD after a failed connect attempt for another connect, meaning that a new FD needs to be created
+    // after each failing attempt during a multi-connect. When creating a new handle, we need to make sure that relevant socket options are
+    // transferred to the new socket FD and we need to track which options have been changed so we know we need to transfer them.
+    // We are only tracking options which are relevant for sockets that can do multi-connect. Options which are only relevant for UDP/datagram sockets
+    // are not tracked, since multi-connect is not a meaningful operation for such sockets.
     public partial class SafeSocketHandle
     {
         private int _trackedOptions;
@@ -91,6 +95,7 @@ namespace System.Net.Sockets
 
         private static int GetMask(TrackableSocketOptions tracked) => 1 << ((int)tracked - 1);
 
+        // Relevant option names and values taken from Windows headers.
         private enum TrackableSocketOptions
         {
             None = 0,
