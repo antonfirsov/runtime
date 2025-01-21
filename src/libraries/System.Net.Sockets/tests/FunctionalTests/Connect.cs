@@ -297,6 +297,7 @@ namespace System.Net.Sockets.Tests
             });
 
         [ConditionalFact]
+        [PlatformSpecific(TestPlatforms.AnyUnix)]
         public async Task MultiConnect_DualMode_Preserved()
         {
             if (UsesEap) throw new SkipTestException("EAP does not support IPAddress[] connect");
@@ -311,8 +312,9 @@ namespace System.Net.Sockets.Tests
                 DualMode = false
             };
 
-            IPAddress[] addresses = [IPAddress.Parse("1.2.3.4")];
+            IPAddress[] addresses = [IPAddress.Parse("fc00:1:2:3:4:5:6:7"), IPAddress.IPv6Loopback]; // No listeners on the first address.
             await c.ConnectAsync(addresses, port);
+            Assert.False(c.DualMode);
         }
 
         private async Task MultiConnectTestImpl(bool dnsConnect, Action<Socket> setupSocket, Action<Socket> validateSocket)
