@@ -320,27 +320,24 @@ namespace System.Net
         //
         // Afterwards, the function can be called many times with other URIs and
         // setDefault == false to check whether this cookie matches given uri
-        internal bool VerifySetDefaults(CookieVariant variant, Uri uri, bool isLocalDomain, string localDomain, bool setDefault, bool shouldThrow)
+        internal bool VerifySetDefaults(CookieVariant variant, Uri uri, bool isLocalDomain, string localDomain)
         {
             string host = uri.Host;
             int port = uri.Port;
             string path = uri.AbsolutePath;
             bool valid = true;
 
-            if (setDefault)
+            // Set Variant. If version is zero => reset cookie to Version0 style
+            if (Version == 0)
             {
-                // Set Variant. If version is zero => reset cookie to Version0 style
-                if (Version == 0)
-                {
-                    variant = CookieVariant.Plain;
-                }
-                else if (Version == 1 && variant == CookieVariant.Unknown)
-                {
-                    // Since we don't expose Variant to an app, set it to Default
-                    variant = CookieVariant.Default;
-                }
-                m_cookieVariant = variant;
+                variant = CookieVariant.Plain;
             }
+            else if (Version == 1 && variant == CookieVariant.Unknown)
+            {
+                // Since we don't expose Variant to an app, set it to Default
+                variant = CookieVariant.Default;
+            }
+            m_cookieVariant = variant;
 
             // Check the name
             if (string.IsNullOrEmpty(m_name) ||
@@ -349,50 +346,34 @@ namespace System.Net
                 m_name.EndsWith(' ') ||
                 m_name.AsSpan().ContainsAny(s_reservedToNameChars))
             {
-                if (shouldThrow)
-                {
-                    throw new CookieException(SR.Format(SR.net_cookie_attribute, "Name", m_name ?? "<null>"));
-                }
-                return false;
+                throw new CookieException(SR.Format(SR.net_cookie_attribute, "Name", m_name ?? "<null>"));
             }
 
             // Check the value
             if (m_value == null ||
                 (!(m_value.Length > 2 && m_value.StartsWith('\"') && m_value.EndsWith('\"')) && m_value.AsSpan().ContainsAny(';', ',')))
             {
-                if (shouldThrow)
-                {
-                    throw new CookieException(SR.Format(SR.net_cookie_attribute, "Value", m_value ?? "<null>"));
-                }
-                return false;
+                throw new CookieException(SR.Format(SR.net_cookie_attribute, "Value", m_value ?? "<null>"));
             }
 
             // Check Comment syntax
             if (Comment != null && !(Comment.Length > 2 && Comment.StartsWith('\"') && Comment.EndsWith('\"'))
                 && (Comment.AsSpan().ContainsAny(';', ',')))
             {
-                if (shouldThrow)
-                {
-                    throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.CommentAttributeName, Comment));
-                }
-                return false;
+                throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.CommentAttributeName, Comment));
             }
 
             // Check Path syntax
             if (Path != null && !(Path.Length > 2 && Path.StartsWith('\"') && Path.EndsWith('\"'))
                 && (Path.AsSpan().ContainsAny(';', ',')))
             {
-                if (shouldThrow)
-                {
-                    throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.PathAttributeName, Path));
-                }
-                return false;
+                throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.PathAttributeName, Path));
             }
 
             // Check/set domain
             //
             // If domain is implicit => assume a) uri is valid, b) just set domain to uri hostname.
-            if (setDefault && m_domain_implicit)
+            if (m_domain_implicit)
             {
                 m_domain = host;
             }
@@ -411,11 +392,7 @@ namespace System.Net
                     // Syntax check for Domain charset plus empty string.
                     if (!DomainCharsTest(domain))
                     {
-                        if (shouldThrow)
-                        {
-                            throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.DomainAttributeName, domain ?? "<null>"));
-                        }
-                        return false;
+                        throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.DomainAttributeName, domain ?? "<null>"));
                     }
 
                     // Domain must start with '.' if set explicitly.
@@ -482,16 +459,12 @@ namespace System.Net
                 }
                 if (!valid)
                 {
-                    if (shouldThrow)
-                    {
-                        throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.DomainAttributeName, m_domain));
-                    }
-                    return false;
+                    throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.DomainAttributeName, m_domain));
                 }
             }
 
             // Check/Set Path
-            if (setDefault && m_path_implicit)
+            if (m_path_implicit)
             {
                 // This code assumes that the URI path is always valid and contains at least one '/'.
                 switch (m_cookieVariant)
@@ -529,7 +502,7 @@ namespace System.Net
             }
 
             // Set the default port if Port attribute was present but had no value.
-            if (setDefault && (m_port_implicit == false && m_port.Length == 0))
+            if (m_port_implicit == false && m_port.Length == 0)
             {
                 m_port_list = new int[1] { port };
             }
@@ -548,11 +521,7 @@ namespace System.Net
                 }
                 if (!valid)
                 {
-                    if (shouldThrow)
-                    {
-                        throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.PortAttributeName, m_port));
-                    }
-                    return false;
+                    throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.PortAttributeName, m_port));
                 }
             }
             return true;

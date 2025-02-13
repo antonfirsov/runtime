@@ -252,24 +252,20 @@ namespace System.Net
 
             // We don't know cookie verification status, so re-create the cookie and verify it.
             Cookie new_cookie = cookie.Clone();
-            new_cookie.VerifySetDefaults(new_cookie.Variant, uri, IsLocalDomain(uri.Host), m_fqdnMyDomain, true, true);
+            new_cookie.VerifySetDefaults(new_cookie.Variant, uri, IsLocalDomain(uri.Host), m_fqdnMyDomain);
 
-            Add(new_cookie, true);
+            AddInternal(new_cookie);
         }
 
         // This method is called *only* when cookie verification is done, so unlike with public
         // Add(Cookie cookie) the cookie is in a reasonable condition.
-        internal void Add(Cookie cookie, bool throwOnError)
+        internal void AddInternal(Cookie cookie)
         {
             PathList? pathList;
 
             if (cookie.Value.Length > m_maxCookieSize)
             {
-                if (throwOnError)
-                {
-                    throw new CookieException(SR.Format(SR.net_cookie_size, cookie, m_maxCookieSize));
-                }
-                return;
+                throw new CookieException(SR.Format(SR.net_cookie_size, cookie, m_maxCookieSize));
             }
 
             try
@@ -340,10 +336,7 @@ namespace System.Net
             }
             catch (Exception e)
             {
-                if (throwOnError)
-                {
-                    throw new CookieException(SR.net_container_add_cookie, e);
-                }
+                throw new CookieException(SR.net_container_add_cookie, e);
             }
         }
 
@@ -656,9 +649,9 @@ namespace System.Net
             ArgumentNullException.ThrowIfNull(cookie);
 
             Cookie new_cookie = cookie.Clone();
-            new_cookie.VerifySetDefaults(new_cookie.Variant, uri, IsLocalDomain(uri.Host), m_fqdnMyDomain, true, true);
+            new_cookie.VerifySetDefaults(new_cookie.Variant, uri, IsLocalDomain(uri.Host), m_fqdnMyDomain);
 
-            Add(new_cookie, true);
+            AddInternal(new_cookie);
         }
 
         public void Add(Uri uri, CookieCollection cookies)
@@ -670,14 +663,14 @@ namespace System.Net
             foreach (Cookie c in cookies)
             {
                 Cookie new_cookie = c.Clone();
-                new_cookie.VerifySetDefaults(new_cookie.Variant, uri, isLocalDomain, m_fqdnMyDomain, true, true);
-                Add(new_cookie, true);
+                new_cookie.VerifySetDefaults(new_cookie.Variant, uri, isLocalDomain, m_fqdnMyDomain);
+                AddInternal(new_cookie);
             }
         }
 
-        internal CookieCollection CookieCutter(Uri uri, string? headerName, string setCookieHeader, bool isThrow)
+        internal CookieCollection CookieCutter(Uri uri, string? headerName, string setCookieHeader)
         {
-            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"uri:{uri} headerName:{headerName} setCookieHeader:{setCookieHeader} isThrow:{isThrow}");
+            if (NetEventSource.Log.IsEnabled()) NetEventSource.Info(this, $"uri:{uri} headerName:{headerName} setCookieHeader:{setCookieHeader}");
 
             CookieCollection cookies = new CookieCollection();
             CookieVariant variant = CookieVariant.Unknown;
@@ -717,17 +710,12 @@ namespace System.Net
                     // Parser marks invalid cookies this way
                     if (string.IsNullOrEmpty(cookie.Name))
                     {
-                        if (isThrow)
-                        {
-                            throw new CookieException(SR.net_cookie_format);
-                        }
-                        // Otherwise, ignore (reject) cookie
-                        continue;
+                        throw new CookieException(SR.net_cookie_format);
                     }
 
                     // This will set the default values from the response URI
                     // AND will check for cookie validity
-                    if (!cookie.VerifySetDefaults(variant, uri, isLocalDomain, m_fqdnMyDomain, true, isThrow))
+                    if (!cookie.VerifySetDefaults(variant, uri, isLocalDomain, m_fqdnMyDomain))
                     {
                         continue;
                     }
@@ -742,16 +730,13 @@ namespace System.Net
             }
             catch (Exception e)
             {
-                if (isThrow)
-                {
-                    throw new CookieException(SR.Format(SR.net_cookie_parse_header, uri.AbsoluteUri), e);
-                }
+                throw new CookieException(SR.Format(SR.net_cookie_parse_header, uri.AbsoluteUri), e);
             }
 
             int cookiesCount = cookies.Count;
             for (int i = 0; i < cookiesCount; i++)
             {
-                Add((Cookie)cookies[i], isThrow);
+                AddInternal((Cookie)cookies[i], true);
             }
 
             return cookies;
@@ -1025,7 +1010,7 @@ namespace System.Net
             ArgumentNullException.ThrowIfNull(uri);
             ArgumentNullException.ThrowIfNull(cookieHeader);
 
-            CookieCutter(uri, null, cookieHeader, true); // Will throw on error
+            CookieCutter(uri, null, cookieHeader); // Will throw on error
         }
     }
 
