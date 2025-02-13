@@ -1016,10 +1016,11 @@ namespace System.Net.Primitives.Unit.Tests
             { "https://yay.test.com", "yay.test.com" },
             { "https://yay.test.com", ".yay.test.com" },
             { "https://yay.test.com", ".test.com" },
-            { "https://yay.test.com", "test.com" },
+            { "https://yay.test.com/foo/bar", "test.com" },
             { "https://127.0.1.1", "127.0.1.1" },
             { "https://42.42.100.100", "42.42.100.100" },
-            { "https://[::FFFF:192.168.0.1]", "::FFFF:192.168.0.1" },
+            { "https://[::1]", "[::1]" },
+            { "https://[::FFFF:192.168.0.1]/test", "[::FFFF:192.168.0.1]" },
         };
 
 
