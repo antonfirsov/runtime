@@ -736,7 +736,7 @@ namespace System.Net
             int cookiesCount = cookies.Count;
             for (int i = 0; i < cookiesCount; i++)
             {
-                AddInternal((Cookie)cookies[i], true);
+                AddInternal((Cookie)cookies[i]);
             }
 
             return cookies;
