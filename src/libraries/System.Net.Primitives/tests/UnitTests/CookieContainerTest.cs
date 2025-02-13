@@ -590,13 +590,20 @@ namespace System.Net.Primitives.Unit.Tests
         {
             Uri uri = new Uri("http://domain.com");
 
+            Cookie c0 = new Cookie("name1", "value", "", "domain.com");
             Cookie c1 = new Cookie("name1", "value", "", ".domain.com"); // Variant = Plain
             Cookie c2 = new Cookie("name1", "value", "", ".domain.com") { Port = "\"80\"" }; // Variant = RFC2965 (should override)
             Cookie c3 = new Cookie("name1", "value", "", ".domain.com") { Port = "\"80, 90\"" }; // Variant = RFC2965 (should override)
             Cookie c4 = new Cookie("name1", "value", "", ".domain.com") { Version = 1 }; // Variant = RFC2109 (should be rejected)
 
             CookieContainer cc = new CookieContainer();
+
+            cc.Add(c0);
+            Assert.Equal("domain.com", cc.GetCookies(uri)[0].Domain);
+
             cc.Add(c1);
+            Assert.Equal(1, cc.Count);
+            Assert.Equal(".domain.com", cc.GetCookies(uri)[0].Domain);
 
             // Adding a newer variant should override an older one
             cc.Add(c2);
@@ -612,6 +619,24 @@ namespace System.Net.Primitives.Unit.Tests
 
             // Ensure that although we added 3 cookies, only 1 was actually added (the others were overridden or rejected)
             Assert.Equal(1, cc.Count);
+        }
+
+        [Fact]
+        public static void Add_SetCookies_SameCookieDifferentVairants_OverridesOlderVariant()
+        {
+            Uri uri = new Uri("http://domain.com");
+            CookieContainer cc = new();
+            Cookie a = new()
+            {
+                Domain = "test.com",
+                Name = "lol",
+                Value = "0"
+            };
+            cc.Add(uri, a);
+            cc.SetCookies(uri, "lol=42");
+
+            Assert.Equal(1, cc.Count);
+            Assert.Equal("42", cc.GetCookies(uri).Single().Value);
         }
 
         [Fact]
@@ -984,20 +1009,36 @@ namespace System.Net.Primitives.Unit.Tests
             Assert.Equal(expectedMatches, collection.Count);
         }
 
-        [Fact]
-        public static void Lol()
+        public static TheoryData<string, string> DomainMatchingFollowsRfc6265_WhenMatches_Data = new TheoryData<string, string>()
         {
-            Uri uri = new Uri("https://test.com");
-            CookieContainer container = new();
-            Cookie a = new()
+            { "https://test.com", "test.com" },
+            { "https://test.com", ".test.com" },
+            { "https://yay.test.com", "yay.test.com" },
+            { "https://yay.test.com", ".yay.test.com" },
+            { "https://yay.test.com", ".test.com" },
+            { "https://yay.test.com", "test.com" },
+            { "https://127.0.1.1", "127.0.1.1" },
+            { "https://42.42.100.100", "42.42.100.100" },
+            { "https://[::FFFF:192.168.0.1]", "::FFFF:192.168.0.1" },
+        };
+
+
+        [Theory]
+        [MemberData(nameof(DomainMatchingFollowsRfc6265_WhenMatches_Data))]
+        public void DomainMatchingFollowsRfc6265_WhenMatches(string uriString, string domain)
+        {
+            CookieContainer container = new CookieContainer();
+            Cookie cookie = new Cookie("lol", "haha")
             {
-                Domain = "test.com",
-                Name = "lol",
-                Value = "0"
+                Domain = domain
             };
-            container.Add(uri, a);
-            container.SetCookies(uri, "lol=42");
-            //Assert.Equal(1, container.Count);
+
+            Uri uri = new Uri(uriString);
+            container.Add(uri, cookie);
+            Assert.Equal(1, container.Count);
+
+            CookieCollection collection = container.GetCookies(uri);
+            Assert.Equal(1, collection.Count);
         }
     }
 }
