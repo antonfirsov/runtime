@@ -983,5 +983,21 @@ namespace System.Net.Primitives.Unit.Tests
             CookieCollection collection = container.GetCookies(requestUri);
             Assert.Equal(expectedMatches, collection.Count);
         }
+
+        [Fact]
+        public static void Lol()
+        {
+            Uri uri = new Uri("https://test.com");
+            CookieContainer container = new();
+            Cookie a = new()
+            {
+                Domain = "test.com",
+                Name = "lol",
+                Value = "0"
+            };
+            container.Add(uri, a);
+            container.SetCookies(uri, "lol=42");
+            Assert.Equal(1, container.Count);
+        }
     }
 }

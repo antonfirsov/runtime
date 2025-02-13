@@ -307,12 +307,9 @@ namespace System.Net
             return clonedCookie;
         }
 
+        // +1 in the host length is to account for the leading dot in domain
         private static bool IsDomainEqualToHost(string domain, string host)
-        {
-            // +1 in the host length is to account for the leading dot in domain
-            return (host.Length + 1 == domain.Length) &&
-                   (string.Compare(host, 0, domain, 1, host.Length, StringComparison.OrdinalIgnoreCase) == 0);
-        }
+            => domain.AsSpan(1).Equals(host, StringComparison.OrdinalIgnoreCase);
 
         // According to spec we must assume default values for attributes but still
         // keep in mind that we must not include them into the requests.
