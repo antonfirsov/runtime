@@ -628,7 +628,7 @@ namespace System.Net.Primitives.Unit.Tests
             CookieContainer cc = new();
             Cookie a = new()
             {
-                Domain = "test.com",
+                Domain = "domain.com",
                 Name = "lol",
                 Value = "0"
             };
@@ -1009,7 +1009,7 @@ namespace System.Net.Primitives.Unit.Tests
             Assert.Equal(expectedMatches, collection.Count);
         }
 
-        public static TheoryData<string, string> DomainMatchingFollowsRfc6265_WhenMatches_Data = new TheoryData<string, string>()
+        public static TheoryData<string, string> DomainMatching_WhenMatches_Success_Data = new TheoryData<string, string>()
         {
             { "https://test.com", "test.com" },
             { "https://test.com", ".test.com" },
@@ -1025,8 +1025,8 @@ namespace System.Net.Primitives.Unit.Tests
 
 
         [Theory]
-        [MemberData(nameof(DomainMatchingFollowsRfc6265_WhenMatches_Data))]
-        public void DomainMatchingFollowsRfc6265_WhenMatches(string uriString, string domain)
+        [MemberData(nameof(DomainMatching_WhenMatches_Success_Data))]
+        public void DomainMatching_WhenMatches_Success(string uriString, string domain)
         {
             CookieContainer container = new CookieContainer();
             Cookie cookie = new Cookie("lol", "haha")
@@ -1040,6 +1040,30 @@ namespace System.Net.Primitives.Unit.Tests
 
             CookieCollection collection = container.GetCookies(uri);
             Assert.Equal(1, collection.Count);
+        }
+
+        public static TheoryData<string, string> DomainMatching_WhenDoesNotMatch_ThrowsCookieException_Data = new TheoryData<string, string>()
+        {
+            { "https://test.com", "ttest.com" }, // Suffix but not separated by dot
+            { "https://test.com", "test.com." }, // Trailing dot
+            { "https://foo.test.com", "yay.test.com" }, // subdomain mismatch
+            { "https://42.42.100.100", "41.42.100.100" }, // different IP
+            { "https://foo.42.42.100.100", "41.42.100.100" }, // Not an IP
+        };
+
+
+        [Theory]
+        [MemberData(nameof(DomainMatching_WhenDoesNotMatch_ThrowsCookieException_Data))]
+        public void DomainMatching_WhenDoesNotMatch_ThrowsCookieException(string uriString, string domain)
+        {
+            CookieContainer container = new CookieContainer();
+            Cookie cookie = new Cookie("lol", "haha")
+            {
+                Domain = domain
+            };
+
+            Uri uri = new Uri(uriString);
+            Assert.Throws<CookieException>(() => container.Add(uri, cookie));
         }
     }
 }
