@@ -1046,6 +1046,7 @@ namespace System.Net.Primitives.Unit.Tests
         {
             { "https://test.com", "ttest.com" }, // Suffix but not separated by dot
             { "https://test.com", "test.com." }, // Trailing dot
+            { "https://test.com", "..test.com" }, // 2 leading dots
             { "https://foo.test.com", "yay.test.com" }, // subdomain mismatch
             { "https://42.42.100.100", "41.42.100.100" }, // different IP
             { "https://foo.42.42.100.100", "41.42.100.100" }, // Not an IP

@@ -379,85 +379,73 @@ namespace System.Net
             }
             else
             {
-                if (!m_domain_implicit)
+                // Forwarding note: If Uri.Host is of IP address form then the only supported case
+                // is for IMPLICIT domain property of a cookie.
+                // The code below (explicit cookie.Domain value) will try to parse Uri.Host IP string
+                // as a fqdn and reject the cookie.
+
+                // Aliasing since we might need the KeyValue (but not the original one).
+                string domain = m_domain;
+
+                // Syntax check for Domain charset plus empty string.
+                if (!DomainCharsTest(domain))
                 {
-                    // Forwarding note: If Uri.Host is of IP address form then the only supported case
-                    // is for IMPLICIT domain property of a cookie.
-                    // The code below (explicit cookie.Domain value) will try to parse Uri.Host IP string
-                    // as a fqdn and reject the cookie.
-
-                    // Aliasing since we might need the KeyValue (but not the original one).
-                    string domain = m_domain;
-
-                    // Syntax check for Domain charset plus empty string.
-                    if (!DomainCharsTest(domain))
-                    {
-                        throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.DomainAttributeName, domain ?? "<null>"));
-                    }
-
-                    // Domain must start with '.' if set explicitly.
-                    if (domain[0] != '.')
-                    {
-                        domain = '.' + domain;
-                    }
-
-                    int host_dot = host.IndexOf('.');
-
-                    // First quick check is for pushing a cookie into the local domain.
-                    if (isLocalDomain && string.Equals(localDomain, domain, StringComparison.OrdinalIgnoreCase))
-                    {
-                        valid = true;
-                    }
-                    else if (domain.IndexOf('.', 1, domain.Length - 2) == -1)
-                    {
-                        // A single label domain is valid only if the domain is exactly the same as the host specified in the URI.
-                        if (!IsDomainEqualToHost(domain, host))
-                        {
-                            valid = false;
-                        }
-                    }
-                    else if (variant == CookieVariant.Plain)
-                    {
-                        // We distinguish between Version0 cookie and other versions on domain issue.
-                        // According to Version0 spec a domain must be just a substring of the hostname.
-
-                        if (!IsDomainEqualToHost(domain, host))
-                        {
-                            if (host.Length <= domain.Length ||
-                                (string.Compare(host, host.Length - domain.Length, domain, 0, domain.Length, StringComparison.OrdinalIgnoreCase) != 0))
-                            {
-                                valid = false;
-                            }
-                        }
-                    }
-                    else if (host_dot == -1 ||
-                             domain.Length != host.Length - host_dot ||
-                             (string.Compare(host, host_dot, domain, 0, domain.Length, StringComparison.OrdinalIgnoreCase) != 0))
-                    {
-                        // Starting from the first dot, the host must match the domain.
-                        //
-                        // For null hosts, the host must match the domain exactly.
-                        if (!IsDomainEqualToHost(domain, host))
-                        {
-                            valid = false;
-                        }
-                    }
-
-                    if (valid)
-                    {
-                        m_domainKey = domain.ToLowerInvariant();
-                    }
+                    throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.DomainAttributeName, domain ?? "<null>"));
                 }
-                else
+
+                // Domain must start with '.' if set explicitly.
+                if (domain[0] != '.')
                 {
-                    // For implicitly set domain AND at the set_default == false time
-                    // we simply need to match uri.Host against m_domain.
-                    if (!string.Equals(host, m_domain, StringComparison.OrdinalIgnoreCase))
+                    domain = '.' + domain;
+                }
+
+                int host_dot = host.IndexOf('.');
+
+                // First quick check is for pushing a cookie into the local domain.
+                if (isLocalDomain && string.Equals(localDomain, domain, StringComparison.OrdinalIgnoreCase))
+                {
+                    valid = true;
+                }
+                else if (domain.IndexOf('.', 1, domain.Length - 2) == -1)
+                {
+                    // A single label domain is valid only if the domain is exactly the same as the host specified in the URI.
+                    if (!IsDomainEqualToHost(domain, host))
                     {
                         valid = false;
                     }
                 }
-                if (!valid)
+                else if (variant == CookieVariant.Plain)
+                {
+                    // We distinguish between Version0 cookie and other versions on domain issue.
+                    // According to Version0 spec a domain must be just a substring of the hostname.
+
+                    if (!IsDomainEqualToHost(domain, host))
+                    {
+                        if (host.Length <= domain.Length ||
+                            (string.Compare(host, host.Length - domain.Length, domain, 0, domain.Length, StringComparison.OrdinalIgnoreCase) != 0))
+                        {
+                            valid = false;
+                        }
+                    }
+                }
+                else if (host_dot == -1 ||
+                            domain.Length != host.Length - host_dot ||
+                            (string.Compare(host, host_dot, domain, 0, domain.Length, StringComparison.OrdinalIgnoreCase) != 0))
+                {
+                    // Starting from the first dot, the host must match the domain.
+                    //
+                    // For null hosts, the host must match the domain exactly.
+                    if (!IsDomainEqualToHost(domain, host))
+                    {
+                        valid = false;
+                    }
+                }
+
+                if (valid)
+                {
+                    m_domainKey = domain.ToLowerInvariant();
+                }
+                else
                 {
                     throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.DomainAttributeName, m_domain));
                 }
