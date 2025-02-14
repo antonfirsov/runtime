@@ -130,10 +130,15 @@ namespace System.Net
 
         private static string CreateFqdnMyDomain()
         {
-            string domain = HostInformation.DomainName;
-            return domain != null && domain.Length > 1 ?
-                '.' + domain :
-                string.Empty;
+            string domain = HostInformation.DomainName ?? string.Empty;
+
+            // Strip leading dot.
+            if (domain.StartsWith('.'))
+            {
+                domain = domain[1..];
+            }
+
+            return domain;
         }
 
         // NOTE: after shrinking the capacity, Count can become greater than Capacity.
@@ -252,7 +257,7 @@ namespace System.Net
 
             // We don't know cookie verification status, so re-create the cookie and verify it.
             Cookie new_cookie = cookie.Clone();
-            new_cookie.VerifySetDefaults(new_cookie.Variant, uri, IsLocalDomain(uri.Host), m_fqdnMyDomain);
+            new_cookie.VerifyAndSetDefaults(new_cookie.Variant, uri);
 
             AddInternal(new_cookie);
         }
@@ -573,83 +578,13 @@ namespace System.Net
             }
         }
 
-        // This will try (if needed) get the full domain name of the host given the Uri.
-        // NEVER call this function from internal methods with 'fqdnRemote' == null.
-        // Since this method counts security issue for DNS and hence will slow
-        // the performance.
-        internal bool IsLocalDomain(string host)
-        {
-            int dot = host.IndexOf('.');
-            if (dot == -1)
-            {
-                // No choice but to treat it as a host on the local domain.
-                // This also covers 'localhost' and 'loopback'.
-                return true;
-            }
-
-            // Quick test for typical cases: loopback addresses for IPv4 and IPv6.
-            if ((host == "127.0.0.1") || (host == "::1") || (host == "0:0:0:0:0:0:0:1"))
-            {
-                return true;
-            }
-
-            // Test domain membership.
-            if (string.Compare(m_fqdnMyDomain, 0, host, dot, m_fqdnMyDomain.Length, StringComparison.OrdinalIgnoreCase) == 0)
-            {
-                return true;
-            }
-
-            // Test for "127.###.###.###" without using regex.
-            ReadOnlySpan<char> hostSpan = host;
-            Span<Range> ipParts = stackalloc Range[5];
-            ipParts = ipParts.Slice(0, hostSpan.Split(ipParts, '.'));
-            if (ipParts.Length == 4 && hostSpan[ipParts[0]] is "127")
-            {
-                int i;
-                for (i = 1; i < ipParts.Length; i++)
-                {
-                    ReadOnlySpan<char> part = hostSpan[ipParts[i]];
-                    switch (part.Length)
-                    {
-                        case 3:
-                            if (!char.IsAsciiDigit(part[2]))
-                            {
-                                break;
-                            }
-                            goto case 2;
-
-                        case 2:
-                            if (!char.IsAsciiDigit(part[1]))
-                            {
-                                break;
-                            }
-                            goto case 1;
-
-                        case 1:
-                            if (!char.IsAsciiDigit(part[0]))
-                            {
-                                break;
-                            }
-                            continue;
-                    }
-                    break;
-                }
-                if (i == 4)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
         public void Add(Uri uri, Cookie cookie)
         {
             ArgumentNullException.ThrowIfNull(uri);
             ArgumentNullException.ThrowIfNull(cookie);
 
             Cookie new_cookie = cookie.Clone();
-            new_cookie.VerifySetDefaults(new_cookie.Variant, uri, IsLocalDomain(uri.Host), m_fqdnMyDomain);
+            new_cookie.VerifyAndSetDefaults(new_cookie.Variant, uri);
 
             AddInternal(new_cookie);
         }
@@ -659,11 +594,10 @@ namespace System.Net
             ArgumentNullException.ThrowIfNull(uri);
             ArgumentNullException.ThrowIfNull(cookies);
 
-            bool isLocalDomain = IsLocalDomain(uri.Host);
             foreach (Cookie c in cookies)
             {
                 Cookie new_cookie = c.Clone();
-                new_cookie.VerifySetDefaults(new_cookie.Variant, uri, isLocalDomain, m_fqdnMyDomain);
+                new_cookie.VerifyAndSetDefaults(new_cookie.Variant, uri);
                 AddInternal(new_cookie);
             }
         }
@@ -689,7 +623,6 @@ namespace System.Net
                 }
             }
 
-            bool isLocalDomain = IsLocalDomain(uri.Host);
             try
             {
                 CookieParser parser = new CookieParser(setCookieHeader);
@@ -715,10 +648,7 @@ namespace System.Net
 
                     // This will set the default values from the response URI
                     // AND will check for cookie validity
-                    if (!cookie.VerifySetDefaults(variant, uri, isLocalDomain, m_fqdnMyDomain))
-                    {
-                        continue;
-                    }
+                    cookie.VerifyAndSetDefaults(variant, uri);
                     // If many same cookies arrive we collapse them into just one, hence setting
                     // parameter isStrict = true below
                     cookies.InternalAdd(cookie, true);

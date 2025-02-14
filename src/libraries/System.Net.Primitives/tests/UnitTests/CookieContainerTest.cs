@@ -1009,9 +1009,22 @@ namespace System.Net.Primitives.Unit.Tests
             Assert.Equal(expectedMatches, collection.Count);
         }
 
+        [Fact]
+        public void Add_ImplicitDomainOfIPv6Hostname_Success()
+        {
+            CookieContainer container = new CookieContainer();
+            Cookie cookie = new Cookie("lol", "haha");
+            Uri uri = new Uri("https://[::FFFF:192.168.0.1]/test");
+            container.Add(uri, cookie);
+            Assert.Equal(uri.Host, container.GetCookies(uri).Single().Domain);
+        }
+
         public static TheoryData<string, string> DomainMatching_WhenMatches_Success_Data = new TheoryData<string, string>()
         {
+            { "https://q", "q" },
+            { "https://localhost/", "localhost" },
             { "https://test.com", "test.com" },
+            { "https://test.COM", "tEsT.com" },
             { "https://test.com", ".test.com" },
             { "https://yay.test.com", "yay.test.com" },
             { "https://yay.test.com", ".yay.test.com" },
@@ -1019,10 +1032,7 @@ namespace System.Net.Primitives.Unit.Tests
             { "https://yay.test.com/foo/bar", "test.com" },
             { "https://127.0.1.1", "127.0.1.1" },
             { "https://42.42.100.100", "42.42.100.100" },
-            { "https://[::1]", "[::1]" },
-            { "https://[::FFFF:192.168.0.1]/test", "[::FFFF:192.168.0.1]" },
         };
-
 
         [Theory]
         [MemberData(nameof(DomainMatching_WhenMatches_Success_Data))]
@@ -1044,12 +1054,18 @@ namespace System.Net.Primitives.Unit.Tests
 
         public static TheoryData<string, string> DomainMatching_WhenDoesNotMatch_ThrowsCookieException_Data = new TheoryData<string, string>()
         {
+            { "https://test.com", "test.co" }, // Domain is not a suffix
+            { "https://test.com", "x.test.com" }, // Domain is not a suffix (extra chars at start)
             { "https://test.com", "ttest.com" }, // Suffix but not separated by dot
             { "https://test.com", "test.com." }, // Trailing dot
             { "https://test.com", "..test.com" }, // 2 leading dots
             { "https://foo.test.com", "yay.test.com" }, // subdomain mismatch
             { "https://42.42.100.100", "41.42.100.100" }, // different IP
-            { "https://foo.42.42.100.100", "41.42.100.100" }, // Not an IP
+
+            // If Host is an IP address, it should be equal to the domain.
+            // See https://issues.chromium.org/issues/40126142 and the last condition in
+            // https://datatracker.ietf.org/doc/html/rfc6265#section-5.1.3
+            { "https://1.2.3.4", ".2.3.4" }
         };
 
 

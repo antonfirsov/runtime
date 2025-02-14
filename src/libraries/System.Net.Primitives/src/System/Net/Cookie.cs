@@ -179,7 +179,10 @@ namespace System.Net
             {
                 m_domain = value ?? string.Empty;
                 m_domain_implicit = false;
-                m_domainKey = string.Empty; // _domainKey will be set when adding this cookie to a container.
+
+                // For explicit domain we init DomainKey here for correct GetHashCode() behavior.
+                // It might be altered when adding (a copy of) the cookie to a container and running VerifyAndSetDefaults().
+                InitDomainKey();
             }
         }
 
@@ -286,7 +289,7 @@ namespace System.Net
             {
                 clonedCookie.Path = m_path;
             }
-            clonedCookie.Domain = m_domain;
+            clonedCookie.m_domain = m_domain;
 
             // If the domain in the original cookie was implicit, we should preserve that property
             clonedCookie.DomainImplicit = m_domain_implicit;
@@ -307,9 +310,37 @@ namespace System.Net
             return clonedCookie;
         }
 
-        // +1 in the host length is to account for the leading dot in domain
-        private static bool IsDomainEqualToHost(string domain, string host)
-            => domain.AsSpan(1).Equals(host, StringComparison.OrdinalIgnoreCase);
+        private void InitDomainKey()
+        {
+            m_domainKey = CookieComparer.StripLeadingDot(m_domain).ToString().ToLowerInvariant();
+        }
+
+        // Implements RFC 6265 Domain Matching, assuming 'domain' has been stripped of its optional leading dot and converted to lower case.
+        // The method checks if the condition defined in https://datatracker.ietf.org/doc/html/rfc6265#section-5.1.3 is met:
+        // [rephrased] 'host' domain-matches 'domain' if at least one of the following conditions hold:
+        // - 'domain' and 'host' are identical.
+        // - All of the following conditions hold:
+        //    * 'domain' is a suffix of 'host'
+        //    * The last character of 'host' that is not included in the 'domain' string is a "." character.
+        //    * 'host' is a host name (i.e., not an IP address).
+        private static bool HostMatchesDomain(ReadOnlySpan<char> host, ReadOnlySpan<char> domain)
+        {
+            if (!host.EndsWith(domain, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            // The last character of the string that is not included in the domain
+            int idxOfSeparator = host.Length - domain.Length - 1;
+            if (idxOfSeparator < 0)
+            {
+                // 'host' and 'domain' are equal
+                Debug.Assert(idxOfSeparator == -1);
+                return true;
+            }
+
+            return host[idxOfSeparator] is '.' && !IPAddress.IsValid(host);
+        }
 
         // According to spec we must assume default values for attributes but still
         // keep in mind that we must not include them into the requests.
@@ -320,12 +351,11 @@ namespace System.Net
         //
         // Afterwards, the function can be called many times with other URIs and
         // setDefault == false to check whether this cookie matches given uri
-        internal bool VerifySetDefaults(CookieVariant variant, Uri uri, bool isLocalDomain, string localDomain)
+        internal void VerifyAndSetDefaults(CookieVariant variant, Uri uri)
         {
             string host = uri.Host;
             int port = uri.Port;
             string path = uri.AbsolutePath;
-            bool valid = true;
 
             // Set Variant. If version is zero => reset cookie to Version0 style
             if (Version == 0)
@@ -376,76 +406,14 @@ namespace System.Net
             if (m_domain_implicit)
             {
                 m_domain = host;
+                InitDomainKey();
             }
             else
             {
-                // Forwarding note: If Uri.Host is of IP address form then the only supported case
-                // is for IMPLICIT domain property of a cookie.
-                // The code below (explicit cookie.Domain value) will try to parse Uri.Host IP string
-                // as a fqdn and reject the cookie.
+                Debug.Assert(m_domain is not null);
+                InitDomainKey();
 
-                // Aliasing since we might need the KeyValue (but not the original one).
-                string domain = m_domain;
-
-                // Syntax check for Domain charset plus empty string.
-                if (!DomainCharsTest(domain))
-                {
-                    throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.DomainAttributeName, domain ?? "<null>"));
-                }
-
-                // Domain must start with '.' if set explicitly.
-                if (domain[0] != '.')
-                {
-                    domain = '.' + domain;
-                }
-
-                int host_dot = host.IndexOf('.');
-
-                // First quick check is for pushing a cookie into the local domain.
-                if (isLocalDomain && string.Equals(localDomain, domain, StringComparison.OrdinalIgnoreCase))
-                {
-                    valid = true;
-                }
-                else if (domain.IndexOf('.', 1, domain.Length - 2) == -1)
-                {
-                    // A single label domain is valid only if the domain is exactly the same as the host specified in the URI.
-                    if (!IsDomainEqualToHost(domain, host))
-                    {
-                        valid = false;
-                    }
-                }
-                else if (variant == CookieVariant.Plain)
-                {
-                    // We distinguish between Version0 cookie and other versions on domain issue.
-                    // According to Version0 spec a domain must be just a substring of the hostname.
-
-                    if (!IsDomainEqualToHost(domain, host))
-                    {
-                        if (host.Length <= domain.Length ||
-                            (string.Compare(host, host.Length - domain.Length, domain, 0, domain.Length, StringComparison.OrdinalIgnoreCase) != 0))
-                        {
-                            valid = false;
-                        }
-                    }
-                }
-                else if (host_dot == -1 ||
-                            domain.Length != host.Length - host_dot ||
-                            (string.Compare(host, host_dot, domain, 0, domain.Length, StringComparison.OrdinalIgnoreCase) != 0))
-                {
-                    // Starting from the first dot, the host must match the domain.
-                    //
-                    // For null hosts, the host must match the domain exactly.
-                    if (!IsDomainEqualToHost(domain, host))
-                    {
-                        valid = false;
-                    }
-                }
-
-                if (valid)
-                {
-                    m_domainKey = domain.ToLowerInvariant();
-                }
-                else
+                if (!IsValidDomainName(m_domainKey) || !HostMatchesDomain(host, m_domainKey))
                 {
                     throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.DomainAttributeName, m_domain));
                 }
@@ -498,7 +466,7 @@ namespace System.Net
             if (m_port_implicit == false)
             {
                 // Port must match against the one from the uri.
-                valid = false;
+                bool valid = false;
                 foreach (int p in m_port_list!)
                 {
                     if (p == port)
@@ -512,14 +480,13 @@ namespace System.Net
                     throw new CookieException(SR.Format(SR.net_cookie_attribute, CookieFields.PortAttributeName, m_port));
                 }
             }
-            return true;
         }
 
         // Very primitive test to make sure that the name does not have illegal characters
         // as per RFC 952 (relaxed on first char could be a digit and string can have '_').
-        private static bool DomainCharsTest(string name) =>
-            !string.IsNullOrEmpty(name) &&
-            !name.AsSpan().ContainsAnyExcept(s_domainChars);
+        private static bool IsValidDomainName(ReadOnlySpan<char> name) =>
+            !name.IsEmpty &&
+            !name.ContainsAnyExcept(s_domainChars);
 
         [AllowNull]
         public string Port
@@ -667,7 +634,7 @@ namespace System.Net
                 StringComparer.OrdinalIgnoreCase.GetHashCode(Name),
                 StringComparer.Ordinal.GetHashCode(Value),
                 StringComparer.Ordinal.GetHashCode(Path),
-                StringComparer.OrdinalIgnoreCase.GetHashCode(Domain),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(DomainKey),
                 Version);
         }
 
