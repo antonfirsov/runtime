@@ -79,6 +79,13 @@ namespace System.Net.Primitives.Unit.Tests
         }
 
         [Fact]
+        public void _Omg()
+        {
+            bool valid = IPAddress.IsValid("0.url1.com");
+            Assert.False(valid);
+        }
+
+        [Fact]
         public void Add_Cookies_Success()
         {
             CookieContainer cc = CreateCount11Container();
