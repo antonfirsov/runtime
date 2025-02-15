@@ -339,7 +339,7 @@ namespace System.Net
                 return true;
             }
 
-            return host[idxOfSeparator] is '.' /*&& !IPAddress.IsValid(host)*/;
+            return host[idxOfSeparator] is '.' && !IPAddress.IsValid(host);
         }
 
         // According to spec we must assume default values for attributes but still
