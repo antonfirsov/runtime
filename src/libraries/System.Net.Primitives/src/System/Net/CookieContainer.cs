@@ -781,7 +781,7 @@ namespace System.Net
             //    }
             //}
 
-            BuildCookieCollectionFromDomainMatches(uri, isSecure, port, ref cookies, matchingDomainKeys, false);
+            BuildCookieCollectionFromDomainMatches(uri, isSecure, port, ref cookies, matchingDomainKeys);
             //if (domainAttributeMatchOnlyCookieVariantPlain != null)
             //{
             //    BuildCookieCollectionFromDomainMatches(uri, isSecure, port, ref cookies, domainAttributeMatchOnlyCookieVariantPlain, true);
@@ -790,7 +790,7 @@ namespace System.Net
             return cookies;
         }
 
-        private void BuildCookieCollectionFromDomainMatches(Uri uri, bool isSecure, int port, ref CookieCollection? cookies, List<string> matchingDomainKeys, bool matchOnlyPlainCookie)
+        private void BuildCookieCollectionFromDomainMatches(Uri uri, bool isSecure, int port, ref CookieCollection? cookies, List<string> matchingDomainKeys)
         {
             for (int i = 0; i < matchingDomainKeys.Count; i++)
             {
@@ -815,7 +815,7 @@ namespace System.Net
                         {
                             CookieCollection cc = (CookieCollection)list.GetByIndex(e)!;
                             cc.TimeStamp(CookieCollection.Stamp.Set);
-                            MergeUpdateCollections(ref cookies, cc, port, isSecure, matchOnlyPlainCookie);
+                            MergeUpdateCollections(ref cookies, uri.Host, cc, port, isSecure);
                         }
                     }
                 }
@@ -851,7 +851,7 @@ namespace System.Net
                    requestPath[cookiePath.Length] == '/';
         }
 
-        private void MergeUpdateCollections(ref CookieCollection? destination, CookieCollection source, int port, bool isSecure, bool isPlainOnly)
+        private void MergeUpdateCollections(ref CookieCollection? destination, string host, CookieCollection source, int port, bool isSecure)
         {
             lock (source)
             {
@@ -871,13 +871,7 @@ namespace System.Net
                     }
                     else
                     {
-                        // Add only if port does match to this request URI
-                        // or was not present in the original response.
-                        if (isPlainOnly && cookie.Variant != CookieVariant.Plain)
-                        {
-                            ; // Don't add
-                        }
-                        else if (cookie.PortList != null)
+                        if (cookie.PortList != null)
                         {
                             foreach (int p in cookie.PortList)
                             {
@@ -896,6 +890,12 @@ namespace System.Net
 
                         // Refuse to add a secure cookie into an 'unsecure' destination
                         if (cookie.Secure && !isSecure)
+                        {
+                            to_add = false;
+                        }
+
+                        // For implicit domains exact match is needed
+                        if (cookie.DomainImplicit && !string.Equals(host, cookie.Domain, StringComparison.OrdinalIgnoreCase))
                         {
                             to_add = false;
                         }

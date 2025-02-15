@@ -1057,22 +1057,13 @@ namespace System.Net.Primitives.Unit.Tests
             Assert.Equal(1, collection.Count);
         }
 
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void DomainMatching_MatchMultiple(bool implicitDomainWithDot)
+        [Fact]
+        public void DomainMatching_ExplicitDomain_MatchesMultiple()
         {
             CookieContainer container = new CookieContainer();
-            Cookie a = new Cookie("a", "aa");
-            Cookie b = new Cookie("b", "bb");
-            Cookie c = new Cookie("c", "cc");
-
-            if (implicitDomainWithDot)
-            {
-                a.Domain = ".a.com";
-                b.Domain = ".b.a.com";
-                c.Domain = ".c.b.a.com";
-            }
+            Cookie a = new Cookie("a", "aa", null, "a.com");
+            Cookie b = new Cookie("b", "bb", null, "b.a.com");
+            Cookie c = new Cookie("c", "cc", null, "c.b.a.com");
 
             container.Add(new Uri("http://a.com"), a);
             container.Add(new Uri("http://b.a.com"), b);
