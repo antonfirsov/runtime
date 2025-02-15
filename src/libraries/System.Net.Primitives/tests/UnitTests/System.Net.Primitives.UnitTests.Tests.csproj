@@ -62,7 +62,6 @@
   <ItemGroup>
     <Compile Include="CookieCollectionTest.cs" />
     <Compile Include="Fakes\CookieException.cs" />
-    <Compile Include="Fakes\HostInformation.cs" />
     <Compile Include="$(CommonPath)System\Net\HttpKnownHeaderNames.cs"
              Link="ProductionCode\Common\System\Net\HttpKnownHeaderNames.cs" />
     <Compile Include="$(CommonPath)System\Net\IPAddressParserStatics.cs"
