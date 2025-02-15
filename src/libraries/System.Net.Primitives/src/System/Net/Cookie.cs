@@ -67,7 +67,7 @@ namespace System.Net
         private string m_value = string.Empty; // Do not rename (binary serialization)
         private int m_version; // Do not rename (binary serialization)
 
-        private string m_domainKey = string.Empty; // Do not rename (binary serialization)
+        private string? m_domainKey; // Do not rename (binary serialization)
 
 #pragma warning disable 0649 // set via reflection by CookieParser: https://github.com/dotnet/runtime/issues/19348
         internal bool IsQuotedVersion; // Do not rename (binary serialization)
@@ -180,8 +180,7 @@ namespace System.Net
                 m_domain = value ?? string.Empty;
                 m_domain_implicit = false;
 
-                // For explicit domain we init DomainKey here for correct GetHashCode() behavior.
-                // It might be altered when adding (a copy of) the cookie to a container and running VerifyAndSetDefaults().
+                // Given Domain is explicit now, it is necessary to initialize DomainKey for correct GetHashCode() behavior.
                 InitDomainKey();
             }
         }
@@ -293,6 +292,7 @@ namespace System.Net
 
             // If the domain in the original cookie was implicit, we should preserve that property
             clonedCookie.DomainImplicit = m_domain_implicit;
+            clonedCookie.m_domainKey = m_domainKey;
             clonedCookie.m_timeStamp = m_timeStamp;
             clonedCookie.Comment = m_comment;
             clonedCookie.CommentUri = m_commentUri;
@@ -328,6 +328,8 @@ namespace System.Net
         // in case 'domain' is a single-label domain, an exact match is required.
         // This is to avoid matching top-level domains, for example "test.com" should not match "com",
         // however this does not prevent matching multi-label public suffixes, eg. "co.uk".
+        // Note that browsers handle this by validating against the Public Suffix List (https://publicsuffix.org/)
+        // which is a behavior under standardization in the latest RFC drafts: https://datatracker.ietf.org/doc/draft-ietf-httpbis-rfc6265bis/
         private static bool HostMatchesDomain(ReadOnlySpan<char> host, ReadOnlySpan<char> domain)
         {
             if (!host.EndsWith(domain, StringComparison.Ordinal))
@@ -417,8 +419,7 @@ namespace System.Net
             }
             else
             {
-                Debug.Assert(m_domain is not null);
-                InitDomainKey();
+                Debug.Assert(m_domainKey is not null);
 
                 if (!IsValidDomainName(m_domainKey) || !HostMatchesDomain(host, m_domainKey))
                 {
@@ -604,7 +605,7 @@ namespace System.Net
         {
             get
             {
-                return m_domain_implicit ? Domain : m_domainKey;
+                return m_domain_implicit ? Domain : m_domainKey!;
             }
         }
 

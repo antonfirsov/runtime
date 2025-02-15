@@ -988,22 +988,18 @@ namespace System.Net.Primitives.Unit.Tests
 
         public static TheoryData<string, string> DomainMatching_WhenMatches_Success_Data = new TheoryData<string, string>()
         {
-            //{ "https://q", "q" },
-            //{ "https://localhost/", "localhost" },
-            //{ "https://test.com", "test.com" },
-            //{ "https://test.COM", "tEsT.com" },
-            //{ "https://test.com", ".test.com" },
-            //{ "https://yay.test.com", "yay.test.com" },
-            //{ "https://yay.test.com", ".yay.test.com" },
-            //{ "https://yay.test.com", ".test.com" },
+            { "https://q", "q" },
+            { "https://localhost/", "localhost" },
+            { "https://test.com", "test.com" },
+            { "https://test.COM", "tEsT.com" },
+            { "https://test.com", ".test.com" },
+            { "https://yay.test.com", "yay.test.com" },
+            { "https://yay.test.com", ".yay.test.com" },
+            { "https://yay.test.com", ".test.com" },
             { "https://42.aaaa.bbb.cc.d.test.com", "d.test.com" },
-            //{ "https://yay.test.com/foo/bar", "test.com" },
-            //{ "https://127.0.1.1", "127.0.1.1" },
-            //{ "https://42.42.100.100", "42.42.100.100" },
-
-            // This is allowed by RFC 6265, but discouraged by later working drafts and doesn't work in browsers.
-            { "https://com", ".com" },
-            { "https://x.co.uk", ".co.uk" },
+            { "https://yay.test.com/foo/bar", "test.com" },
+            { "https://127.0.1.1", "127.0.1.1" },
+            { "https://42.42.100.100", "42.42.100.100" },
         };
 
         [Theory]

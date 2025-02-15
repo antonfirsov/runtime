@@ -4,7 +4,6 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Net.NetworkInformation;
 using System.Text;
 
 // Relevant cookie specs:
@@ -28,30 +27,7 @@ using System.Text;
 //
 // Cookies without an explicit Domain attribute will only match a potential uri that matches the original
 // uri from where the cookie came from.
-//
-// For explicit Domain attribute in the cookie, the following rules apply:
-//
-// Version=0 (Netscape, RFC6265) allows the Domain attribute of the cookie to match any tail substring
-// of the host uri.
-//
-// Version=1 related cookie specs only allows the Domain attribute to match the host uri based on a
-// more restricted set of rules.
-//
-// According to RFC2109/RFC2965, the cookie will be rejected for matching if:
-// * The value for the Domain attribute contains no embedded dots or does not start with a dot.
-// * The value for the request-host does not domain-match the Domain attribute.
-// " The request-host is a FQDN (not IP address) and has the form HD, where D is the value of the Domain
-//  attribute, and H is a string that contains one or more dots.
-//
-// Examples:
-// * A cookie from request-host y.x.foo.com for Domain=.foo.com would be rejected, because H is y.x
-//  and contains a dot.
-//
-// * A cookie from request-host x.foo.com for Domain=.foo.com would be accepted.
-//
-// * A cookie with Domain=.com or Domain=.com., will always be rejected, because there is no embedded dot.
-//
-// * A cookie with Domain=ajax.com will be rejected because the value for Domain does not begin with a dot.
+// For explicit Domain attribute in the cookie, see the rules defined in Cookie.HostMatchesDomain().
 
 namespace System.Net
 {
@@ -244,12 +220,12 @@ namespace System.Net
             Cookie new_cookie = cookie.Clone();
             new_cookie.VerifyAndSetDefaults(new_cookie.Variant, uri);
 
-            AddInternal(new_cookie);
+            InternalAdd(new_cookie);
         }
 
         // This method is called *only* when cookie verification is done, so unlike with public
         // Add(Cookie cookie) the cookie is in a reasonable condition.
-        internal void AddInternal(Cookie cookie)
+        internal void InternalAdd(Cookie cookie)
         {
             PathList? pathList;
 
@@ -571,7 +547,7 @@ namespace System.Net
             Cookie new_cookie = cookie.Clone();
             new_cookie.VerifyAndSetDefaults(new_cookie.Variant, uri);
 
-            AddInternal(new_cookie);
+            InternalAdd(new_cookie);
         }
 
         public void Add(Uri uri, CookieCollection cookies)
@@ -583,7 +559,7 @@ namespace System.Net
             {
                 Cookie new_cookie = c.Clone();
                 new_cookie.VerifyAndSetDefaults(new_cookie.Variant, uri);
-                AddInternal(new_cookie);
+                InternalAdd(new_cookie);
             }
         }
 
@@ -651,7 +627,7 @@ namespace System.Net
             int cookiesCount = cookies.Count;
             for (int i = 0; i < cookiesCount; i++)
             {
-                AddInternal((Cookie)cookies[i]);
+                InternalAdd((Cookie)cookies[i]);
             }
 
             return cookies;
@@ -716,62 +692,7 @@ namespace System.Net
                 lastDot = dot;
             }
 
-            //List<string>? domainAttributeMatchOnlyCookieVariantPlain = null;
-
-            //string fqdnRemote = uri.Host;
-
-            //// Add initial candidates to match Domain attribute of possible cookies.
-            //// For these Domains, cookie can have any CookieVariant enum value.
-            //matchingDomainKeys.Add(fqdnRemote);
-            //matchingDomainKeys.Add("." + fqdnRemote);
-
-            //int dot = fqdnRemote.IndexOf('.');
-            //if (dot == -1)
-            //{
-            //    // DNS.resolve may return short names even for other inet domains ;-(
-            //    // We _don't_ know what the exact domain is, so try also grab short hostname cookies.
-            //    // Grab long name from the local domain
-            //    if (!string.IsNullOrEmpty(m_fqdnMyDomain))
-            //    {
-            //        matchingDomainKeys.Add(fqdnRemote + m_fqdnMyDomain);
-            //        // Grab the local domain itself
-            //        matchingDomainKeys.Add(m_fqdnMyDomain);
-            //    }
-            //}
-            //else
-            //{
-            //    // Grab the host domain
-            //    matchingDomainKeys.Add(fqdnRemote.Substring(dot));
-
-            //    // The following block is only for compatibility with Version0 spec.
-            //    // Still, we'll add only Plain-Variant cookies if found under below keys
-            //    if (fqdnRemote.Length > 2)
-            //    {
-            //        // We ignore the '.' at the end on the name
-            //        int last = fqdnRemote.LastIndexOf('.', fqdnRemote.Length - 2);
-            //        // AND keys with <2 dots inside.
-            //        if (last > 0)
-            //        {
-            //            last = fqdnRemote.LastIndexOf('.', last - 1);
-            //        }
-            //        if (last != -1)
-            //        {
-            //            while ((dot < last) && (dot = fqdnRemote.IndexOf('.', dot + 1)) != -1)
-            //            {
-            //                // These candidates can only match CookieVariant.Plain cookies.
-            //                domainAttributeMatchOnlyCookieVariantPlain ??= new System.Collections.Generic.List<string>();
-            //                domainAttributeMatchOnlyCookieVariantPlain.Add(fqdnRemote.Substring(dot));
-            //            }
-            //        }
-            //    }
-            //}
-
             BuildCookieCollectionFromDomainMatches(uri, isSecure, port, ref cookies, matchingDomainKeys);
-            //if (domainAttributeMatchOnlyCookieVariantPlain != null)
-            //{
-            //    BuildCookieCollectionFromDomainMatches(uri, isSecure, port, ref cookies, domainAttributeMatchOnlyCookieVariantPlain, true);
-            //}
-
             return cookies;
         }
 
