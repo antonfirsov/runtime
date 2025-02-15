@@ -716,74 +716,88 @@ namespace System.Net
             int port = uri.Port;
             CookieCollection? cookies = null;
 
-            var domainAttributeMatchAnyCookieVariant = new System.Collections.Generic.List<string>();
-            System.Collections.Generic.List<string>? domainAttributeMatchOnlyCookieVariantPlain = null;
-
-            string fqdnRemote = uri.Host;
-
-            // Add initial candidates to match Domain attribute of possible cookies.
-            // For these Domains, cookie can have any CookieVariant enum value.
-            domainAttributeMatchAnyCookieVariant.Add(fqdnRemote);
-            domainAttributeMatchAnyCookieVariant.Add("." + fqdnRemote);
-
-            int dot = fqdnRemote.IndexOf('.');
-            if (dot == -1)
+            List<string> matchingDomainKeys = [uri.Host];
+            ReadOnlySpan<char> host = uri.Host;
+            int lastDot = host.LastIndexOf('.');
+            while (lastDot > 0)
             {
-                // DNS.resolve may return short names even for other inet domains ;-(
-                // We _don't_ know what the exact domain is, so try also grab short hostname cookies.
-                // Grab long name from the local domain
-                if (!string.IsNullOrEmpty(m_fqdnMyDomain))
+                int dot = host[..lastDot].LastIndexOf('.');
+                if (dot > 0)
                 {
-                    domainAttributeMatchAnyCookieVariant.Add(fqdnRemote + m_fqdnMyDomain);
-                    // Grab the local domain itself
-                    domainAttributeMatchAnyCookieVariant.Add(m_fqdnMyDomain);
+                    string match = host[(dot + 1)..].ToString();
+                    matchingDomainKeys.Add(match);
                 }
-            }
-            else
-            {
-                // Grab the host domain
-                domainAttributeMatchAnyCookieVariant.Add(fqdnRemote.Substring(dot));
 
-                // The following block is only for compatibility with Version0 spec.
-                // Still, we'll add only Plain-Variant cookies if found under below keys
-                if (fqdnRemote.Length > 2)
-                {
-                    // We ignore the '.' at the end on the name
-                    int last = fqdnRemote.LastIndexOf('.', fqdnRemote.Length - 2);
-                    // AND keys with <2 dots inside.
-                    if (last > 0)
-                    {
-                        last = fqdnRemote.LastIndexOf('.', last - 1);
-                    }
-                    if (last != -1)
-                    {
-                        while ((dot < last) && (dot = fqdnRemote.IndexOf('.', dot + 1)) != -1)
-                        {
-                            // These candidates can only match CookieVariant.Plain cookies.
-                            domainAttributeMatchOnlyCookieVariantPlain ??= new System.Collections.Generic.List<string>();
-                            domainAttributeMatchOnlyCookieVariantPlain.Add(fqdnRemote.Substring(dot));
-                        }
-                    }
-                }
+                lastDot = dot;
             }
 
-            BuildCookieCollectionFromDomainMatches(uri, isSecure, port, ref cookies, domainAttributeMatchAnyCookieVariant, false);
-            if (domainAttributeMatchOnlyCookieVariantPlain != null)
-            {
-                BuildCookieCollectionFromDomainMatches(uri, isSecure, port, ref cookies, domainAttributeMatchOnlyCookieVariantPlain, true);
-            }
+            //List<string>? domainAttributeMatchOnlyCookieVariantPlain = null;
+
+            //string fqdnRemote = uri.Host;
+
+            //// Add initial candidates to match Domain attribute of possible cookies.
+            //// For these Domains, cookie can have any CookieVariant enum value.
+            //matchingDomainKeys.Add(fqdnRemote);
+            //matchingDomainKeys.Add("." + fqdnRemote);
+
+            //int dot = fqdnRemote.IndexOf('.');
+            //if (dot == -1)
+            //{
+            //    // DNS.resolve may return short names even for other inet domains ;-(
+            //    // We _don't_ know what the exact domain is, so try also grab short hostname cookies.
+            //    // Grab long name from the local domain
+            //    if (!string.IsNullOrEmpty(m_fqdnMyDomain))
+            //    {
+            //        matchingDomainKeys.Add(fqdnRemote + m_fqdnMyDomain);
+            //        // Grab the local domain itself
+            //        matchingDomainKeys.Add(m_fqdnMyDomain);
+            //    }
+            //}
+            //else
+            //{
+            //    // Grab the host domain
+            //    matchingDomainKeys.Add(fqdnRemote.Substring(dot));
+
+            //    // The following block is only for compatibility with Version0 spec.
+            //    // Still, we'll add only Plain-Variant cookies if found under below keys
+            //    if (fqdnRemote.Length > 2)
+            //    {
+            //        // We ignore the '.' at the end on the name
+            //        int last = fqdnRemote.LastIndexOf('.', fqdnRemote.Length - 2);
+            //        // AND keys with <2 dots inside.
+            //        if (last > 0)
+            //        {
+            //            last = fqdnRemote.LastIndexOf('.', last - 1);
+            //        }
+            //        if (last != -1)
+            //        {
+            //            while ((dot < last) && (dot = fqdnRemote.IndexOf('.', dot + 1)) != -1)
+            //            {
+            //                // These candidates can only match CookieVariant.Plain cookies.
+            //                domainAttributeMatchOnlyCookieVariantPlain ??= new System.Collections.Generic.List<string>();
+            //                domainAttributeMatchOnlyCookieVariantPlain.Add(fqdnRemote.Substring(dot));
+            //            }
+            //        }
+            //    }
+            //}
+
+            BuildCookieCollectionFromDomainMatches(uri, isSecure, port, ref cookies, matchingDomainKeys, false);
+            //if (domainAttributeMatchOnlyCookieVariantPlain != null)
+            //{
+            //    BuildCookieCollectionFromDomainMatches(uri, isSecure, port, ref cookies, domainAttributeMatchOnlyCookieVariantPlain, true);
+            //}
 
             return cookies;
         }
 
-        private void BuildCookieCollectionFromDomainMatches(Uri uri, bool isSecure, int port, ref CookieCollection? cookies, List<string> domainAttribute, bool matchOnlyPlainCookie)
+        private void BuildCookieCollectionFromDomainMatches(Uri uri, bool isSecure, int port, ref CookieCollection? cookies, List<string> matchingDomainKeys, bool matchOnlyPlainCookie)
         {
-            for (int i = 0; i < domainAttribute.Count; i++)
+            for (int i = 0; i < matchingDomainKeys.Count; i++)
             {
                 PathList pathList;
                 lock (m_domainTable.SyncRoot)
                 {
-                    pathList = (PathList)m_domainTable[domainAttribute[i]]!;
+                    pathList = (PathList)m_domainTable[matchingDomainKeys[i]]!;
                     if (pathList == null)
                     {
                         continue;
@@ -811,7 +825,7 @@ namespace System.Net
                 {
                     lock (m_domainTable.SyncRoot)
                     {
-                        m_domainTable.Remove(domainAttribute[i]);
+                        m_domainTable.Remove(matchingDomainKeys[i]);
                     }
                 }
             }

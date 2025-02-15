@@ -1057,6 +1057,31 @@ namespace System.Net.Primitives.Unit.Tests
             Assert.Equal(1, collection.Count);
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void DomainMatching_MatchMultiple(bool implicitDomainWithDot)
+        {
+            CookieContainer container = new CookieContainer();
+            Cookie a = new Cookie("a", "aa");
+            Cookie b = new Cookie("b", "bb");
+            Cookie c = new Cookie("c", "cc");
+
+            if (implicitDomainWithDot)
+            {
+                a.Domain = ".a.com";
+                b.Domain = ".b.a.com";
+                c.Domain = ".c.b.a.com";
+            }
+
+            container.Add(new Uri("http://a.com"), a);
+            container.Add(new Uri("http://b.a.com"), b);
+            container.Add(new Uri("http://c.b.a.com"), c);
+
+            CookieCollection matches = container.GetCookies(new Uri("http://c.b.a.com"));
+            Assert.Equal(3, matches.Count);
+        }
+
         public static TheoryData<string, string> DomainMatching_WhenDoesNotMatch_ThrowsCookieException_Data = new TheoryData<string, string>()
         {
             { "https://test.com", "test.co" }, // Domain is not a suffix

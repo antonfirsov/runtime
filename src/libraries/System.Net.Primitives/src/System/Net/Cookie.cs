@@ -330,7 +330,6 @@ namespace System.Net
         // however this does not prevent matching multi-label public suffixes, eg. "co.uk".
         private static bool HostMatchesDomain(ReadOnlySpan<char> host, ReadOnlySpan<char> domain)
         {
-            Debug.Assert(!domain.StartsWith('.'));
             if (!host.EndsWith(domain, StringComparison.Ordinal))
             {
                 return false;
