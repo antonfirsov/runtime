@@ -773,10 +773,10 @@ namespace System.Net.Primitives.Unit.Tests
 
             for (int i = 0; i < expected.Length; i++)
             {
-                Cookie c1 = expected[i];
                 Cookie c2 = cc2[i];
-                Assert.Equal(c1.Name, c2.Name); // Primitive check for equality
-                Assert.Equal(c1.Value, c2.Value);
+                Cookie c1 = expected.Single(c => c.Name == c2.Name);
+
+                Assert.Equal(c1.Value, c2.Value); // Primitive check for equality
             }
         }
 
