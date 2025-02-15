@@ -315,22 +315,28 @@ namespace System.Net
             m_domainKey = CookieComparer.StripLeadingDot(m_domain).ToString().ToLowerInvariant();
         }
 
-        // Implements RFC 6265 Domain Matching, assuming 'domain' has been stripped of its optional leading dot and converted to lower case.
-        // The method checks if the condition defined in https://datatracker.ietf.org/doc/html/rfc6265#section-5.1.3 is met:
+        // Implements Domain Matching following RFC 6265 rules with a special handling for single-label domains.
+        // The method assumes that 'domain' has been stripped of its optional leading dot and converted to lower case.
+        // It checks if the condition defined in https://datatracker.ietf.org/doc/html/rfc6265#section-5.1.3 is met:
         // [rephrased] 'host' domain-matches 'domain' if at least one of the following conditions hold:
         // - 'domain' and 'host' are identical.
         // - All of the following conditions hold:
         //    * 'domain' is a suffix of 'host'
-        //    * The last character of 'host' that is not included in the 'domain' string is a "." character.
+        //    * The last character of 'host' that is not included in 'domain' is a "."
         //    * 'host' is a host name (i.e., not an IP address).
+        // Beside the RFC 6265 rules, an extra condition is included for compatibility:
+        // in case 'domain' is a single-label domain, an exact match is required.
+        // This is to avoid matching top-level domains, for example "test.com" should not match "com",
+        // however this does not prevent matching multi-label public suffixes, eg. "co.uk".
         private static bool HostMatchesDomain(ReadOnlySpan<char> host, ReadOnlySpan<char> domain)
         {
+            Debug.Assert(!domain.StartsWith('.'));
             if (!host.EndsWith(domain, StringComparison.Ordinal))
             {
                 return false;
             }
 
-            // The last character of the string that is not included in the domain
+            // The last character of the 'host' that is not included in the domain
             int idxOfSeparator = host.Length - domain.Length - 1;
             if (idxOfSeparator < 0)
             {
@@ -339,7 +345,9 @@ namespace System.Net
                 return true;
             }
 
-            return host[idxOfSeparator] is '.' && !IPAddress.IsValid(host);
+            return host[idxOfSeparator] is '.' // The last character of 'host' that is not included in 'domain' is a "."
+                && domain.Contains('.') // In case of single-label domains, there should be an exact match.
+                && !IPAddress.IsValid(host); // If host is an IP address, there should be an exact match.
         }
 
         // According to spec we must assume default values for attributes but still
