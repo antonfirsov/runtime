@@ -386,9 +386,26 @@ namespace System.Net
         private static IPAddress[] GetHostAddressesCore(string hostName, AddressFamily addressFamily, NameResolutionActivity? activityOrDefault = default) =>
             (IPAddress[])GetHostEntryOrAddressesCore(hostName, justAddresses: true, addressFamily, activityOrDefault);
 
+        private static void ValidateAddressFamily(ref AddressFamily addressFamily)
+        {
+            if (!SocketProtocolSupportPal.OSSupportsIPv6)
+            {
+                if (addressFamily == AddressFamily.InterNetworkV6)
+                {
+                    throw new PlatformNotSupportedException();
+                }
+                else if (addressFamily == AddressFamily.Unspecified)
+                {
+                    // Narrow the query to IPv4 only.
+                    addressFamily = AddressFamily.InterNetwork;
+                }
+            }
+        }
+
         private static object GetHostEntryOrAddressesCore(string hostName, bool justAddresses, AddressFamily addressFamily, NameResolutionActivity? activityOrDefault = default)
         {
             ValidateHostName(hostName);
+            ValidateAddressFamily(ref addressFamily);
 
             // NameResolutionActivity may have already been set if we're being called from RunAsync.
             NameResolutionActivity activity = activityOrDefault ?? NameResolutionTelemetry.Log.BeforeResolution(hostName);
@@ -434,6 +451,8 @@ namespace System.Net
         private static object GetHostEntryOrAddressesCore(IPAddress address, bool justAddresses, AddressFamily addressFamily, NameResolutionActivity? activityOrDefault = default)
         {
             if (OperatingSystem.IsWasi()) throw new PlatformNotSupportedException(); // TODO remove with https://github.com/dotnet/runtime/pull/107185
+
+            ValidateAddressFamily(ref addressFamily);
 
             // Try to get the data for the host from its address.
             // We need to call getnameinfo first, because getaddrinfo w/ the ipaddress string
@@ -510,6 +529,7 @@ namespace System.Net
         private static Task GetHostEntryOrAddressesCoreAsync(string hostName, bool justReturnParsedIp, bool throwOnIIPAny, bool justAddresses, AddressFamily family, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(hostName);
+            ValidateAddressFamily(ref family);
 
             if (cancellationToken.IsCancellationRequested)
             {

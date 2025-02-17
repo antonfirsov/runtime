@@ -192,7 +192,7 @@ namespace System.Net.NameResolution.Tests
         [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
         [InlineData(false)]
         [InlineData(true)]
-        public void GetHostAddresses_DisableIPv6_AddressFamilyInterNetworkV6_ThrowsArgumentException(bool useAsyncOuter)
+        public void GetHostAddresses_DisableIPv6_AddressFamilyInterNetworkV6_ThrowsPNSE(bool useAsyncOuter)
         {
             RemoteExecutor.Invoke(RunTest, useAsyncOuter.ToString()).Dispose();
             static async Task RunTest(string useAsync)
@@ -200,11 +200,11 @@ namespace System.Net.NameResolution.Tests
                 AppContext.SetSwitch("System.Net.DisableIPv6", true);
                 if (bool.Parse(useAsync))
                 {
-                    await Assert.ThrowsAsync<ArgumentException>(() => Dns.GetHostAddressesAsync(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
+                    await Assert.ThrowsAsync<PlatformNotSupportedException>(() => Dns.GetHostAddressesAsync(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
                 }
                 else
                 {
-                    Assert.Throws<ArgumentException>(() => Dns.GetHostAddresses(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
+                    Assert.Throws<PlatformNotSupportedException>(() => Dns.GetHostAddresses(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
                 }
             }
         }
