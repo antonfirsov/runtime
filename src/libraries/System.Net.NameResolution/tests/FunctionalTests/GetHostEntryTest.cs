@@ -108,37 +108,45 @@ namespace System.Net.NameResolution.Tests
         public static bool GetHostEntry_DisableIPv6_Condition = GetHostEntryWorks && RemoteExecutor.IsSupported;
 
         [ConditionalTheory(nameof(GetHostEntry_DisableIPv6_Condition))]
-        [InlineData("")]
-        [InlineData(TestSettings.LocalHost)]
-        public void Dns_GetHostEntry_DisableIPv6_ExcludesIPv6Addresses(string hostnameOuter)
+        [InlineData("", false, AddressFamily.Unspecified)]
+        [InlineData("", true, AddressFamily.Unspecified)]
+        [InlineData(TestSettings.LocalHost, false, AddressFamily.Unspecified)]
+        [InlineData(TestSettings.LocalHost, true, AddressFamily.Unspecified)]
+        public void GetHostEntry_DisableIPv6_ExcludesIPv6Addresses(string hostnameOuter, bool useAsyncOuter, AddressFamily addressFamilyOuter)
         {
-            RemoteExecutor.Invoke(RunTest, hostnameOuter).Dispose();
+            string expectedHostName = Dns.GetHostEntry(hostnameOuter).HostName;
+            RemoteExecutor.Invoke(RunTest, hostnameOuter, expectedHostName, useAsyncOuter.ToString(), addressFamilyOuter.ToString()).Dispose();
 
-            static void RunTest(string hostnameInner)
+            static async Task RunTest(string hostnameInner, string expectedHostName, string useAsync, string addressFamilyStr)
             {
                 AppContext.SetSwitch("System.Net.DisableIPv6", true);
-                IPHostEntry entry = Dns.GetHostEntry(hostnameInner);
-                foreach (IPAddress address in entry.AddressList)
-                {
-                    Assert.NotEqual(AddressFamily.InterNetworkV6, address.AddressFamily);
-                }
+                AddressFamily addressFamily = Enum.Parse<AddressFamily>(addressFamilyStr);
+
+                IPHostEntry entry = bool.Parse(useAsync) ?
+                    await Dns.GetHostEntryAsync(hostnameInner, addressFamily) :
+                    Dns.GetHostEntry(hostnameInner, addressFamily);
+
+                Assert.Equal(entry.HostName, expectedHostName);
+                Assert.All(entry.AddressList, address => Assert.Equal(AddressFamily.InterNetwork, address.AddressFamily));
             }
         }
 
         [ConditionalTheory(nameof(GetHostEntry_DisableIPv6_Condition))]
-        [InlineData("")]
-        [InlineData(TestSettings.LocalHost)]
-        public void Dns_GetHostEntryAsync_DisableIPv6_ExcludesIPv6Addresses(string hostnameOuter)
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GetHostEntry_DisableIPv6_AddressFamilyInterNetworkV6_ThrowsArgumentException(bool useAsyncOuter)
         {
-            RemoteExecutor.Invoke(RunTest, hostnameOuter).Dispose();
-
-            static async Task RunTest(string hostnameInner)
+            RemoteExecutor.Invoke(RunTest, useAsyncOuter.ToString()).Dispose();
+            static async Task RunTest(string useAsync)
             {
                 AppContext.SetSwitch("System.Net.DisableIPv6", true);
-                IPHostEntry entry = await Dns.GetHostEntryAsync(hostnameInner);
-                foreach (IPAddress address in entry.AddressList)
+                if (bool.Parse(useAsync))
                 {
-                    Assert.NotEqual(AddressFamily.InterNetworkV6, address.AddressFamily);
+                    await Assert.ThrowsAsync<ArgumentException>(() => Dns.GetHostEntryAsync(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
+                }
+                else
+                {
+                    Assert.Throws<ArgumentException>(() => Dns.GetHostEntry(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
                 }
             }
         }

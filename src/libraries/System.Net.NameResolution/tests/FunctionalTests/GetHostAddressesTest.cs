@@ -6,7 +6,7 @@ using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-
+using Microsoft.DotNet.RemoteExecutor;
 using Xunit;
 
 namespace System.Net.NameResolution.Tests
@@ -171,6 +171,43 @@ namespace System.Net.NameResolution.Tests
             OperationCanceledException oce = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Dns.GetHostAddressesAsync(TestSettings.LocalHost, cts.Token));
             Assert.Equal(cts.Token, oce.CancellationToken);
         }
+
+        [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GetHostAddresses_DisableIPv6_ExcludesIPv6Addresses(bool useAsyncOuter)
+        {
+            RemoteExecutor.Invoke(RunTest, useAsyncOuter.ToString()).Dispose();
+
+            static async Task RunTest(string useAsync)
+            {
+                AppContext.SetSwitch("System.Net.DisableIPv6", true);
+                IPAddress[] addresses =
+                    bool.Parse(useAsync) ? await Dns.GetHostAddressesAsync(TestSettings.LocalHost) :
+                    Dns.GetHostAddresses(TestSettings.LocalHost);
+                Assert.All(addresses, address => Assert.Equal(AddressFamily.InterNetwork, address.AddressFamily));
+            }
+        }
+
+        [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void GetHostAddresses_DisableIPv6_AddressFamilyInterNetworkV6_ThrowsArgumentException(bool useAsyncOuter)
+        {
+            RemoteExecutor.Invoke(RunTest, useAsyncOuter.ToString()).Dispose();
+            static async Task RunTest(string useAsync)
+            {
+                AppContext.SetSwitch("System.Net.DisableIPv6", true);
+                if (bool.Parse(useAsync))
+                {
+                    await Assert.ThrowsAsync<ArgumentException>(() => Dns.GetHostAddressesAsync(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
+                }
+                else
+                {
+                    Assert.Throws<ArgumentException>(() => Dns.GetHostAddresses(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
+                }
+            }
+        }
     }
 
     // Cancellation tests are sequential to reduce the chance of timing issues.
@@ -224,6 +261,6 @@ namespace System.Net.NameResolution.Tests
                     cancellationTokenSource.Cancel();
                 }
             }
-        }
+        }       
     }
 }
