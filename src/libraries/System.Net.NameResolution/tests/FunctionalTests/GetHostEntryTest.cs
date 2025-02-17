@@ -108,23 +108,22 @@ namespace System.Net.NameResolution.Tests
         public static bool GetHostEntry_DisableIPv6_Condition = GetHostEntryWorks && RemoteExecutor.IsSupported;
 
         [ConditionalTheory(nameof(GetHostEntry_DisableIPv6_Condition))]
-        [InlineData("", false, AddressFamily.Unspecified)]
-        [InlineData("", true, AddressFamily.Unspecified)]
-        [InlineData(TestSettings.LocalHost, false, AddressFamily.Unspecified)]
-        [InlineData(TestSettings.LocalHost, true, AddressFamily.Unspecified)]
-        public void GetHostEntry_DisableIPv6_ExcludesIPv6Addresses(string hostnameOuter, bool useAsyncOuter, AddressFamily addressFamilyOuter)
+        [InlineData("", false)]
+        [InlineData("", true)]
+        [InlineData(TestSettings.LocalHost, false)]
+        [InlineData(TestSettings.LocalHost, true)]
+        public void GetHostEntry_DisableIPv6_ExcludesIPv6Addresses(string hostnameOuter, bool useAsyncOuter)
         {
             string expectedHostName = Dns.GetHostEntry(hostnameOuter).HostName;
-            RemoteExecutor.Invoke(RunTest, hostnameOuter, expectedHostName, useAsyncOuter.ToString(), addressFamilyOuter.ToString()).Dispose();
+            RemoteExecutor.Invoke(RunTest, hostnameOuter, expectedHostName, useAsyncOuter.ToString()).Dispose();
 
-            static async Task RunTest(string hostnameInner, string expectedHostName, string useAsync, string addressFamilyStr)
+            static async Task RunTest(string hostnameInner, string expectedHostName, string useAsync)
             {
                 AppContext.SetSwitch("System.Net.DisableIPv6", true);
-                AddressFamily addressFamily = Enum.Parse<AddressFamily>(addressFamilyStr);
 
                 IPHostEntry entry = bool.Parse(useAsync) ?
-                    await Dns.GetHostEntryAsync(hostnameInner, addressFamily) :
-                    Dns.GetHostEntry(hostnameInner, addressFamily);
+                    await Dns.GetHostEntryAsync(hostnameInner) :
+                    Dns.GetHostEntry(hostnameInner);
 
                 Assert.Equal(entry.HostName, expectedHostName);
                 Assert.All(entry.AddressList, address => Assert.Equal(AddressFamily.InterNetwork, address.AddressFamily));
