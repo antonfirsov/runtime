@@ -381,11 +381,11 @@ namespace System.Net
             return ipHostEntry;
         }
 
-        private static IPHostEntry GetHostEntryCore(string hostName, AddressFamily addressFamily, bool addressFamilyValidated = false, NameResolutionActivity? activityOrDefault = default) =>
-            (IPHostEntry)GetHostEntryOrAddressesCore(hostName, justAddresses: false, addressFamily, addressFamilyValidated, activityOrDefault);
+        private static IPHostEntry GetHostEntryCore(string hostName, AddressFamily addressFamily, NameResolutionActivity? activityOrDefault = default) =>
+            (IPHostEntry)GetHostEntryOrAddressesCore(hostName, justAddresses: false, addressFamily, activityOrDefault);
 
-        private static IPAddress[] GetHostAddressesCore(string hostName, AddressFamily addressFamily, bool addressFamilyValidated = false, NameResolutionActivity? activityOrDefault = default) =>
-            (IPAddress[])GetHostEntryOrAddressesCore(hostName, justAddresses: true, addressFamily, addressFamilyValidated, activityOrDefault);
+        private static IPAddress[] GetHostAddressesCore(string hostName, AddressFamily addressFamily, NameResolutionActivity? activityOrDefault = default) =>
+            (IPAddress[])GetHostEntryOrAddressesCore(hostName, justAddresses: true, addressFamily, activityOrDefault);
 
         private static bool ValidateAddressFamily(ref AddressFamily addressFamily, string hostName, bool justAddresses, [NotNullWhen(false)] out object? resultOnFailure)
         {
@@ -416,11 +416,11 @@ namespace System.Net
             return true;
         }
 
-        private static object GetHostEntryOrAddressesCore(string hostName, bool justAddresses, AddressFamily addressFamily, bool addressFamilyValidated, NameResolutionActivity? activityOrDefault = default)
+        private static object GetHostEntryOrAddressesCore(string hostName, bool justAddresses, AddressFamily addressFamily, NameResolutionActivity? activityOrDefault = default)
         {
             ValidateHostName(hostName);
 
-            if (!addressFamilyValidated && !ValidateAddressFamily(ref addressFamily, hostName, justAddresses, out object? resultOnFailure))
+            if (!ValidateAddressFamily(ref addressFamily, hostName, justAddresses, out object? resultOnFailure))
             {
                 return resultOnFailure;
             }
@@ -558,9 +558,14 @@ namespace System.Net
                     Task.FromCanceled<IPHostEntry>(cancellationToken);
             }
 
+            if (!ValidateAddressFamily(ref family, hostName, justAddresses, out object? resultOnFailure))
+            {
+                return justAddresses ? (Task)
+                    Task.FromResult((IPAddress[])resultOnFailure) :
+                    Task.FromResult((IPHostEntry)resultOnFailure);
+            }
+
             object asyncState;
-            bool addressFamilyValidated = false;
-            object? resultOnFailure;
 
             // See if it's an IP Address.
             if (NameResolutionPal.SupportsGetNameInfo && IPAddress.TryParse(hostName, out IPAddress? ipAddress))
@@ -592,14 +597,6 @@ namespace System.Net
 
                     ValidateHostName(hostName);
 
-                    if (!ValidateAddressFamily(ref family, hostName, justAddresses, out resultOnFailure))
-                    {
-                        return justAddresses ? (Task)
-                            Task.FromResult((IPAddress[])resultOnFailure) :
-                            Task.FromResult((IPHostEntry)resultOnFailure);
-                    }
-                    addressFamilyValidated = true;
-
                     Task? t;
                     if (NameResolutionTelemetry.AnyDiagnosticsEnabled())
                     {
@@ -623,19 +620,12 @@ namespace System.Net
                 asyncState = family == AddressFamily.Unspecified ? (object)hostName : new KeyValuePair<string, AddressFamily>(hostName, family);
             }
 
-            if (!addressFamilyValidated && !ValidateAddressFamily(ref family, hostName, justAddresses, out resultOnFailure))
-            {
-                return justAddresses ? (Task)
-                    Task.FromResult((IPAddress[])resultOnFailure) :
-                    Task.FromResult((IPHostEntry)resultOnFailure);
-            }
-
             if (justAddresses)
             {
                 return RunAsync(static (s, activity) => s switch
                 {
-                    string h => GetHostAddressesCore(h, AddressFamily.Unspecified, addressFamilyValidated:true, activity),
-                    KeyValuePair<string, AddressFamily> t => GetHostAddressesCore(t.Key, t.Value, addressFamilyValidated: true, activity),
+                    string h => GetHostAddressesCore(h, AddressFamily.Unspecified, activity),
+                    KeyValuePair<string, AddressFamily> t => GetHostAddressesCore(t.Key, t.Value, activity),
                     IPAddress a => GetHostAddressesCore(a, AddressFamily.Unspecified, activity),
                     KeyValuePair<IPAddress, AddressFamily> t => GetHostAddressesCore(t.Key, t.Value, activity),
                     _ => null
@@ -645,8 +635,8 @@ namespace System.Net
             {
                 return RunAsync(static (s, activity) => s switch
                 {
-                    string h => GetHostEntryCore(h, AddressFamily.Unspecified, addressFamilyValidated: true, activity),
-                    KeyValuePair<string, AddressFamily> t => GetHostEntryCore(t.Key, t.Value, addressFamilyValidated: true, activity),
+                    string h => GetHostEntryCore(h, AddressFamily.Unspecified, activity),
+                    KeyValuePair<string, AddressFamily> t => GetHostEntryCore(t.Key, t.Value, activity),
                     IPAddress a => GetHostEntryCore(a, AddressFamily.Unspecified, activity),
                     KeyValuePair<IPAddress, AddressFamily> t => GetHostEntryCore(t.Key, t.Value, activity),
                     _ => null
