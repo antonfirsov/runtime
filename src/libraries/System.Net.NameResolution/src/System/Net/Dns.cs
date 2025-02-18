@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Runtime.Versioning;
+using System.Diagnostics.CodeAnalysis;
 
 namespace System.Net
 {
@@ -380,32 +381,49 @@ namespace System.Net
             return ipHostEntry;
         }
 
-        private static IPHostEntry GetHostEntryCore(string hostName, AddressFamily addressFamily, NameResolutionActivity? activityOrDefault = default) =>
-            (IPHostEntry)GetHostEntryOrAddressesCore(hostName, justAddresses: false, addressFamily, activityOrDefault);
+        private static IPHostEntry GetHostEntryCore(string hostName, AddressFamily addressFamily, bool addressFamilyValidated = false, NameResolutionActivity? activityOrDefault = default) =>
+            (IPHostEntry)GetHostEntryOrAddressesCore(hostName, justAddresses: false, addressFamily, addressFamilyValidated, activityOrDefault);
 
-        private static IPAddress[] GetHostAddressesCore(string hostName, AddressFamily addressFamily, NameResolutionActivity? activityOrDefault = default) =>
-            (IPAddress[])GetHostEntryOrAddressesCore(hostName, justAddresses: true, addressFamily, activityOrDefault);
+        private static IPAddress[] GetHostAddressesCore(string hostName, AddressFamily addressFamily, bool addressFamilyValidated = false, NameResolutionActivity? activityOrDefault = default) =>
+            (IPAddress[])GetHostEntryOrAddressesCore(hostName, justAddresses: true, addressFamily, addressFamilyValidated, activityOrDefault);
 
-        private static void ValidateAddressFamily(ref AddressFamily addressFamily)
+        private static bool ValidateAddressFamily(ref AddressFamily addressFamily, string hostName, bool justAddresses, [NotNullWhen(false)] out object? resultOnFailure)
         {
             if (!SocketProtocolSupportPal.OSSupportsIPv6)
             {
                 if (addressFamily == AddressFamily.InterNetworkV6)
                 {
-                    throw new PlatformNotSupportedException();
+                    // The caller requested IPv6, but the OS doesn't support it; return an empty result.
+                    IPAddress[] addresses = Array.Empty<IPAddress>();
+                    resultOnFailure = justAddresses ? (object)
+                        addresses :
+                        new IPHostEntry
+                        {
+                            AddressList = addresses,
+                            HostName = hostName,
+                            Aliases = Array.Empty<string>()
+                        };
+                    return false;
                 }
                 else if (addressFamily == AddressFamily.Unspecified)
                 {
-                    // Narrow the query to IPv4 only.
+                    // Narrow the query to IPv4.
                     addressFamily = AddressFamily.InterNetwork;
                 }
             }
+
+            resultOnFailure = null;
+            return true;
         }
 
-        private static object GetHostEntryOrAddressesCore(string hostName, bool justAddresses, AddressFamily addressFamily, NameResolutionActivity? activityOrDefault = default)
+        private static object GetHostEntryOrAddressesCore(string hostName, bool justAddresses, AddressFamily addressFamily, bool addressFamilyValidated, NameResolutionActivity? activityOrDefault = default)
         {
             ValidateHostName(hostName);
-            ValidateAddressFamily(ref addressFamily);
+
+            if (!addressFamilyValidated && !ValidateAddressFamily(ref addressFamily, hostName, justAddresses, out object? resultOnFailure))
+            {
+                return resultOnFailure;
+            }
 
             // NameResolutionActivity may have already been set if we're being called from RunAsync.
             NameResolutionActivity activity = activityOrDefault ?? NameResolutionTelemetry.Log.BeforeResolution(hostName);
@@ -452,8 +470,6 @@ namespace System.Net
         {
             if (OperatingSystem.IsWasi()) throw new PlatformNotSupportedException(); // TODO remove with https://github.com/dotnet/runtime/pull/107185
 
-            ValidateAddressFamily(ref addressFamily);
-
             // Try to get the data for the host from its address.
             // We need to call getnameinfo first, because getaddrinfo w/ the ipaddress string
             // will only return that address and not the full list.
@@ -481,6 +497,11 @@ namespace System.Net
             }
 
             NameResolutionTelemetry.Log.AfterResolution(address, activity, answer: name);
+
+            if (!ValidateAddressFamily(ref addressFamily, name, justAddresses, out object? resultOnFailure))
+            {
+                return resultOnFailure;
+            }
 
             // Do the forward lookup to get the IPs for that host name
             activity = NameResolutionTelemetry.Log.BeforeResolution(name);
@@ -529,7 +550,6 @@ namespace System.Net
         private static Task GetHostEntryOrAddressesCoreAsync(string hostName, bool justReturnParsedIp, bool throwOnIIPAny, bool justAddresses, AddressFamily family, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(hostName);
-            ValidateAddressFamily(ref family);
 
             if (cancellationToken.IsCancellationRequested)
             {
@@ -539,6 +559,8 @@ namespace System.Net
             }
 
             object asyncState;
+            bool addressFamilyValidated = false;
+            object? resultOnFailure;
 
             // See if it's an IP Address.
             if (NameResolutionPal.SupportsGetNameInfo && IPAddress.TryParse(hostName, out IPAddress? ipAddress))
@@ -570,6 +592,14 @@ namespace System.Net
 
                     ValidateHostName(hostName);
 
+                    if (!ValidateAddressFamily(ref family, hostName, justAddresses, out resultOnFailure))
+                    {
+                        return justAddresses ? (Task)
+                            Task.FromResult((IPAddress[])resultOnFailure) :
+                            Task.FromResult((IPHostEntry)resultOnFailure);
+                    }
+                    addressFamilyValidated = true;
+
                     Task? t;
                     if (NameResolutionTelemetry.AnyDiagnosticsEnabled())
                     {
@@ -593,12 +623,19 @@ namespace System.Net
                 asyncState = family == AddressFamily.Unspecified ? (object)hostName : new KeyValuePair<string, AddressFamily>(hostName, family);
             }
 
+            if (!addressFamilyValidated && !ValidateAddressFamily(ref family, hostName, justAddresses, out resultOnFailure))
+            {
+                return justAddresses ? (Task)
+                    Task.FromResult((IPAddress[])resultOnFailure) :
+                    Task.FromResult((IPHostEntry)resultOnFailure);
+            }
+
             if (justAddresses)
             {
                 return RunAsync(static (s, activity) => s switch
                 {
-                    string h => GetHostAddressesCore(h, AddressFamily.Unspecified, activity),
-                    KeyValuePair<string, AddressFamily> t => GetHostAddressesCore(t.Key, t.Value, activity),
+                    string h => GetHostAddressesCore(h, AddressFamily.Unspecified, addressFamilyValidated:true, activity),
+                    KeyValuePair<string, AddressFamily> t => GetHostAddressesCore(t.Key, t.Value, addressFamilyValidated: true, activity),
                     IPAddress a => GetHostAddressesCore(a, AddressFamily.Unspecified, activity),
                     KeyValuePair<IPAddress, AddressFamily> t => GetHostAddressesCore(t.Key, t.Value, activity),
                     _ => null
@@ -608,8 +645,8 @@ namespace System.Net
             {
                 return RunAsync(static (s, activity) => s switch
                 {
-                    string h => GetHostEntryCore(h, AddressFamily.Unspecified, activity),
-                    KeyValuePair<string, AddressFamily> t => GetHostEntryCore(t.Key, t.Value, activity),
+                    string h => GetHostEntryCore(h, AddressFamily.Unspecified, addressFamilyValidated: true, activity),
+                    KeyValuePair<string, AddressFamily> t => GetHostEntryCore(t.Key, t.Value, addressFamilyValidated: true, activity),
                     IPAddress a => GetHostEntryCore(a, AddressFamily.Unspecified, activity),
                     KeyValuePair<IPAddress, AddressFamily> t => GetHostEntryCore(t.Key, t.Value, activity),
                     _ => null

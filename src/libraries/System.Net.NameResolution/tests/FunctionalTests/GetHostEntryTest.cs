@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -133,20 +134,16 @@ namespace System.Net.NameResolution.Tests
         [ConditionalTheory(nameof(GetHostEntry_DisableIPv6_Condition))]
         [InlineData(false)]
         [InlineData(true)]
-        public void GetHostEntry_DisableIPv6_AddressFamilyInterNetworkV6_ThrowsPNSE(bool useAsyncOuter)
+        public void GetHostEntry_DisableIPv6_AddressFamilyInterNetworkV6_ReturnsEmpty(bool useAsyncOuter)
         {
             RemoteExecutor.Invoke(RunTest, useAsyncOuter.ToString()).Dispose();
             static async Task RunTest(string useAsync)
             {
                 AppContext.SetSwitch("System.Net.DisableIPv6", true);
-                if (bool.Parse(useAsync))
-                {
-                    await Assert.ThrowsAsync<PlatformNotSupportedException>(() => Dns.GetHostEntryAsync(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
-                }
-                else
-                {
-                    Assert.Throws<PlatformNotSupportedException>(() => Dns.GetHostEntry(TestSettings.LocalHost, AddressFamily.InterNetworkV6));
-                }
+                IPHostEntry entry = bool.Parse(useAsync) ?
+                    await Dns.GetHostEntryAsync(TestSettings.LocalHost, AddressFamily.InterNetworkV6) :
+                    Dns.GetHostEntry(TestSettings.LocalHost, AddressFamily.InterNetworkV6);
+                Assert.Empty(entry.AddressList);
             }
         }
 
