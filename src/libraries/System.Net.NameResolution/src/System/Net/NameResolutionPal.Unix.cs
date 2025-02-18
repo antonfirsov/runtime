@@ -85,9 +85,9 @@ namespace System.Net
                     for (int i = 0; i < hostEntry.IPAddressCount; i++)
                     {
                         Interop.Sys.IPAddress nativeAddr = addressHandle[i];
-                        if (Array.IndexOf(nativeAddresses, nativeAddr, 0, nativeAddressCount) == -1)
+                        if (Array.IndexOf(nativeAddresses, nativeAddr, 0, nativeAddressCount) == -1 &&
+                            (!nativeAddr.IsIPv6 || SocketProtocolSupportPal.OSSupportsIPv6)) // Do not include IPv6 addresses if IPV6 support is force-disabled
                         {
-                            Debug.Assert(!nativeAddr.IsIPv6 || SocketProtocolSupportPal.OSSupportsIPv6);
                             nativeAddresses[nativeAddressCount++] = nativeAddr;
                         }
                     }

@@ -246,9 +246,8 @@ namespace System.Net
                         addressCount++;
                     }
                 }
-                else if (result->ai_family == AddressFamily.InterNetworkV6)
+                else if (SocketProtocolSupportPal.OSSupportsIPv6 && result->ai_family == AddressFamily.InterNetworkV6)
                 {
-                    Debug.Assert(SocketProtocolSupportPal.OSSupportsIPv6);
                     if (addressLength == SocketAddressPal.IPv6AddressSize)
                     {
                         addressCount++;
@@ -277,9 +276,8 @@ namespace System.Net
                         addresses[addressCount++] = CreateIPv4Address(socketAddress);
                     }
                 }
-                else if (result->ai_family == AddressFamily.InterNetworkV6)
+                else if (SocketProtocolSupportPal.OSSupportsIPv6 && result->ai_family == AddressFamily.InterNetworkV6)
                 {
-                    Debug.Assert(SocketProtocolSupportPal.OSSupportsIPv6);
                     if (addressLength == SocketAddressPal.IPv6AddressSize)
                     {
                         addresses[addressCount++] = CreateIPv6Address(socketAddress);
@@ -308,9 +306,8 @@ namespace System.Net
                         addressCount++;
                     }
                 }
-                else if (result->ai_family == AddressFamily.InterNetworkV6)
+                else if (SocketProtocolSupportPal.OSSupportsIPv6 && result->ai_family == AddressFamily.InterNetworkV6)
                 {
-                    Debug.Assert(SocketProtocolSupportPal.OSSupportsIPv6);
                     if (addressLength == SocketAddressPal.IPv6AddressSize)
                     {
                         addressCount++;
@@ -339,9 +336,8 @@ namespace System.Net
                         addresses[addressCount++] = CreateIPv4Address(socketAddress);
                     }
                 }
-                else if (result->ai_family == AddressFamily.InterNetworkV6)
+                else if (SocketProtocolSupportPal.OSSupportsIPv6 && result->ai_family == AddressFamily.InterNetworkV6)
                 {
-                    Debug.Assert(SocketProtocolSupportPal.OSSupportsIPv6);
                     if (addressLength == SocketAddressPal.IPv6AddressSize)
                     {
                         addresses[addressCount++] = CreateIPv6Address(socketAddress);
