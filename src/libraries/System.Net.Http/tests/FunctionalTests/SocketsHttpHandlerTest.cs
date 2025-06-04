@@ -1271,36 +1271,49 @@ namespace System.Net.Http.Functional.Tests
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public async Task GetAsync_TrailersWithoutServerStreamClosure_Success(bool sendGarbageAfterTrailers)
+        public async Task GetAsync_TrailersWithoutServerStreamClosure_Success(bool sendBytesAfterTrailers)
         {
-            SemaphoreSlim responseReceived = new SemaphoreSlim(0);
+            SemaphoreSlim responseConsumed = new SemaphoreSlim(0);
+            SemaphoreSlim serverCompleted = new SemaphoreSlim(0);
+
             await LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
             {
                 using HttpClient client = CreateHttpClient();
-                HttpResponseMessage response = await client.GetAsync(uri);
-                Assert.Equal(TrailingHeaders.Count, response.TrailingHeaders.Count());
-                responseReceived.Release();
-                response.Dispose();
+                using (HttpResponseMessage response = await client.GetAsync(uri))
+                {
+                    Assert.Equal(TrailingHeaders.Count, response.TrailingHeaders.Count());
+                }
+
+                responseConsumed.Release();
+                await serverCompleted.WaitAsync();
             },
             async server =>
             {
-                await using Http3LoopbackConnection connection = (Http3LoopbackConnection)await server.EstablishGenericConnectionAsync();
-                await using Http3LoopbackStream stream = await connection.AcceptRequestStreamAsync();
-                _ = await stream.ReadRequestDataAsync();
-                await stream.SendResponseHeadersAsync(statusCode: HttpStatusCode.OK);
-                await stream.SendResponseBodyAsync(new byte[4096], isFinal: false);
-                await stream.SendResponseHeadersAsync(statusCode: null, headers: TrailingHeaders);
-                if (sendGarbageAfterTrailers)
+                try
                 {
-                    // https://datatracker.ietf.org/doc/html/rfc9114#section-7.2.8
-                    // Frame types of the format 0x1f * N + 0x21 for non - negative integer values of N are reserved to exercise the requirement that unknown types be ignored.
-                    await stream.SendFrameAsync(0x1f * 7 + 0x21, new byte[1024]);
-                }
+                    await using Http3LoopbackConnection connection = (Http3LoopbackConnection)await server.EstablishGenericConnectionAsync();
+                    await using Http3LoopbackStream stream = await connection.AcceptRequestStreamAsync();
+                    _ = await stream.ReadRequestDataAsync();
+                    await stream.SendResponseHeadersAsync(statusCode: HttpStatusCode.OK);
+                    await stream.SendResponseBodyAsync(new byte[4096], isFinal: false);
+                    await stream.SendResponseHeadersAsync(statusCode: null, headers: TrailingHeaders);
+                    if (sendBytesAfterTrailers)
+                    {
+                        // https://datatracker.ietf.org/doc/html/rfc9114#section-7.2.8
+                        // Frame types of the format 0x1f * N + 0x21 for non - negative integer values of N are reserved to exercise the requirement that unknown types be ignored.
+                        await stream.SendFrameAsync(0x1f * 7 + 0x21, new byte[1024]);
+                    }
 
-                await responseReceived.WaitAsync();
-                await stream.Stream.WritesClosed;
-                await stream.Stream.ReadsClosed;
-            });
+                    await responseConsumed.WaitAsync();
+
+                    await stream.DisposeAsync();
+                    await stream.Stream.WritesClosed;
+                }
+                finally
+                {
+                    serverCompleted.Release();
+                }
+            }).WaitAsync(TimeSpan.FromSeconds(30));
         }
     }
 

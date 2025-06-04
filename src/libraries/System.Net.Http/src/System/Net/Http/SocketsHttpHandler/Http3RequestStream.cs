@@ -88,9 +88,19 @@ namespace System.Net.Http
             {
                 _disposed = true;
                 AbortStream();
-                if (_stream.WritesClosed.IsCompleted)
+                Task? disposeTask = null;
+                if (_responseDrainTask is not null)
                 {
-                    _connection.LogExceptions(_stream.DisposeAsync().AsTask());
+                    disposeTask = WaitForDrainCompletionAndDisposeAsync();
+                }
+                else if (_stream.WritesClosed.IsCompleted)
+                {
+                    disposeTask = _stream.DisposeAsync().AsTask();
+                }
+
+                if (disposeTask is not null)
+                {
+                    _connection.LogExceptions(disposeTask);
                 }
                 else
                 {
@@ -98,6 +108,13 @@ namespace System.Net.Http
                 }
                 DisposeSyncHelper();
             }
+        }
+
+        private async Task WaitForDrainCompletionAndDisposeAsync()
+        {
+            Debug.Assert(_responseDrainTask is not null);
+            await _responseDrainTask.ConfigureAwait(false);
+            await _stream.DisposeAsync().ConfigureAwait(false);
         }
 
         private void RemoveFromConnectionIfDone()
@@ -113,10 +130,19 @@ namespace System.Net.Http
             if (!_disposed)
             {
                 _disposed = true;
-                AbortStream();
-                if (_stream.WritesClosed.IsCompleted)
+                Task? disposeTask = null;
+                if (_responseDrainTask is not null)
                 {
-                    _connection.LogExceptions(_stream.DisposeAsync().AsTask());
+                    disposeTask = WaitForDrainCompletionAndDisposeAsync();
+                }
+                else if (_stream.WritesClosed.IsCompleted)
+                {
+                    disposeTask = _stream.DisposeAsync().AsTask();
+                }
+
+                if (disposeTask is not null)
+                {
+                    _connection.LogExceptions(disposeTask);
                 }
                 else
                 {
@@ -1335,6 +1361,23 @@ namespace System.Net.Http
             throw new HttpIOException(HttpRequestError.Unknown, SR.net_http_client_execution_error, new HttpRequestException(SR.net_http_client_execution_error, ex));
         }
 
+        private Task? _responseDrainTask;
+
+        private async Task DrainResponseAsync(CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                _recvBuffer.EnsureAvailableSpace(1);
+                int bytesRead = await _stream.ReadAsync(_recvBuffer.AvailableMemory, cancellationToken).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    return;
+                }
+                _recvBuffer.Commit(bytesRead);
+                _recvBuffer.Discard(bytesRead);
+            }
+        }
+
         private async ValueTask<bool> ReadNextDataFrameAsync(HttpResponseMessage response, CancellationToken cancellationToken)
         {
             if (_responseDataPayloadRemaining == -1)
@@ -1364,6 +1407,8 @@ namespace System.Net.Http
                         // Read any trailing headers.
                         _trailingHeaders = new List<(HeaderDescriptor name, string value)>();
                         await ReadHeadersAsync(payloadLength, cancellationToken).ConfigureAwait(false);
+
+                        _responseDrainTask = DrainResponseAsync(cancellationToken);
 
                         // There may be more frames after this one, but they would all be unknown extension
                         // frames that we are allowed to skip. Just close the stream early.
