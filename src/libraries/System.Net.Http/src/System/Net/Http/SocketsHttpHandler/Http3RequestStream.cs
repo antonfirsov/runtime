@@ -593,9 +593,8 @@ namespace System.Net.Http
                         _trailingHeaders = new List<(HeaderDescriptor name, string value)>();
                         await ReadHeadersAsync(payloadLength, cancellationToken).ConfigureAwait(false);
 
-                        // Stop looping after a trailing header.
-                        // Note: this does leave us open to a bad server sending us an out of order DATA frame.
-                        // TODO: Add comments here.
+                        // We do not expect more DATA frames after the trailers.
+                        // Start draining the response to avoid shutting down reads prematurely in Dispose(Async).
                         _responseDrainTask = DrainResponseAsync();
                         goto case null;
                     case null:
@@ -1364,7 +1363,10 @@ namespace System.Net.Http
             throw new HttpIOException(HttpRequestError.Unknown, SR.net_http_client_execution_error, new HttpRequestException(SR.net_http_client_execution_error, ex));
         }
 
-
+        /// <summary>
+        /// Drains QuicStream without attempting to interpret the content or detecting invalid frame sequence.
+        /// Note: this does leave us open to a bad server sending us an out of order frames without us being able to react with H3_FRAME_UNEXPECTED.
+        /// </summary>
         private async Task DrainResponseAsync()
         {
             HttpConnectionSettings settings = _connection.Pool.Settings;
@@ -1377,6 +1379,7 @@ namespace System.Net.Http
             using CancellationTokenSource cts = new CancellationTokenSource(settings._maxResponseDrainTime);
             try
             {
+                // If there is more data than MaxResponseDrainSize or MaxResponseDrainTime expires, we silently stop draining and let Dispose(Async) abort the stream.
                 int remaining = settings._maxResponseDrainSize;
                 while (remaining > 0)
                 {
@@ -1436,9 +1439,9 @@ namespace System.Net.Http
                         _trailingHeaders = new List<(HeaderDescriptor name, string value)>();
                         await ReadHeadersAsync(payloadLength, cancellationToken).ConfigureAwait(false);
 
-                        // TODO: add proper comment.
+                        // We do not expect more DATA frames after the trailers.
+                        // Start draining the response to avoid shutting down reads prematurely in Dispose(Async).
                         _responseDrainTask = DrainResponseAsync();
-
                         goto case null;
                     case null:
                         // End of stream.
