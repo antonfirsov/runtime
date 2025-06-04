@@ -46,6 +46,9 @@ namespace System.Net.Http
         /// <summary>Any trailing headers.</summary>
         private List<(HeaderDescriptor name, string value)>? _trailingHeaders;
 
+        /// <summary>Response drain task after receiving trailers.</summary>
+        private Task? _responseDrainTask;
+
         // When reading response content, keep track of the number of bytes left in the current data frame.
         private long _responseDataPayloadRemaining;
 
@@ -591,9 +594,9 @@ namespace System.Net.Http
                         await ReadHeadersAsync(payloadLength, cancellationToken).ConfigureAwait(false);
 
                         // Stop looping after a trailing header.
-                        // There may be extra frames after this one, but they would all be unknown extension
-                        // frames that can be safely ignored. Just stop reading here.
                         // Note: this does leave us open to a bad server sending us an out of order DATA frame.
+                        // TODO: Add comments here.
+                        _responseDrainTask = DrainResponseAsync();
                         goto case null;
                     case null:
                         // Done receiving: copy over trailing headers.
@@ -1361,20 +1364,45 @@ namespace System.Net.Http
             throw new HttpIOException(HttpRequestError.Unknown, SR.net_http_client_execution_error, new HttpRequestException(SR.net_http_client_execution_error, ex));
         }
 
-        private Task? _responseDrainTask;
 
-        private async Task DrainResponseAsync(CancellationToken cancellationToken)
+        private async Task DrainResponseAsync()
         {
-            while (true)
+            HttpConnectionSettings settings = _connection.Pool.Settings;
+            TimeSpan drainTime = settings._maxResponseDrainTime;
+            if (drainTime == TimeSpan.Zero)
             {
-                _recvBuffer.EnsureAvailableSpace(1);
-                int bytesRead = await _stream.ReadAsync(_recvBuffer.AvailableMemory, cancellationToken).ConfigureAwait(false);
-                if (bytesRead == 0)
+                return;
+            }
+
+            using CancellationTokenSource cts = new CancellationTokenSource(settings._maxResponseDrainTime);
+            try
+            {
+                int remaining = settings._maxResponseDrainSize;
+                while (remaining > 0)
                 {
-                    return;
+                    _recvBuffer.EnsureAvailableSpace(1);
+                    Memory<byte> buffer = remaining >= _recvBuffer.AvailableMemory.Length ? _recvBuffer.AvailableMemory : _recvBuffer.AvailableMemory.Slice(0, remaining);
+                    int bytesRead = await _stream.ReadAsync(buffer, cts.Token).ConfigureAwait(false);
+                    if (bytesRead == 0)
+                    {
+                        // Reached EOS.
+                        return;
+                    }
+                    remaining -= bytesRead;
+                    _recvBuffer.Commit(bytesRead);
+                    _recvBuffer.Discard(bytesRead);
                 }
-                _recvBuffer.Commit(bytesRead);
-                _recvBuffer.Discard(bytesRead);
+            }
+            catch (Exception ex)
+            {
+                // Eat exceptions and stop draining to unblock QuicStream disposal waiting for response drain.
+                if (NetEventSource.Log.IsEnabled())
+                {
+                    string message = ex is OperationCanceledException oce && oce.CancellationToken == cts.Token ? "Response drain timed out." : $"Response drain failed with exception: {ex}";
+                    Trace(message);
+                }
+
+                return;
             }
         }
 
@@ -1408,13 +1436,9 @@ namespace System.Net.Http
                         _trailingHeaders = new List<(HeaderDescriptor name, string value)>();
                         await ReadHeadersAsync(payloadLength, cancellationToken).ConfigureAwait(false);
 
-                        _responseDrainTask = DrainResponseAsync(cancellationToken);
+                        // TODO: add proper comment.
+                        _responseDrainTask = DrainResponseAsync();
 
-                        // There may be more frames after this one, but they would all be unknown extension
-                        // frames that we are allowed to skip. Just close the stream early.
-
-                        // Note: if a server sends additional HEADERS or DATA frames at this point, it
-                        // would be a connection error -- not draining the stream means we won't catch this.
                         goto case null;
                     case null:
                         // End of stream.
