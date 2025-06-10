@@ -756,7 +756,7 @@ namespace System.Net.NetworkInformation.Tests
         {
             var sender = new Ping();
             PingReply reply = sender.Send(TestSettings.UnreachableAddress);
-            Assert.Equal(IPStatus.TimedOut, reply.Status);
+            ExpectTimeOut(reply.Status);
         }
 
         [Fact]
@@ -786,7 +786,7 @@ namespace System.Net.NetworkInformation.Tests
             sender.SendAsync(TestSettings.UnreachableAddress, tcs);
 
             PingReply reply = await tcs.Task;
-            Assert.Equal(IPStatus.TimedOut, reply.Status);
+            ExpectTimeOut(reply.Status);
         }
 
         [Fact]
@@ -795,7 +795,21 @@ namespace System.Net.NetworkInformation.Tests
         {
             var sender = new Ping();
             PingReply reply = await sender.SendPingAsync(TestSettings.UnreachableAddress);
-            Assert.Equal(IPStatus.TimedOut, reply.Status);
+            ExpectTimeOut(reply.Status);
+        }
+
+        private void ExpectTimeOut(IPStatus status)
+        {
+            if (OperatingSystem.IsMacOS())
+            {
+                // We often get DestinationNetworkUnreachable instead of a timeout on Helix Macs.
+                // This is likely a result of a middleware dropping the ICMP packet.
+                Assert.True(status is IPStatus.TimedOut or IPStatus.DestinationNetworkUnreachable);
+            }
+            else
+            {
+                Assert.Equal(IPStatus.TimedOut, status);
+            }
         }
 
         private static bool IsRemoteExecutorSupportedAndPrivilegedProcess => RemoteExecutor.IsSupported && PlatformDetection.IsPrivilegedProcess;
