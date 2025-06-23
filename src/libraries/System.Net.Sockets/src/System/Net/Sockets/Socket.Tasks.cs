@@ -1190,6 +1190,7 @@ namespace System.Net.Sockets
                 {
                     if (socket.ConnectAsync(this, userSocket: true, saeaCancelable: false, cancellationToken))
                     {
+                        _cancellationToken = cancellationToken;
                         return new ValueTask(this, _mrvtsc.Version);
                     }
                 }
