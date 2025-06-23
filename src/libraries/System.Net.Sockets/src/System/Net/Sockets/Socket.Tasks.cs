@@ -97,33 +97,7 @@ namespace System.Net.Sockets
 
             saea.RemoteEndPoint = remoteEP;
 
-            ValueTask connectTask = saea.ConnectAsync(this, cancellationToken);
-            if (connectTask.IsCompleted || !cancellationToken.CanBeCanceled || (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows) && remoteEP is IPEndPoint))
-            {
-                // Avoid async invocation overhead
-                return connectTask;
-            }
-            else
-            {
-                return WaitForConnectWithCancellation(saea, connectTask, cancellationToken);
-            }
-
-            static async ValueTask WaitForConnectWithCancellation(AwaitableSocketAsyncEventArgs saea, ValueTask connectTask, CancellationToken cancellationToken)
-            {
-                Debug.Assert(cancellationToken.CanBeCanceled);
-                try
-                {
-                    using (cancellationToken.UnsafeRegister(o => CancelConnectAsync((SocketAsyncEventArgs)o!), saea))
-                    {
-                        await connectTask.ConfigureAwait(false);
-                    }
-                }
-                catch (SocketException se) when (se.SocketErrorCode == SocketError.OperationAborted)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    throw;
-                }
-            }
+            return saea.ConnectAsync(this, cancellationToken);
         }
 
         /// <summary>
@@ -1214,7 +1188,7 @@ namespace System.Net.Sockets
             {
                 try
                 {
-                    if (socket.ConnectAsync(this, userSocket: true, saeaCancelable: cancellationToken.CanBeCanceled, cancellationToken))
+                    if (socket.ConnectAsync(this, userSocket: true, saeaCancelable: false, cancellationToken))
                     {
                         return new ValueTask(this, _mrvtsc.Version);
                     }

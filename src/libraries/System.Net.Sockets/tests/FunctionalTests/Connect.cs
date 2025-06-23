@@ -801,57 +801,57 @@ namespace System.Net.Sockets.Tests
     {
         public ConnectTask_NonParallel(ITestOutputHelper output) : base(output) { }
 
-        [Fact]
-        public async Task _Lol()
-        {
-            var disposedProperty = typeof(Socket).GetProperty("Disposed", BindingFlags.NonPublic | BindingFlags.Instance);
-            StringBuilder bld = new StringBuilder();
+        //[Fact]
+        //public async Task _Lol()
+        //{
+        //    var disposedProperty = typeof(Socket).GetProperty("Disposed", BindingFlags.NonPublic | BindingFlags.Instance);
+        //    StringBuilder bld = new StringBuilder();
 
-            try
-            {
-                using var serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                serverSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
-                serverSocket.Listen(50_000);
-                int i = 0;
-                while (true)
-                {
-                    using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                    using var cts = new CancellationTokenSource();
+        //    try
+        //    {
+        //        using var serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        //        serverSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        //        serverSocket.Listen(50_000);
+        //        int i = 0;
+        //        while (true)
+        //        {
+        //            using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        //            using var cts = new CancellationTokenSource();
 
-                    ValueTask connectTask = socket.ConnectAsync(serverSocket.LocalEndPoint!, cts.Token);
-                    using var _ = await serverSocket.AcceptAsync().ConfigureAwait(false);
-                    cts.Cancel();
+        //            ValueTask connectTask = socket.ConnectAsync(serverSocket.LocalEndPoint!, cts.Token);
+        //            using var _ = await serverSocket.AcceptAsync().ConfigureAwait(false);
+        //            cts.Cancel();
 
-                    try
-                    {
-                        await connectTask.ConfigureAwait(false);
-                        var disposed = (bool)disposedProperty.GetValue(socket);
-                        if (disposed && socket.Connected)
-                        {
-                            bld.AppendLine($"D({i})");
-                        }
-                    }
-                    catch (Exception)
-                    {
-                    }
+        //            try
+        //            {
+        //                await connectTask.ConfigureAwait(false);
+        //                var disposed = (bool)disposedProperty.GetValue(socket);
+        //                if (disposed && socket.Connected)
+        //                {
+        //                    bld.AppendLine($"D({i})");
+        //                }
+        //            }
+        //            catch (Exception)
+        //            {
+        //            }
 
-                    if (i % 100 == 0)
-                    {
-                        bld.Append(".");
-                    }
-                    if (i > 30_000) break;
-                    i++;
-                }
-            }
-            catch (Exception ex)
-            {
-                _output.WriteLine("boo");
-                _output.WriteLine(ex.ToString());
-            }
+        //            if (i % 100 == 0)
+        //            {
+        //                bld.Append(".");
+        //            }
+        //            if (i > 30_000) break;
+        //            i++;
+        //        }
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _output.WriteLine("boo");
+        //        _output.WriteLine(ex.ToString());
+        //    }
             
 
-            _output.WriteLine(bld.ToString());
-        }
+        //    _output.WriteLine(bld.ToString());
+        //}
     }
 
     public sealed class ConnectEap_NonParallel : Connect_NonParallel<SocketHelperEap>
