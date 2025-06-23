@@ -828,6 +828,10 @@ namespace System.Net.Sockets.Tests
                     {
                         bld.AppendLine($"D({i})");
                     }
+                    else
+                    {
+                        bld.Append(".");
+                    }
                 }
                 catch (OperationCanceledException)
                 {
