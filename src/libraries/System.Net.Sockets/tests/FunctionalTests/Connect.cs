@@ -2,14 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Runtime.InteropServices;
+using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 using Xunit.Abstractions;
 using Xunit.Sdk;
-using System.Linq;
-using Microsoft.DotNet.XUnitExtensions;
 
 namespace System.Net.Sockets.Tests
 {
@@ -798,6 +800,58 @@ namespace System.Net.Sockets.Tests
     public sealed class ConnectTask_NonParallel : Connect_NonParallel<SocketHelperTask>
     {
         public ConnectTask_NonParallel(ITestOutputHelper output) : base(output) { }
+
+        [Fact]
+        public async Task _Lol()
+        {
+            var disposedProperty = typeof(Socket).GetProperty("Disposed", BindingFlags.NonPublic | BindingFlags.Instance);
+            StringBuilder bld = new StringBuilder();
+
+            try
+            {
+                using var serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                serverSocket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+                serverSocket.Listen(50_000);
+                int i = 0;
+                while (true)
+                {
+                    using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                    using var cts = new CancellationTokenSource();
+
+                    ValueTask connectTask = socket.ConnectAsync(serverSocket.LocalEndPoint!, cts.Token);
+                    using var _ = await serverSocket.AcceptAsync().ConfigureAwait(false);
+                    cts.Cancel();
+
+                    try
+                    {
+                        await connectTask.ConfigureAwait(false);
+                        var disposed = (bool)disposedProperty.GetValue(socket);
+                        if (disposed && socket.Connected)
+                        {
+                            bld.AppendLine($"D({i})");
+                        }
+                    }
+                    catch (Exception)
+                    {
+                    }
+
+                    if (i % 100 == 0)
+                    {
+                        bld.Append(".");
+                    }
+                    if (i > 30_000) break;
+                    i++;
+                }
+            }
+            catch (Exception ex)
+            {
+                _output.WriteLine("boo");
+                _output.WriteLine(ex.ToString());
+            }
+            
+
+            _output.WriteLine(bld.ToString());
+        }
     }
 
     public sealed class ConnectEap_NonParallel : Connect_NonParallel<SocketHelperEap>
