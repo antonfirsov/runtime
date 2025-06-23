@@ -2877,7 +2877,7 @@ namespace System.Net.Sockets
         public bool ConnectAsync(SocketAsyncEventArgs e) =>
             ConnectAsync(e, userSocket: true, saeaCancelable: true);
 
-        internal bool ConnectAsync(SocketAsyncEventArgs e, bool userSocket, bool saeaCancelable)
+        internal bool ConnectAsync(SocketAsyncEventArgs e, bool userSocket, bool saeaCancelable, CancellationToken singleConnectCancellationToken = default)
         {
             bool pending;
 
@@ -2957,8 +2957,8 @@ namespace System.Net.Sockets
                     // ConnectEx supports connection-oriented sockets but not UDS. The socket must be bound before calling ConnectEx.
                     bool canUseConnectEx = _socketType == SocketType.Stream && endPointSnapshot.AddressFamily != AddressFamily.Unix;
                     SocketError socketError = canUseConnectEx ?
-                        e.DoOperationConnectEx(this, _handle) :
-                        e.DoOperationConnect(_handle); // For connectionless protocols, Connect is not an I/O call.
+                        e.DoOperationConnectEx(this, _handle, singleConnectCancellationToken) :
+                        e.DoOperationConnect(_handle, singleConnectCancellationToken); // For connectionless protocols, Connect is not an I/O call.
                     pending = socketError == SocketError.IOPending;
                 }
                 catch (Exception ex)
