@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http.Headers;
-using System.Net.Quic;
 using System.Net.Test.Common;
 using System.Text;
 using System.Threading.Tasks;
@@ -160,7 +159,8 @@ namespace System.Net.Http.Functional.Tests
                     // Client should abort at some point so this is going to throw.
                     HttpRequestData requestData = await server.HandleRequestAsync(HttpStatusCode.OK).ConfigureAwait(false);
                 }
-                catch (Exception) { };
+                catch (Exception) { }
+                ;
             });
         }
 
@@ -594,6 +594,67 @@ namespace System.Net.Http.Functional.Tests
                     }
                 });
             });
+        }
+
+        [Fact]
+        public async Task _EndlinesInHeaders_Replaced()
+        {
+            await LoopbackServerFactory.CreateClientAndServerAsync(
+                async uri =>
+                {
+                    using HttpClient client = CreateHttpClient();
+
+                    using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, uri)
+                    {
+                        Version = UseVersion,
+                        VersionPolicy = HttpVersionPolicy.RequestVersionExact
+                    };
+
+                    using HttpResponseMessage response = await client.SendAsync(request);
+                    foreach (var h in response.Headers)
+                    {
+                        _output.WriteLine($"{h.Key}:");
+                        foreach (string v in h.Value)
+                        {
+                            _output.WriteLine($"[{v}]");
+                        }
+                    }
+                },
+                async server =>
+                {
+                    List<HttpHeaderData> headers = [
+                        new HttpHeaderData("poop", "lol\n"),
+                        new HttpHeaderData("fart", "pff\r\n"),
+                        new HttpHeaderData("fart2", "pff\r"),
+                        new HttpHeaderData("lumina", "con\nverter")];
+                    HttpRequestData requestData = await server.AcceptConnectionSendResponseAndCloseAsync(additionalHeaders: headers);
+                });
+        }
+
+        [Theory]
+        [InlineData(false)]
+        //[InlineData(true)]
+        public async Task _Lol(bool useIp)
+        {
+            using HttpClient client = CreateHttpClient();
+            string host = "example.org";
+            if (useIp)
+            {
+                host = (await Dns.GetHostAddressesAsync("example.org")).First().ToString();
+            }
+
+            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, $"https://{host}")
+            {
+                Version = UseVersion,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact
+            };
+
+            if (useIp)
+            {
+                request.Headers.Host = host;
+            }
+
+            await client.SendAsync(request);
         }
     }
 }
