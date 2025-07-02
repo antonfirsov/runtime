@@ -597,7 +597,7 @@ namespace System.Net.Http.Functional.Tests
         }
 
         [Fact]
-        public async Task _EndlinesInHeaders_Replaced()
+        public async Task SendAsync_InvalidCharactersInResponseHeader_ReplacedWithSpaces()
         {
             await LoopbackServerFactory.CreateClientAndServerAsync(
                 async uri =>
@@ -623,10 +623,12 @@ namespace System.Net.Http.Functional.Tests
                 async server =>
                 {
                     List<HttpHeaderData> headers = [
-                        new HttpHeaderData("poop", "lol\n"),
-                        new HttpHeaderData("fart", "pff\r\n"),
-                        new HttpHeaderData("fart2", "pff\r"),
-                        new HttpHeaderData("lumina", "con\nverter")];
+                        new HttpHeaderData("h1", "lol\r\n"),
+                        new HttpHeaderData("h2", "pf\0f"),
+                        new HttpHeaderData("h3", "woo\n"),
+                        new HttpHeaderData("fart2", "mrawrr\rr"),
+                        new HttpHeaderData("lumina", "con\nverter")
+                        ];
                     HttpRequestData requestData = await server.AcceptConnectionSendResponseAndCloseAsync(additionalHeaders: headers);
                 });
         }
