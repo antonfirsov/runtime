@@ -632,31 +632,5 @@ namespace System.Net.Http.Functional.Tests
                     HttpRequestData requestData = await server.AcceptConnectionSendResponseAndCloseAsync(additionalHeaders: headers);
                 });
         }
-
-        [Theory]
-        [InlineData(false)]
-        //[InlineData(true)]
-        public async Task _Lol(bool useIp)
-        {
-            using HttpClient client = CreateHttpClient();
-            string host = "example.org";
-            if (useIp)
-            {
-                host = (await Dns.GetHostAddressesAsync("example.org")).First().ToString();
-            }
-
-            using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, $"https://{host}")
-            {
-                Version = UseVersion,
-                VersionPolicy = HttpVersionPolicy.RequestVersionExact
-            };
-
-            if (useIp)
-            {
-                request.Headers.Host = host;
-            }
-
-            await client.SendAsync(request);
-        }
     }
 }

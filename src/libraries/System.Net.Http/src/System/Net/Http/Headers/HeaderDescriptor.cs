@@ -129,7 +129,9 @@ namespace System.Net.Http.Headers
             return new HeaderDescriptor(Name, customHeader: true);
         }
 
-        public string GetHeaderValue(ReadOnlySpan<byte> headerValue, Encoding? valueEncoding)
+        private static readonly SearchValues<char> s_dangerousCharacters = SearchValues.Create('\0', '\r', '\n');
+
+        public string GetHeaderValue(ReadOnlySpan<byte> headerValue, Encoding? valueEncoding, bool replaceDangerousCharacters = false)
         {
             if (headerValue.Length == 0)
             {
@@ -169,7 +171,32 @@ namespace System.Net.Http.Headers
                 }
             }
 
-            return (valueEncoding ?? HttpRuleParser.DefaultHttpEncoding).GetString(headerValue);
+            Encoding encoding = valueEncoding ?? HttpRuleParser.DefaultHttpEncoding;
+            if (!replaceDangerousCharacters)
+            {
+                return encoding.GetString(headerValue);
+            }
+
+            int length = encoding.GetCharCount(headerValue);
+            char[]? toReturn = null;
+            Span<char> charSpan = (uint)length <= 512 ? stackalloc char[512] : (toReturn = ArrayPool<char>.Shared.Rent(length));
+            charSpan = charSpan.Slice(0, length);
+
+            try
+            {
+                int doubleCheck = encoding.GetChars(headerValue, charSpan);
+                Debug.Assert(length == doubleCheck);
+
+                charSpan.ReplaceAny(s_dangerousCharacters, ' ');
+                return new string(charSpan);
+            }
+            finally
+            {
+                if (toReturn is not null)
+                {
+                    ArrayPool<char>.Shared.Return(toReturn);
+                }
+            }
         }
 
         internal static string? GetKnownContentType(ReadOnlySpan<byte> contentTypeValue)
