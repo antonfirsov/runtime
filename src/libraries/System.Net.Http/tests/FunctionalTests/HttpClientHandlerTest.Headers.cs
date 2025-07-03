@@ -8,7 +8,7 @@ using System.Net.Http.Headers;
 using System.Net.Test.Common;
 using System.Text;
 using System.Threading.Tasks;
-
+using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -596,9 +596,19 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
-        [Fact]
-        public async Task SendAsync_InvalidCharactersInResponseHeader_ReplacedWithSpaces()
+        [ConditionalTheory]
+        [InlineData(false, "test\nxwow\nmore\n")]
+        [InlineData(false, "test\rwow\rmore\r")]
+        [InlineData(false, "test\r\nwow\r\nmore\r\n")]
+        [InlineData(true, "one\0two\0three\0")]
+        public async Task SendAsync_InvalidCharactersInResponseHeader_ReplacedWithSpaces(bool testHttp11, string value)
         {
+            if (!testHttp11 && UseVersion == HttpVersion.Version11)
+            {
+                throw new SkipTestException("This case is not valid for HTTP 1.1");
+            }
+
+            string expectedValue = value.Replace('\r', ' ').Replace('\n', ' ').Replace('\0', ' ');
             await LoopbackServerFactory.CreateClientAndServerAsync(
                 async uri =>
                 {
@@ -611,24 +621,11 @@ namespace System.Net.Http.Functional.Tests
                     };
 
                     using HttpResponseMessage response = await client.SendAsync(request);
-                    foreach (var h in response.Headers)
-                    {
-                        _output.WriteLine($"{h.Key}:");
-                        foreach (string v in h.Value)
-                        {
-                            _output.WriteLine($"[{v}]");
-                        }
-                    }
+                    Assert.Equal(expectedValue, response.Headers.GetValues("test").Single());
                 },
                 async server =>
                 {
-                    List<HttpHeaderData> headers = [
-                        new HttpHeaderData("h1", "lol\r\n"),
-                        new HttpHeaderData("h2", "pf\0f"),
-                        new HttpHeaderData("h3", "woo\n"),
-                        new HttpHeaderData("fart2", "mrawrr\rr"),
-                        new HttpHeaderData("lumina", "con\nverter")
-                        ];
+                    List<HttpHeaderData> headers = [new HttpHeaderData("test", value)];
                     HttpRequestData requestData = await server.AcceptConnectionSendResponseAndCloseAsync(additionalHeaders: headers);
                 });
         }
