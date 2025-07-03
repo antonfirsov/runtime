@@ -132,15 +132,17 @@ namespace System.Net.Http.Headers
             return new HeaderDescriptor(Name, customHeader: true);
         }
 
-        private readonly ref struct CreateHeaderState
+        private readonly ref struct CreateHeaderStringState
         {
             public readonly ReadOnlySpan<byte> Bytes;
             public readonly Encoding Encoding;
+            public readonly bool ReplaceDangerousCharacters;
 
-            public CreateHeaderState(ReadOnlySpan<byte> bytes, Encoding encoding)
+            public CreateHeaderStringState(ReadOnlySpan<byte> bytes, Encoding encoding, bool replaceDangerousCharacters)
             {
                 Bytes = bytes;
                 Encoding = encoding;
+                ReplaceDangerousCharacters = replaceDangerousCharacters;
             }
         }
 
@@ -185,38 +187,17 @@ namespace System.Net.Http.Headers
             }
 
             Encoding encoding = valueEncoding ?? HttpRuleParser.DefaultHttpEncoding;
-            if (!replaceDangerousCharacters || headerValue.IndexOfAny(s_dangerousCharacterBytes) < 0)
-            {
-                return encoding.GetString(headerValue);
-            }
-
+            replaceDangerousCharacters = replaceDangerousCharacters && headerValue.IndexOfAny(s_dangerousCharacterBytes) >= 0;
             int length = encoding.GetCharCount(headerValue);
-            return string.Create(length, new CreateHeaderState(headerValue, encoding), static (chars, s) =>
+            return string.Create(length, new CreateHeaderStringState(headerValue, encoding, replaceDangerousCharacters), static (chars, s) =>
             {
                 int doubleCheck = s.Encoding.GetChars(s.Bytes, chars);
                 Debug.Assert(chars.Length == doubleCheck);
-                chars.ReplaceAny(s_dangerousCharacters, ' ');
+                if (s.ReplaceDangerousCharacters)
+                {
+                    chars.ReplaceAny(s_dangerousCharacters, ' ');
+                }
             });
-
-            //char[]? toReturn = null;
-            //Span<char> charSpan = (uint)length <= 512 ? stackalloc char[512] : (toReturn = ArrayPool<char>.Shared.Rent(length));
-            //charSpan = charSpan.Slice(0, length);
-
-            //try
-            //{
-            //    int doubleCheck = encoding.GetChars(headerValue, charSpan);
-            //    Debug.Assert(length == doubleCheck);
-
-            //    charSpan.ReplaceAny(s_dangerousCharacters, ' ');
-            //    return new string(charSpan);
-            //}
-            //finally
-            //{
-            //    if (toReturn is not null)
-            //    {
-            //        ArrayPool<char>.Shared.Return(toReturn);
-            //    }
-            //}
         }
 
         internal static string? GetKnownContentType(ReadOnlySpan<byte> contentTypeValue)
