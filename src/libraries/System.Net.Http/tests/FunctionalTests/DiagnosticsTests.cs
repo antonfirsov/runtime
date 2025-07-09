@@ -1665,6 +1665,69 @@ namespace System.Net.Http.Functional.Tests
             }
         }
 
+        [ConditionalTheory(typeof(RemoteExecutor), nameof(RemoteExecutor.IsSupported))]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task SendAsync_UseIPAddressInUri_RecordsHostHeaderAsServerAddress(bool useTls)
+        {
+            if (UseVersion == HttpVersion30 && !useTls) return;
+
+            //await RemoteExecutor.Invoke(RunTest, UseVersion.ToString(), TestAsync.ToString(), useTls.ToString()).DisposeAsync();
+            await RunTest(UseVersion.ToString(), TestAsync.ToString(), useTls.ToString());
+
+            static async Task RunTest(string useVersion, string testAsync, string useTlsString)
+            {
+                bool useTls = bool.Parse(useTlsString);
+
+                Activity parentActivity = new Activity("parent").Start();
+
+                using ActivityRecorder requestRecorder = new("System.Net.Http", "System.Net.Http.HttpRequestOut")
+                {
+                    ExpectedParent = parentActivity
+                };
+
+                using ActivityRecorder connectionSetupRecorder = new("Experimental.System.Net.Http.Connections", "Experimental.System.Net.Http.Connections.ConnectionSetup");
+
+                await GetFactoryForVersion(useVersion).CreateClientAndServerAsync(
+                    async uri =>
+                    {
+                        string hostName = uri.Host;
+                        uri = new Uri($"{uri.Scheme}://{IPAddress.Loopback}:{uri.Port}");
+
+                        Version version = Version.Parse(useVersion);
+                        
+                        using HttpClient client = new HttpClient(CreateHttpClientHandler(allowAllCertificates: true));
+
+                        using HttpRequestMessage request = CreateRequest(HttpMethod.Get, uri, version, exactVersion: true);
+                        request.Headers.Host = hostName;
+
+                        await client.SendAsync(bool.Parse(testAsync), request);
+
+                        Activity req = requestRecorder.VerifyActivityRecordedOnce();
+                        Activity conn = connectionSetupRecorder.VerifyActivityRecordedOnce();
+                        ActivityAssert.HasTag(req, "server.address", hostName);
+
+                        Assert.Equal($"HTTP connection_setup {hostName}:{uri.Port}", conn.DisplayName);
+                        ActivityAssert.HasTag(conn, "network.peer.address",
+                            (string a) => a == IPAddress.Loopback.ToString() ||
+                            a == IPAddress.Loopback.MapToIPv6().ToString() ||
+                            a == IPAddress.IPv6Loopback.ToString());
+                        ActivityAssert.HasTag(conn, "server.address", hostName);
+                        ActivityAssert.HasTag(conn, "server.port", uri.Port);
+                        ActivityAssert.HasTag(conn, "url.scheme", useTls ? "https" : "http");
+
+                        connectionSetupRecorder.VerifyActivityRecorded(1);
+                    },
+                    async server =>
+                    {
+                        await server.AcceptConnectionSendResponseAndCloseAsync();
+                    }, options: new GenericLoopbackOptions()
+                    {
+                        UseSsl = useTls,
+                    });
+            }
+        }
+
         private static T GetProperty<T>(object obj, string propertyName)
         {
             Type t = obj.GetType();

@@ -920,6 +920,41 @@ namespace System.Net.Http.Functional.Tests
             });
         }
 
+        [ConditionalFact(typeof(SocketsHttpHandler), nameof(SocketsHttpHandler.IsSupported))]
+        public Task UseIPAddressInUri_RecordsHostHeaderAsServerAddress()
+        {
+            return LoopbackServerFactory.CreateClientAndServerAsync(async uri =>
+            {
+                using HttpMessageInvoker client = CreateHttpMessageInvoker();
+                uri = new Uri($"{uri.Scheme}://{IPAddress.Loopback}:{uri.Port}");
+
+                using InstrumentRecorder<long> activeRequestsRecorder = SetupInstrumentRecorder<long>(InstrumentNames.ActiveRequests);
+                using InstrumentRecorder<double> requestDurationRecorder = SetupInstrumentRecorder<double>(InstrumentNames.RequestDuration);
+                using InstrumentRecorder<long> openConnectionsRecorder = SetupInstrumentRecorder<long>(InstrumentNames.OpenConnections);
+                using InstrumentRecorder<double> connectionDurationRecorder = SetupInstrumentRecorder<double>(InstrumentNames.ConnectionDuration);
+                using InstrumentRecorder<double> timeInQueueRecorder = SetupInstrumentRecorder<double>(InstrumentNames.TimeInQueue);
+
+                using HttpRequestMessage request = new(HttpMethod.Get, uri) { Version = UseVersion };
+                HttpResponseMessage response = await SendAsync(client, request);
+                response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
+
+                VerifyHostName(activeRequestsRecorder);
+                VerifyHostName(requestDurationRecorder);
+                VerifyHostName(openConnectionsRecorder);
+                VerifyHostName(connectionDurationRecorder);
+                VerifyHostName(timeInQueueRecorder);
+            }, async server =>
+            {
+                await server.AcceptConnectionSendResponseAndCloseAsync();
+            });
+
+            static void VerifyHostName<T>(InstrumentRecorder<T> recorder) where T : struct
+            {
+                IReadOnlyList<Measurement<T>> measurements = recorder.GetMeasurements();
+                Assert.Collection(measurements, m => VerifyTag(m.Tags.ToArray(), "server.address", "localhost"));
+            }
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
