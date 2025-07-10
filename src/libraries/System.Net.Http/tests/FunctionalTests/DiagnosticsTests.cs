@@ -1702,10 +1702,10 @@ namespace System.Net.Http.Functional.Tests
 
                         await client.SendAsync(bool.Parse(testAsync), request);
 
-                        Activity req = requestRecorder.VerifyActivityRecordedOnce();
-                        Activity conn = connectionSetupRecorder.VerifyActivityRecordedOnce();
-                        ActivityAssert.HasTag(req, "server.address", hostName);
+                        Activity requestActivity = requestRecorder.VerifyActivityRecordedOnce();
+                        ActivityAssert.HasTag(requestActivity, "server.address", hostName);
 
+                        Activity connectionActivity = connectionSetupRecorder.VerifyActivityRecordedOnce();
                         //Assert.Equal($"HTTP connection_setup {hostName}:{uri.Port}", conn.DisplayName);
                         //ActivityAssert.HasTag(conn, "network.peer.address",
                         //    (string a) => a == IPAddress.Loopback.ToString() ||

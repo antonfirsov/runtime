@@ -946,11 +946,14 @@ namespace System.Net.Http.Functional.Tests
                 HttpResponseMessage response = await SendAsync(client, request);
                 response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
+                // Request metrics:
                 VerifyHostName(activeRequestsRecorder);
                 VerifyHostName(requestDurationRecorder);
-                //VerifyHostName(openConnectionsRecorder);
-                //VerifyHostName(connectionDurationRecorder);
-                //VerifyHostName(timeInQueueRecorder);
+
+                // Connection metrics:
+                VerifyHostName(openConnectionsRecorder);
+                VerifyHostName(connectionDurationRecorder);
+                VerifyHostName(timeInQueueRecorder);
             }, async server =>
             {
                 await server.AcceptConnectionSendResponseAndCloseAsync();
@@ -1229,12 +1232,14 @@ namespace System.Net.Http.Functional.Tests
                 HttpResponseMessage response = await SendAsync(client, request);
                 response.Dispose(); // Make sure disposal doesn't interfere with recording by enforcing early disposal.
 
+                // Request metrics:
                 VerifyHostName(activeRequestsRecorder);
                 VerifyHostName(requestDurationRecorder);
 
-                //VerifyHostName(openConnectionsRecorder);
-                //VerifyHostName(connectionDurationRecorder);
-                //VerifyHostName(timeInQueueRecorder);
+                // Connection metrics:
+                VerifyHostName(openConnectionsRecorder);
+                VerifyHostName(connectionDurationRecorder);
+                VerifyHostName(timeInQueueRecorder);
             }, async server =>
             {
                 await server.AcceptConnectionSendResponseAndCloseAsync();
