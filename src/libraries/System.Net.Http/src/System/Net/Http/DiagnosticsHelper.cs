@@ -35,6 +35,17 @@ namespace System.Net.Http
             _ => httpVersion.ToString()
         };
 
+        public static string GetServerAddress(HttpRequestMessage request, IWebProxy? proxy)
+        {
+            Debug.Assert(request.RequestUri is not null);
+            if ((proxy is null || proxy.IsBypassed(request.RequestUri)) && request.HasHeaders && request.Headers.Host is string hostHeader)
+            {
+                return HttpUtilities.ParseHostNameFromHeader(hostHeader);
+            }
+
+            return request.RequestUri.Host;
+        }
+
         public static bool TryGetErrorType(HttpResponseMessage? response, Exception? exception, out string? errorType)
         {
             if (response is not null)
@@ -103,6 +114,38 @@ namespace System.Net.Http
             return (uint)index < (uint)strings.Length
                 ? strings[index] ??= statusCode.ToString()
                 : statusCode.ToString();
+        }
+    }
+
+    internal static partial class HttpUtilities
+    {
+        public static string ParseHostNameFromHeader(string hostHeader)
+        {
+            // See if we need to trim off a port.
+            int colonPos = hostHeader.IndexOf(':');
+            if (colonPos >= 0)
+            {
+                // There is colon, which could either be a port separator or a separator in
+                // an IPv6 address.  See if this is an IPv6 address; if it's not, use everything
+                // before the colon as the host name, and if it is, use everything before the last
+                // colon iff the last colon is after the end of the IPv6 address (otherwise it's a
+                // part of the address).
+                int ipV6AddressEnd = hostHeader.IndexOf(']');
+                if (ipV6AddressEnd == -1)
+                {
+                    return hostHeader.Substring(0, colonPos);
+                }
+                else
+                {
+                    colonPos = hostHeader.LastIndexOf(':');
+                    if (colonPos > ipV6AddressEnd)
+                    {
+                        return hostHeader.Substring(0, colonPos);
+                    }
+                }
+            }
+
+            return hostHeader;
         }
     }
 }
