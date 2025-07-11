@@ -73,14 +73,14 @@ namespace System.Net.Http
         /// <param name="port">The port with which this pool is associated.</param>
         /// <param name="sslHostName">The SSL host with which this pool is associated.</param>
         /// <param name="proxyUri">The proxy this pool targets (optional).</param>
-        /// <param name="telemetryHostName">The value of the 'server.address' tag to be emitted by Metrics and Distributed Tracing.</param>
-        public HttpConnectionPool(HttpConnectionPoolManager poolManager, HttpConnectionKind kind, string? host, int port, string? sslHostName, Uri? proxyUri, string telemetryHostName)
+        /// <param name="telemetryServerAddress">The value of the 'server.address' tag to be emitted by Metrics and Distributed Tracing.</param>
+        public HttpConnectionPool(HttpConnectionPoolManager poolManager, HttpConnectionKind kind, string? host, int port, string? sslHostName, Uri? proxyUri, string telemetryServerAddress)
         {
             _poolManager = poolManager;
             _kind = kind;
             _proxyUri = proxyUri;
             _maxHttp11Connections = Settings._maxConnectionsPerServer;
-            _telemetryServerAddress = telemetryHostName;
+            _telemetryServerAddress = telemetryServerAddress;
 
             // The only case where 'host' will not be set is if this is a Proxy connection pool.
             Debug.Assert(host is not null || (kind == HttpConnectionKind.Proxy && proxyUri is not null));
@@ -259,7 +259,7 @@ namespace System.Net.Http
             }
 
             if (NetEventSource.Log.IsEnabled()) Trace($"{this}");
-            _telemetryServerAddress = telemetryHostName;
+            _telemetryServerAddress = telemetryServerAddress;
         }
 
         private static SslClientAuthenticationOptions ConstructSslOptions(HttpConnectionPoolManager poolManager, string sslHostName)

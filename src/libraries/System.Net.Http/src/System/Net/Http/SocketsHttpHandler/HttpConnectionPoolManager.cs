@@ -301,8 +301,9 @@ namespace System.Net.Http
             }
         }
 
-        // Picks the value of the 'server.address' tag as specified in
+        // Picks the value of the 'server.address' tag following rules specified in
         // https://github.com/open-telemetry/semantic-conventions/blob/728e5d1/docs/http/http-spans.md#http-client-span
+        // When there is no proxy, we need to prioritize the contents of the Host header.
         private static string GetTelemetryServerAddress(HttpRequestMessage request, HttpConnectionKey key)
         {
             Uri? uri = request.RequestUri;
